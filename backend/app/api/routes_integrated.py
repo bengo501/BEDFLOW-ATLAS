@@ -666,7 +666,10 @@ async def _run_openfoam_simulation_wsl(case_dir: str, job: Job, jobs_store: dict
         job.logs.append(f"[{datetime.now()}] diretorio: {wsl_path}")
         job.updated_at = datetime.now()
         
-        wsl_command = f"cd '{wsl_path}' && chmod +x Allrun && ./Allrun"
+        wsl_command = (
+            f"cd '{wsl_path}' && sed -i 's/\\r$//' Allrun && "
+            f"chmod +x Allrun && ./Allrun"
+        )
         
         # executar com captura de output
         process = await asyncio.create_subprocess_exec(

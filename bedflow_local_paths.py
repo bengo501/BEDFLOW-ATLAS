@@ -234,16 +234,22 @@ def scan_project_mesh_files(*, max_files: int = 2000) -> List[Dict[str, Any]]:
         if not is_viewer_mesh_relative_path(rel):
             return
         st = fp.stat()
-        items.append(
-            {
-                "relative_path": rel,
-                "filename": fp.name,
-                "mesh_id": mesh_id_for_relative_path(rel),
-                "size_bytes": st.st_size,
-                "mtime": st.st_mtime,
-                "format": fp.suffix.lower().lstrip("."),
-            }
-        )
+        row = {
+            "relative_path": rel,
+            "filename": fp.name,
+            "mesh_id": mesh_id_for_relative_path(rel),
+            "size_bytes": st.st_size,
+            "mtime": st.st_mtime,
+            "format": fp.suffix.lower().lstrip("."),
+        }
+        try:
+            from bedflow_viewer_hints import augment_mesh_scan_row
+
+            row = augment_mesh_scan_row(row)
+        except ImportError:
+            row["source_hint"] = ""
+            row["recommended_modes"] = ""
+        items.append(row)
 
     for base in iter_mesh_scan_roots():
         try:

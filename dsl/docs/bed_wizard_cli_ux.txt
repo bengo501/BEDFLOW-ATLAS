@@ -1,0 +1,198 @@
+bedflow atlas — bed wizard cli: arquitectura de ux, menus e implementacao
+================================================================================
+
+1. objectivo deste documento
+----------------------------
+explicar o que foi reorganizado no wizard de terminal (bed wizard), como os menus
+foram padronizados, qual o contrato global de teclas, como ficou a separacao entre
+packing.method e geometria de saida (pseudo 2d / fatia fina), como o fluxo de testes
+rapid foi melhorado, que componentes rich foram reutilizados, e que problemas de
+consistencia (descritos no pedido de refactor e observados no codigo anterior) foram
+corrigidos. texto em portugues, minusculas, nivel tecnico.
+
+
+2. ficheiros principais tocados
+-------------------------------
+- dsl/wizard_terminal_ui.py — primitivo de tabela de menu, global_keys_hint (texto longo
+  so com h), pick_list_short_hint no menu de ajuda por seccao, pick_from_list, confirm
+  com pergunta e opcoes em linhas separadas.
+- dsl/bed_wizard.py — submenu comecar, templates_editor_menu, i18n pt/en, ajuda e menu
+  principal (opcoes 1-5 e 0 sair, h, c sair no prompt).
+- dsl/wizard_quick_tests.py — fluxo guiado completo, escolha de ficheiros, geometry_mode,
+  cancelamento, chamadas ao resumo tecnico e ascii.
+- dsl/quick_test_rich.py — tabelas de escolha iguais ao menu principal, resumo tecnico
+  por categorias, paineis ascii com titulos, aviso rigid_body.
+- dsl/wizard_3d_viewer.py — teclas h e q na visualizacao 3d, hint global.
+- dsl/cli/app.py — sem alteracao obrigatoria; flags --slice ja mapeiam pseudo 2d no cli.
+
+
+3. reorganizacao do menu comecar
+---------------------------------
+antes: uma unica entrada "templates, editor e testes rapidos" misturava carregar template
+json, editor .bed classico e o fluxo de testes rapidos num submenu, o que confundia
+quem queria apenas validar um json existente.
+
+depois:
+- opcao 3 — templates e editor: apenas json em dsl/wizard_templates ou editor .bed
+  temporario com notepad/nano/vim.
+- opcao 4 — testes rapidos: fluxo proprio com preview rich, independente de templates.
+- opcoes 5 e 6 — geracao 3d (blender) e pipeline completo (mantem semantica).
+- opcao 0 — voltar ao menu principal.
+
+funcao renomeada conceptualmente: templates_editor_menu (substitui templates_e_testes_menu).
+breadcrumbs: wizard / comecar / templates-editor ou wizard / comecar / testes-rapidos.
+
+
+4. padronizacao visual dos menus
+---------------------------------
+foi extraida a construcao da tabela principal para funcoes reutilizaveis:
+- render_menu_table_plain(rows, title) — fallback sem rich.
+- render_menu_table_rich(console, rows, title) — mesma geometria que o menu inicial:
+  colunas # | modo | | resumo, box rounded, bordas rgb(95,25,35), cabecalho bege.
+
+render_main_menu em richwizardui e plainwizardui delegam nestas funcoes.
+
+no modo testes rapidos, render_choice_table passou a converter cada (tecla, texto longo)
+em MenuRow: parte antes de "—" (ou " - ") vira titulo curto na coluna modo; o resto
+vai para resumo em duas linhas via _menu_resume_two_lines (mesma logica do menu
+principal).
+
+menu de ajuda por seccao usa a mesma tabela # | modo | | resumo que o menu principal,
+mais pick_list_short_hint; o texto completo global_keys_hint so aparece ao premir h
+no prompt seguinte.
+
+pick_from_list nao imprime rodape extra: ? ajuda deste passo vai para o proprio prompt
+quando ha help_callback; h mostra global_keys_hint.
+
+
+5. contrato global de teclas (global_keys_hint)
+-----------------------------------------------
+texto completo em wizard_terminal_ui.global_keys_hint (paragrafos coerentes, sem opcao
+* de revisao global no texto): aparece ao premir h em confirm, pick_from_list e noutros
+ecras que repetem a constante.
+
+ja nao ha linha de resumo no arranque do questionario; o utilizador usa h nos prompts
+(confirm, pick_from_list, caminho .bed) para ver ajuda.
+
+- numero — escolhe opcao em menus numerados.
+- enter — aceita o valor por omissao entre [colchetes] ou no prompt.
+- c — cancelar ou voltar um nivel (onde o fluxo trata cancelamento).
+- h — mostrar ajuda completa (este texto).
+- q — em submenus, sair ou cancelar quando nao ha quit_callback dedicado; no submenu
+  comecar, q regressa ao principal sem obrigar a tecla 0.
+- no menu principal da aplicacao: tecla 0 ou c encerram (atalho q mantem-se por
+  compatibilidade). o cabecalho rich mostra setup://setup-de-parametrizacao.
+
+pick_from_list: tabela padrao; sem linhas extra sob a tabela; prompt
+"opcao (1-n, ? ajuda deste passo, h ajuda, c voltar):" quando ha ajuda contextual
+(get_choice no bedwizard), senao "opcao (1-n, h ajuda, c voltar):". c e q disparam
+cancel_callback que no bedwizard levanta _wizardcancelled.
+
+confirm (rich e plain): pergunta numa linha; na linha seguinte "(s/n) [defeito]" e
+"(h ajuda, c/q cancela):"; h mostra global_keys_hint; c e q cancelam com cancel_callback.
+
+maybe_cancel no questionario aceita tambem q para consistencia.
+
+carregar .bed no inicio do questionario: passa directo ao prompt de caminho com
+"(numero, l=lista, h ajuda, n/vazio sem carregar, c=menu):"; h mostra _print_caminho_bed_help;
+l mostra ficheiros .bed na tabela # modo resumo.
+
+
+6. fluxo de testes rapidos — correcoes
+---------------------------------------
+problemas antigos:
+- _prompt_choice ignorava c e h; apenas validava lista fechada.
+- prompts de ficheiro misturavam "vazio cancelar" com enter=padrao nos passos seguintes.
+- descricao do backend dizia rigid body como unico caso do blender.
+- pseudo 2d aparecia como passo "3b" depois de packing, reforcando a ideia errada de que
+  era um tipo de packing.
+
+correcoes:
+- substituicao por _read_menu_key com c, q, h e enter=padrao.
+- escolha de json: tabela estilo menu com indices 1..n mais m para caminho manual;
+  cancelamento explicito sem ambiguidade com enter.
+- idem para .bed.
+- passos renumerados: 1 entrada, 2 backend, 3 packing, aviso rigid_body se aplicavel,
+  4 modo geometrico (full_3d vs pseudo_2d_thin_slice), 5 execucao, 6 pos-execucao.
+- backend: pure_python descrito como geracao cientifica rapida; blender como geracao
+  visual completa e exportacao avancada para qualquer packing suportado.
+- confirmacao final no fluxo de testes rapidos usa ask_line com s/n e c ou q para
+  cancelar (evita loop infinito do confirm com cancel_callback que so repetia o prompt).
+  no questionario principal, confirm do ui usa duas linhas (pergunta + s/n e h/c).
+
+persistencia:
+- full_3d remove a chave slice do json de trabalho e de wizard.params.
+- pseudo_2d_thin_slice grava o dicionario slice com slice_enabled true e parametros
+  pedidos ao utilizador.
+
+
+7. packing.method vs geometry_mode (pseudo 2d)
+-----------------------------------------------
+packing.method continua a ser apenas um dos tres valores canonicos definidos em
+packed_bed_science.packing_modes: spherical_packing, hexagonal_3d, rigid_body.
+
+geometria de saida em fatia fina nao e packing: e um recorte pos-packing guardado na
+chave slice do json (slice_axis, slice_thickness, slice_position, flags de filtro).
+o questionario completo ja usava _questionnaire_slice_section com a mesma semantica;
+o fluxo de testes rapidos alinhou a linguagem com "geometry_mode" na interface e no
+resumo tecnico, sem introduzir um quarto valor em packing.method.
+
+funcao _choose_geometry_mode orquestra escolha full vs thin e delega detalhes a
+_ask_thin_slice_geometry.
+
+
+8. resumo tecnico e preview ascii
+----------------------------------
+render_technical_before passou a receber geometry_mode e slice_detail opcional e a
+emitir blocos separados: fluxo e ficheiros, geometria do leito, packing, geometria
+de saida (nao e packing), com rules e paineis coerentes com a paleta principal.
+
+render_ascii_section aceita title= para separar:
+- secao transversal esquematica,
+- painel de texto curto quando ha fatia fina (parametros da lamina),
+- vista em planta no pos-processamento python,
+- trecho de log blender.
+
+distribuicao vertical (histograma por z) mantem titulo explicito.
+
+
+9. mensagens de sucesso, erro e aviso
+--------------------------------------
+render_error_panel mantem borda vermelha. render_result_panel usa borda principal
+para a tabela interna e borda verde ou vermelha conforme ok no titulo do painel.
+render_blender_open_confirmation usa titulo "sucesso blender" alinhado ao feedback
+positivo. render_rigid_body_notice usa painel amarelo com titulo "aviso rigid_body".
+
+funcoes render_success_panel e render_warning_panel foram adicionadas em
+quick_test_rich para uso futuro ou extensao; o fluxo actual reutiliza sobretudo
+render_result_panel e paineis existentes para nao duplicar ruido visual.
+
+
+10. referencia a "prints" do pedido original
+---------------------------------------------
+na sessao de implementacao nao havia imagens anexadas; as correcoes seguiram o texto do
+pedido (menus desalinhados, c sem efeito em _prompt_choice, descricao enganosa do
+blender, pseudo 2d confundido com packing). onde o codigo mostrava esses sintomas,
+foi alterado conforme as seccoes acima.
+
+
+11. como estender
+-----------------
+- novos menus numerados devem usar render_menu_table_* ou render_choice_table para
+  herdar larguras e cores.
+- novos fluxos devem importar global_keys_hint na primeira linha de ajuda ou chamar
+  _read_menu_key com a mesma assinatura.
+- qualquer novo modo de empacotamento deve entrar em packing_modes.py e na tupla
+  _packing_menu com formato "nome_canonico — descricao longa" para o split automatico
+  na coluna modo.
+
+
+12. comandos typer bedwizard test
+----------------------------------
+flags --slice / --no-slice e parametros --slice-thickness, --slice-axis, etc. continuam
+a mapear directamente para o dicionario slice no json de trabalho (geometry_mode fino
+em modo nao interactivo). o resumo verbose do comando reflecte geometry_mode derivado
+de slice_enabled.
+
+
+fim do documento.

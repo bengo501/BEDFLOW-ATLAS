@@ -140,6 +140,15 @@
   opacity: 0.7;
 }
 
+.mesh-li-rec {
+  font-size: 0.68rem;
+  opacity: 0.65;
+  line-height: 1.25;
+  display: block;
+  max-height: 2.5em;
+  overflow: hidden;
+}
+
 .mesh-viewer-error {
   font-size: 0.82rem;
   color: #f2a6a6;

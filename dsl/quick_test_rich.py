@@ -22,9 +22,17 @@ try:
 except ImportError:
     _RICH = False
 
+from wizard_terminal_ui import (
+    MenuRow,
+    PICK_LIST_SHORT_HINT,
+    render_menu_table_plain,
+    render_menu_table_rich,
+)
+
 # strings de estilo rich repetidas para manter o mesmo look do menu principal
 _CHROME = "bold white on rgb(95,25,35)"
 _ACCENT = "bold rgb(240,212,168)"
+_BORDER_MAIN = "rgb(95,25,35)"
 
 
 def rich_available() -> bool:
@@ -58,6 +66,32 @@ def progress_phase(console: Optional[Console], description: str) -> Iterator[Non
     else:
         print(f"  ... {description}")
         yield
+
+
+def render_rigid_body_notice(console: Optional[Any]) -> None:
+    """avisos visuais sobre limitacoes do modo rigid_body no blender."""
+    body = (
+        "o modo rigid_body delega colisao e repouso ao motor de fisica do blender.\n"
+        "pode ser nao determinista (semente, passos, gpu) e apresentar "
+        "interpenetracoes ou contactos visuais imperfeitos.\n"
+        "nao usa o mesmo validador geometrico fechado que spherical_packing e hexagonal_3d.\n"
+        "use spherical_packing ou hexagonal_3d quando precisar de validacao por distancia minima."
+    )
+    if console and _RICH:
+        from rich.panel import Panel as RP
+        from rich.text import Text as RT
+
+        console.print(
+            RP(
+                RT(body, style="dim"),
+                title="aviso rigid_body",
+                border_style="yellow",
+                box=box.ROUNDED,
+            )
+        )
+    else:
+        print("\naviso rigid_body:")
+        print(body)
 
 
 def render_test_header(console: Optional[Console], subtitle: str = "") -> None:
@@ -95,31 +129,46 @@ def render_step_title(console: Optional[Console], step: str, title: str) -> None
         print(f"\n--- {line} ---")
 
 
+def _choice_menu_rows(rows: Sequence[Tuple[str, str]]) -> List[MenuRow]:
+    """converte (tecla, texto longo) em MenuRow para a tabela padrao do wizard."""
+    out: List[MenuRow] = []
+    for key, label in rows:
+        s = (label or "").strip()
+        if "—" in s:
+            modo, rest = s.split("—", 1)
+            modo, rest = modo.strip(), rest.strip()
+        elif " - " in s:
+            modo, rest = s.split(" - ", 1)
+            modo, rest = modo.strip(), rest.strip()
+        else:
+            modo = s[:34] + ("…" if len(s) > 34 else "")
+            rest = s
+        out.append((key, modo, rest))
+    return out
+
+
 def render_choice_table(
     console: Optional[Console],
     caption: str,
     rows: Sequence[Tuple[str, str]],
-    default_key: str,
+    reference_key: Optional[str] = None,
 ) -> None:
-    # tabela com coluna numerica tecla coluna texto e marca padrao
-    # rows e lista de pares tecla descricao longa
-    # default_key indica qual linha recebe etiqueta padrao
+    """menu numerado com o mesmo layout que o menu principal (tabela # modo | resumo)."""
+    menu_rows = _choice_menu_rows(rows)
+    ref_line = ""
+    if reference_key:
+        ref_line = (
+            f"referencia do ficheiro (so informativo, nao e escolha automatica): [{reference_key}]\n"
+        )
+    tail = f"{ref_line}{PICK_LIST_SHORT_HINT}  |  digite o numero; 0 cancelar o fluxo"
     if console and _RICH:
-        console.print(Text(caption, style="bold"))
-        t = Table(box=box.ROUNDED, show_header=True, border_style="dim", header_style=_ACCENT)
-        t.add_column("#", justify="right", width=4)
-        t.add_column("opcao", style="")
-        t.add_column("", width=8)
-        for key, label in rows:
-            dmark = "padrao" if key == default_key else ""
-            t.add_row(key, label, dmark)
-        console.print(t)
-        console.print(Text("enter aceita o padrao", style="dim"))
+        console.print(Text(caption, style="bold rgb(240,212,168)"))
+        render_menu_table_rich(console, menu_rows, title="opcoes")
+        console.print(Text(tail, style="dim"))
     else:
         print(caption)
-        for key, label in rows:
-            mark = " (padrao)" if key == default_key else ""
-            print(f"  {key}. {label}{mark}")
+        render_menu_table_plain(menu_rows, title="opcoes")
+        print(f"  {tail}")
 
 
 def render_technical_before(
@@ -130,13 +179,12 @@ def render_technical_before(
     input_path: str,
     backend: str,
     packing: str,
+    geometry_mode: str,
+    slice_detail: Optional[Dict[str, Any]],
     exec_label: str,
     post_label: str,
 ) -> None:
-    # monta tabela com numeros geometricos extraidos do json normalizado
-    # raio externo e metade do diametro raio interno e externo menos espessura da parede
-    # raio da esfera e metade do diametro da particula
-    # gap vem de packing gap ou collision margin como fallback
+    # blocos separados: fluxo, geometria leito, packing, modo geometrico, fatia, execucao
     bed = dict(data.get("bed") or {})
     particles = dict(data.get("particles") or {})
     packing_d = dict(data.get("packing") or {})
@@ -153,65 +201,99 @@ def render_technical_before(
         gap = packing_d.get("collision_margin")
     gap_f = float(gap) if gap is not None else 0.0
 
-    t = Table(
-        title="resumo tecnico (antes da execucao)",
-        box=box.ROUNDED,
-        border_style="rgb(95,25,35)",
-        show_header=False,
-    )
-    t.add_column("campo", style="dim", width=28)
-    t.add_column("valor", style="")
+    def _emit_rule(title: str) -> None:
+        if console and _RICH:
+            console.print(Rule(Text(title.lower(), style=_ACCENT), style=_BORDER_MAIN))
+        else:
+            print(f"\n--- {title} ---")
 
-    def row(a: str, b: str) -> None:
-        # funcao interna so para evitar repetir add_row com dois argumentos
-        t.add_row(a, b)
+    def _emit_pairs(title: str, pairs: List[Tuple[str, str]]) -> None:
+        t = Table(
+            box=box.ROUNDED,
+            border_style=_BORDER_MAIN,
+            show_header=False,
+            title=title,
+            title_style="dim",
+        )
+        t.add_column("campo", style="dim", width=30)
+        t.add_column("valor", style="")
+        for a, b in pairs:
+            t.add_row(a, b)
+        if console and _RICH:
+            console.print(Panel(t, box=box.SIMPLE, padding=(0, 0)))
+        else:
+            print(f"\n{title}")
+            for a, b in pairs:
+                print(f"  {a}: {b}")
 
-    row("entrada", f"{input_label}  {input_path}")
-    row("backend", backend)
-    row("distribuicao", packing)
-    row("execucao", exec_label)
-    row("pos-execucao", post_label)
-    row("raio externo (m)", f"{r_ext:.6f}")
-    row("raio interno (m)", f"{r_int:.6f}")
-    row("altura leito (m)", f"{h:.6f}")
-    row("raio esferas (m)", f"{rs:.6f}")
-    row("quantidade pedida", str(n))
-    row("gap / margem (m)", f"{gap_f:.6f}")
-
-    if console and _RICH:
-        console.print(Panel(t, box=box.SIMPLE, padding=(0, 0)))
-    else:
-        print("\nresumo tecnico (antes)")
-        plain_rows = [
+    _emit_rule("resumo tecnico antes da execucao")
+    _emit_pairs(
+        "fluxo e ficheiros",
+        [
             ("entrada", f"{input_label}  {input_path}"),
             ("backend", backend),
-            ("distribuicao", packing),
             ("execucao", exec_label),
             ("pos-execucao", post_label),
+        ],
+    )
+    _emit_pairs(
+        "geometria do leito",
+        [
             ("raio externo (m)", f"{r_ext:.6f}"),
             ("raio interno (m)", f"{r_int:.6f}"),
             ("altura leito (m)", f"{h:.6f}"),
             ("raio esferas (m)", f"{rs:.6f}"),
             ("quantidade pedida", str(n)),
             ("gap / margem (m)", f"{gap_f:.6f}"),
-        ]
-        for k, v in plain_rows:
-            print(f"  {k}: {v}")
+        ],
+    )
+    _emit_pairs(
+        "packing (metodo de distribuicao)",
+        [
+            ("packing.method", packing),
+            ("nota", "independente do modo geometrico full_3d vs fatia fina"),
+        ],
+    )
+    slice_rows: List[Tuple[str, str]] = [("geometry_mode", geometry_mode)]
+    if slice_detail:
+        slice_rows.extend(
+            [
+                ("eixo normal do corte", str(slice_detail.get("slice_axis", "?"))),
+                ("espessura (m)", str(slice_detail.get("slice_thickness", "?"))),
+                ("posicao centro (m)", str(slice_detail.get("slice_position", "?"))),
+                (
+                    "so intersectantes",
+                    str(slice_detail.get("keep_only_intersecting_particles", "?")),
+                ),
+                (
+                    "preservar coords originais",
+                    str(slice_detail.get("preserve_original_packing", "?")),
+                ),
+            ]
+        )
+    _emit_pairs("geometria de saida (nao e packing)", slice_rows)
 
 
-def render_ascii_section(console: Optional[Console], ascii_block: str) -> None:
+
+def render_ascii_section(
+    console: Optional[Console],
+    ascii_block: str,
+    *,
+    title: str = "secao transversal (esquematica)",
+) -> None:
     # painel monoespacado com texto dim para nao competir com tabelas numericas
     # ascii_block pode ter varias linhas com quebras ja embutidas
     if console and _RICH:
         console.print(
             Panel(
                 Text(ascii_block, style="dim"),
-                title="secao transversal (esquematica)",
-                border_style="dim",
+                title=title,
+                border_style=_BORDER_MAIN,
                 box=box.ROUNDED,
             )
         )
     else:
+        print(f"\n{title}")
         print(ascii_block)
 
 
@@ -225,9 +307,10 @@ def render_coordinate_table(
         return
     t = Table(
         title="amostra de coordenadas",
-        box=box.SIMPLE_HEAD,
-        border_style="dim",
+        box=box.ROUNDED,
+        border_style=_BORDER_MAIN,
         header_style=_ACCENT,
+        show_header=True,
     )
     t.add_column("id", justify="right")
     t.add_column("x (m)", justify="right")
@@ -251,8 +334,8 @@ def render_height_distribution(console: Optional[Console], lines: List[str]) -> 
         console.print(
             Panel(
                 Text(body, style=""),
-                title="distribuicao por faixa de altura (z)",
-                border_style="dim",
+                title="distribuicao vertical (faixas de z)",
+                border_style=_BORDER_MAIN,
                 box=box.ROUNDED,
             )
         )
@@ -267,20 +350,19 @@ def render_result_panel(
     lines: List[Tuple[str, str]],
     title: str = "resultado",
 ) -> None:
-    # painel verde ou vermelho conforme bool ok
-    # lines e lista de pares chave valor textual para pos processamento humano
-    t = Table(box=box.SIMPLE, show_header=False, border_style="dim")
-    t.add_column("k", style="dim", width=26)
+    # painel alinhado ao tema principal: borda vermelha escura; estado ok em verde
+    t = Table(box=box.ROUNDED, show_header=False, border_style=_BORDER_MAIN)
+    t.add_column("k", style="dim", width=28)
     t.add_column("v", style="")
     for k, v in lines:
         t.add_row(k, v)
-    style = "green" if ok else "red"
+    edge = "green" if ok else "red"
     if console and _RICH:
         console.print(
             Panel(
                 t,
                 title=title,
-                border_style=style,
+                border_style=edge,
                 box=box.ROUNDED,
             )
         )
@@ -288,6 +370,34 @@ def render_result_panel(
         print(f"\n{title}")
         for k, v in lines:
             print(f"  {k}: {v}")
+
+
+def render_success_panel(console: Optional[Console], message: str, title: str = "sucesso") -> None:
+    if console and _RICH:
+        console.print(
+            Panel(
+                Text(message, style="green"),
+                title=title,
+                border_style="green",
+                box=box.ROUNDED,
+            )
+        )
+    else:
+        print(f"\n{title}: {message}")
+
+
+def render_warning_panel(console: Optional[Console], message: str, title: str = "aviso") -> None:
+    if console and _RICH:
+        console.print(
+            Panel(
+                Text(message, style="yellow"),
+                title=title,
+                border_style="yellow",
+                box=box.ROUNDED,
+            )
+        )
+    else:
+        print(f"\n{title}: {message}")
 
 
 def render_error_panel(console: Optional[Console], message: str) -> None:
@@ -312,7 +422,7 @@ def render_blender_open_confirmation(console: Optional[Console], path: Path, kin
         msg.append("blender aberto em segundo plano\n", style="green")
         msg.append(str(path), style="cyan")
         msg.append(f"\ntipo: {kind}", style="dim")
-        console.print(Panel(msg, title="confirmacao", border_style="green", box=box.ROUNDED))
+        console.print(Panel(msg, title="sucesso blender", border_style="green", box=box.ROUNDED))
     else:
         print(f"\nblender aberto: {path}")
 

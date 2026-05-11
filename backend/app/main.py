@@ -27,10 +27,17 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# cors liberta chamadas do frontend vite ou create react app em portas locais
+# cors: localhost e 127.0.0.1 sao origens diferentes no browser — incluir ambos
+# (vite neste repo usa --host 127.0.0.1; sem isto o preflight OPTIONS devolve 400)
+_DEV_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=_DEV_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

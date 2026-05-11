@@ -216,13 +216,20 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           vertices: countVertices(obj),
           bytes: buffer.byteLength,
           path: info?.relative_path || '',
+          source_hint: info?.source_hint || '',
+          recommended_modes: info?.recommended_modes || '',
         });
       }
       try {
         localStorage.setItem(LS_LAST_MESH, id);
       } catch (_) {}
     } catch (e) {
-      setErr(e.message || String(e));
+      const msg = e?.message || String(e);
+      setErr(
+        pt
+          ? `falha ao carregar ou interpretar o modelo (${ext || '?'}): ${msg}`
+          : `failed to load or parse model (${ext || '?'}): ${msg}`,
+      );
     } finally {
       setLoadingMesh(false);
     }
@@ -367,6 +374,11 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
                     <span className="mesh-li-meta">
                       {m.format} · {Math.round(m.size_bytes / 1024)} kb
                     </span>
+                    {m.recommended_modes ? (
+                      <span className="mesh-li-rec" title={m.recommended_modes}>
+                        {m.recommended_modes}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               ))}
@@ -419,6 +431,18 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
                   <dd className="mesh-dd-path">{meta.path}</dd>
                 </>
               )}
+              {meta.source_hint ? (
+                <>
+                  <dt>{pt ? 'origem (heuristica)' : 'source (heuristic)'}</dt>
+                  <dd>{meta.source_hint}</dd>
+                </>
+              ) : null}
+              {meta.recommended_modes ? (
+                <>
+                  <dt>{pt ? 'recomendado' : 'recommended'}</dt>
+                  <dd>{meta.recommended_modes}</dd>
+                </>
+              ) : null}
             </dl>
           )}
         </aside>

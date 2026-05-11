@@ -40,6 +40,101 @@ except ImportError:
 
 MenuRow = Tuple[str, str, str]
 
+# texto completo de ajuda (h em confirm, pick_from_list e menus que reutilizam a constante)
+GLOBAL_KEYS_HINT = (
+    "menus numerados (tabelas com 0 1 2 …):\n"
+    "- 0 regressa ou cancela esse passo.\n"
+    "- 1–n escolhe a linha; enter vazio so confirma quando o menu indicar padrao explicito.\n"
+    "- ? ajuda do campo (se existir), * rever parametros (quando activo), h este texto.\n\n"
+    "perguntas internas (s/n, caminhos, numeros):\n"
+    "- c cancela o fluxo actual (equivalente a voltar um nivel).\n"
+    "- h ajuda; * rever parametros quando disponivel.\n\n"
+    "linha de comando (prompt_toolkit): setas, ctrl+r historico, tab completa atalhos.\n\n"
+    "no menu principal da aplicacao, 0 encerra."
+)
+
+# linha curta sob listas numeradas (detalhe completo so com tecla h)
+PICK_LIST_SHORT_HINT = "h ajuda global  |  0 voltar"
+
+
+def _numeric_menu_aux_lines(
+    *,
+    n_opt: int,
+    has_zero_back: bool,
+    help_callback: Optional[Callable[[], None]],
+    review_callback: Optional[Callable[[], None]],
+    menu_default_index: Optional[int],
+) -> List[str]:
+    """linhas discretas por baixo da tabela de menu numerado."""
+    parts: List[str] = []
+    if has_zero_back:
+        parts.append("0 voltar")
+    parts.append(f"1–{n_opt} escolher")
+    if help_callback:
+        parts.append("? ajuda do campo")
+    if review_callback:
+        parts.append("* rever parametros")
+    parts.append("h ajuda global")
+    lines = ["  " + "  ·  ".join(parts)]
+    if menu_default_index is not None:
+        lines.append(f"  enter vazio = opcao {menu_default_index + 1}")
+    else:
+        lines.append("  enter vazio nao escolhe linha")
+    return lines
+
+
+def _internal_prompt_aux_lines(
+    *, cancel: bool, review: bool, require_explicit: bool = False
+) -> List[str]:
+    bits = ["h ajuda"]
+    if cancel:
+        bits.append("c cancelar")
+    if review:
+        bits.append("* rever parametros")
+    lines = ["  " + "  ·  ".join(bits)]
+    if require_explicit:
+        lines.append("  enter vazio nao confirma; digite s ou n")
+    return lines
+
+
+def _options_to_menu_rows(options: List[str]) -> List[MenuRow]:
+    """converte lista de textos longos em linhas # | modo | resumo (como menu principal)."""
+    out: List[MenuRow] = []
+    for i, label in enumerate(options, start=1):
+        key = str(i)
+        s = (label or "").strip()
+        if "—" in s:
+            modo, rest = s.split("—", 1)
+            modo, rest = modo.strip(), rest.strip()
+        elif " - " in s:
+            modo, rest = s.split(" - ", 1)
+            modo, rest = modo.strip(), rest.strip()
+        else:
+            modo = s[:36] + ("…" if len(s) > 36 else "")
+            rest = s
+        out.append((key, modo, rest))
+    return out
+
+
+def _help_entries_to_menu_rows(
+    entries: Sequence[Tuple[str, str]], back_key: str
+) -> List[MenuRow]:
+    rows: List[MenuRow] = []
+    for key, label in entries:
+        s = (label or "").strip()
+        k = str(key).strip()
+        if "—" in s:
+            modo, rest = s.split("—", 1)
+            rows.append((k, modo.strip(), rest.strip()))
+        elif " - " in s:
+            modo, rest = s.split(" - ", 1)
+            rows.append((k, modo.strip(), rest.strip()))
+        else:
+            rows.append((k, s[:36] + ("…" if len(s) > 36 else ""), s))
+    bk = str(back_key).strip()
+    rows.append((bk, "voltar", "menu principal"))
+    return rows
+
 
 def _menu_resume_two_lines(text: str, line_width: int) -> str:
     """quebra o resumo em exatamente 2 linhas (ascii); ellipsis se nao couber tudo."""
@@ -59,12 +154,91 @@ def _menu_resume_two_lines(text: str, line_width: int) -> str:
     return f"{first}\n{second}"
 
 
+def render_menu_table_plain(rows: Sequence[MenuRow], title: str = "opcoes") -> None:
+    """imprime o mesmo layout logico do menu principal (fallback sem rich)."""
+    print()
+    print(f"  {title}")
+    print("  " + "-" * 56)
+    for key, titulo, desc in rows:
+        desc2 = _menu_resume_two_lines(desc, 52)
+        print(f"  [{key}]  {titulo}")
+        for ln in desc2.splitlines():
+            print(f"       {ln}")
+        print()
+
+
+def render_menu_table_rich(console: Any, rows: Sequence[MenuRow], title: str = "opcoes") -> None:
+    """tabela principal do wizard: # | modo | | resumo (mesmo estilo que menu inicial)."""
+    if not _HAS_RICH:
+        render_menu_table_plain(rows, title=title)
+        return
+    table = Table(
+        box=box.ROUNDED,
+        show_header=True,
+        show_lines=True,
+        header_style="bold rgb(240,212,168)",
+        border_style="rgb(95,25,35)",
+        expand=True,
+        pad_edge=True,
+        title=title,
+        title_style="wizard.muted",
+    )
+    table.add_column(
+        "#",
+        justify="center",
+        style="wizard.accent",
+        width=4,
+        no_wrap=True,
+    )
+    table.add_column(
+        "modo",
+        style="bold default",
+        min_width=24,
+        max_width=36,
+        no_wrap=True,
+        overflow="ellipsis",
+    )
+    table.add_column(
+        "",
+        justify="center",
+        style="wizard.muted",
+        width=1,
+        no_wrap=True,
+    )
+    table.add_column(
+        "resumo",
+        style="wizard.muted",
+        ratio=1,
+        no_wrap=False,
+        overflow="fold",
+    )
+    term_w = int(getattr(console, "width", None) or 80)
+    resume_w = max(16, term_w - 52)
+    for key, titulo, desc in rows:
+        desc_cell = _menu_resume_two_lines(desc, resume_w)
+        table.add_row(key, titulo, "|", desc_cell)
+    console.print()
+    console.print(table)
+    console.print()
+
+
 def _wizard_prompt_session() -> Any:
     """sessao prompt_toolkit: historico, tab em atalhos comuns, sugestao do historico."""
     return PromptSession(
         history=InMemoryHistory(),
         completer=WordCompleter(
-            ["?", "*", "n", "p", "q", "s", "sim", "nao", "c", "cancel", "cancelar"],
+            [
+                "?",
+                "*",
+                "h",
+                "c",
+                "cancelar",
+                "n",
+                "p",
+                "s",
+                "sim",
+                "nao",
+            ],
             ignore_case=True,
         ),
         auto_suggest=AutoSuggestFromHistory(),
@@ -212,6 +386,32 @@ class PlainWizardUi:
             print(f"  {line}")
         print()
 
+    def print_aux_numeric_menu(
+        self,
+        *,
+        n_opt: int,
+        has_zero_back: bool,
+        help_callback: Optional[Callable[[], None]],
+        review_callback: Optional[Callable[[], None]],
+        menu_default_index: Optional[int],
+    ) -> None:
+        for ln in _numeric_menu_aux_lines(
+            n_opt=n_opt,
+            has_zero_back=has_zero_back,
+            help_callback=help_callback,
+            review_callback=review_callback,
+            menu_default_index=menu_default_index,
+        ):
+            print(ln)
+
+    def print_aux_internal_prompt(
+        self, *, cancel: bool, review: bool, require_explicit: bool = False
+    ) -> None:
+        for ln in _internal_prompt_aux_lines(
+            cancel=cancel, review=review, require_explicit=require_explicit
+        ):
+            print(ln)
+
     def pause(self, msg: str = "pressione enter para continuar...") -> None:
         input(f"\n{msg}")
 
@@ -264,25 +464,48 @@ class PlainWizardUi:
         self,
         caption: str,
         options: List[str],
-        default_index: int = 0,
+        menu_default_index: Optional[int] = None,
         help_callback: Optional[Callable[[], None]] = None,
         review_callback: Optional[Callable[[], None]] = None,
         cancel_callback: Optional[Callable[[], None]] = None,
+        quit_callback: Optional[Callable[[], None]] = None,
     ) -> str:
+        _ = quit_callback
+        n = len(options)
+        option_rows = _options_to_menu_rows(options)
+        has_zero = cancel_callback is not None
+        if has_zero:
+            menu_rows: List[MenuRow] = [
+                ("0", "voltar", "cancela este passo sem escolher uma linha da tabela"),
+            ] + option_rows
+        else:
+            menu_rows = option_rows
         while True:
-            print(f"\n{caption}")
-            for i, option in enumerate(options):
-                print(f"  {i + 1}. {option}")
-            if help_callback or review_callback:
-                print("  (? ajuda  * rever parametros)")
-            if cancel_callback:
-                print("  (c = voltar / cancelar — sobe no fluxo ou sai ao menu onde o cancelamento e tratado)")
+            print()
+            print(caption)
+            render_menu_table_plain(menu_rows, title="opcoes")
+            print()
+            self.print_aux_numeric_menu(
+                n_opt=n,
+                has_zero_back=has_zero,
+                help_callback=help_callback,
+                review_callback=review_callback,
+                menu_default_index=menu_default_index,
+            )
+            print()
             try:
-                raw = self.ask_line(
-                    f"\nescolha (1-{len(options)}): ",
-                    default=str(default_index + 1),
-                ).strip()
-                if cancel_callback and raw.lower() in ("c", "cancel", "cancelar", "voltar", "back"):
+                raw = self.ask_line("opcao: ", default="").strip()
+                low = raw.lower()
+                if low == "h":
+                    print()
+                    for ln in GLOBAL_KEYS_HINT.splitlines():
+                        print(f"  {ln}")
+                    print()
+                    continue
+                if low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
+                    print("  aviso: neste menu numerado use 0 para voltar.")
+                    continue
+                if has_zero and raw == "0":
                     cancel_callback()
                     continue
                 if raw == "?" and help_callback:
@@ -292,11 +515,14 @@ class PlainWizardUi:
                     review_callback()
                     continue
                 if not raw:
-                    return options[default_index]
+                    if menu_default_index is None:
+                        print("  aviso: indique um numero da tabela (ou 0 para voltar).")
+                        continue
+                    return options[menu_default_index]
                 idx = int(raw) - 1
-                if 0 <= idx < len(options):
+                if 0 <= idx < n:
                     return options[idx]
-                print(f"  aviso: escolha entre 1 e {len(options)}!")
+                print(f"  aviso: escolha entre 1 e {n}!")
             except ValueError:
                 print("  aviso: digite um numero valido!")
 
@@ -305,15 +531,41 @@ class PlainWizardUi:
         message: str,
         default: bool = True,
         cancel_callback: Optional[Callable[[], None]] = None,
+        *,
+        allow_empty_default: bool = True,
     ) -> bool:
         default_str = "sim" if default else "nao"
         while True:
-            value = input(f"{message} (s/n) [{default_str}]: ").strip()
-            if cancel_callback and value.lower() in ("c", "cancel", "cancelar", "voltar", "back"):
+            print(message)
+            self.print_aux_internal_prompt(
+                cancel=cancel_callback is not None,
+                review=False,
+                require_explicit=not allow_empty_default,
+            )
+            print()
+            value = self.ask_line(f"(s/n) [{default_str}]: ", default="").strip()
+            low = value.lower()
+            if low == "h":
+                print()
+                for ln in GLOBAL_KEYS_HINT.splitlines():
+                    print(f"  {ln}")
+                print()
+                continue
+            if cancel_callback and low in (
+                "c",
+                "cancel",
+                "cancelar",
+                "voltar",
+                "back",
+                "q",
+            ):
                 cancel_callback()
                 continue
             if not value:
-                return default
+                if allow_empty_default:
+                    return default
+                print("  aviso: digite s ou n (ou c para cancelar).")
+                continue
             value = value.lower()
             if value in ("s", "sim", "y", "yes"):
                 return True
@@ -322,21 +574,12 @@ class PlainWizardUi:
             print("  aviso: digite 's' para sim ou 'n' para nao!")
 
     def render_main_menu(self, rows: Sequence[MenuRow], title: str = "opcoes") -> None:
-        print()
-        print(f"  {title}")
-        print("  " + "-" * 56)
-        for key, titulo, desc in rows:
-            desc2 = _menu_resume_two_lines(desc, 52)
-            print(f"  [{key}]  {titulo}")
-            for ln in desc2.splitlines():
-                print(f"       {ln}")
-            print()
+        render_menu_table_plain(rows, title=title)
 
     def render_help_section_menu(self, entries: Sequence[Tuple[str, str]], back_key: str = "0") -> None:
-        print("secoes de ajuda:")
-        for key, label in entries:
-            print(f"  {key}. {label}")
-        print(f"  {back_key}. voltar ao menu principal")
+        rows = _help_entries_to_menu_rows(entries, back_key)
+        render_menu_table_plain(rows, title="secoes de ajuda")
+        print(f"  {PICK_LIST_SHORT_HINT}")
         print()
 
     def render_documentation_page(
@@ -372,9 +615,8 @@ class RichWizardUi:
         chrome = Text()
         chrome.append(" bedflow atlas ", style="wizard.chrome")
         chrome.append(" ", style="")
-        chrome.append("wizard://", style="wizard.path")
-        seg = title.strip().lower().replace(" ", "-")[:48]
-        chrome.append(seg if seg else "inicio", style="wizard.path_seg")
+        chrome.append("setup://", style="wizard.path")
+        chrome.append("setup-de-parametrizacao", style="wizard.path_seg")
         bar = Panel(
             Align.left(chrome),
             box=box.HEAVY,
@@ -395,7 +637,7 @@ class RichWizardUi:
         if not parts:
             return
         t = Text()
-        t.append("wizard://", style="wizard.path")
+        t.append("setup://", style="wizard.path")
         for i, p in enumerate(parts):
             if i:
                 t.append(" / ", style="wizard.muted")
@@ -433,6 +675,32 @@ class RichWizardUi:
                 padding=(0, 1),
             )
         )
+
+    def print_aux_numeric_menu(
+        self,
+        *,
+        n_opt: int,
+        has_zero_back: bool,
+        help_callback: Optional[Callable[[], None]],
+        review_callback: Optional[Callable[[], None]],
+        menu_default_index: Optional[int],
+    ) -> None:
+        for ln in _numeric_menu_aux_lines(
+            n_opt=n_opt,
+            has_zero_back=has_zero_back,
+            help_callback=help_callback,
+            review_callback=review_callback,
+            menu_default_index=menu_default_index,
+        ):
+            self.console.print(Text(ln, style="wizard.muted"))
+
+    def print_aux_internal_prompt(
+        self, *, cancel: bool, review: bool, require_explicit: bool = False
+    ) -> None:
+        for ln in _internal_prompt_aux_lines(
+            cancel=cancel, review=review, require_explicit=require_explicit
+        ):
+            self.console.print(Text(ln, style="wizard.muted"))
 
     def pause(self, msg: str = "pressione enter para continuar...") -> None:
         self.console.input(f"\n[wizard.muted]{msg}[/] ")
@@ -488,35 +756,46 @@ class RichWizardUi:
         self,
         caption: str,
         options: List[str],
-        default_index: int = 0,
+        menu_default_index: Optional[int] = None,
         help_callback: Optional[Callable[[], None]] = None,
         review_callback: Optional[Callable[[], None]] = None,
         cancel_callback: Optional[Callable[[], None]] = None,
+        quit_callback: Optional[Callable[[], None]] = None,
     ) -> str:
-        self.console.print()
-        self.console.print(Text(caption, style="wizard.label"))
-        table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="wizard.section", border_style="dim")
-        table.add_column("#", justify="right", style="wizard.muted", width=4)
-        table.add_column("opcao", style="")
-        for i, opt in enumerate(options):
-            table.add_row(str(i + 1), opt)
-        self.console.print(table)
-        if help_callback or review_callback:
-            self.console.print(Text("? ajuda   * rever parametros", style="wizard.hint"))
-        if cancel_callback:
-            self.console.print(
-                Text(
-                    "c = voltar / cancelar (sobe no fluxo ou sai ao menu onde o cancelamento e tratado)",
-                    style="wizard.hint",
-                )
-            )
-        self.console.print()
+        _ = quit_callback
+        n_opt = len(options)
+        option_rows = _options_to_menu_rows(options)
+        has_zero = cancel_callback is not None
+        if has_zero:
+            menu_rows: List[MenuRow] = [
+                ("0", "voltar", "cancela este passo sem escolher uma linha da tabela"),
+            ] + option_rows
+        else:
+            menu_rows = option_rows
         while True:
-            raw = self.ask_line(
-                f"numero (1-{len(options)}, enter={default_index + 1}): ",
-                default=str(default_index + 1),
-            ).strip()
-            if cancel_callback and raw.lower() in ("c", "cancel", "cancelar", "voltar", "back"):
+            self.console.print()
+            self.console.print(Text(caption, style="wizard.label"))
+            render_menu_table_rich(self.console, menu_rows, title="opcoes")
+            self.console.print()
+            self.print_aux_numeric_menu(
+                n_opt=n_opt,
+                has_zero_back=has_zero,
+                help_callback=help_callback,
+                review_callback=review_callback,
+                menu_default_index=menu_default_index,
+            )
+            self.console.print()
+            raw = self.ask_line("opcao: ", default="").strip()
+            low = raw.lower()
+            if low == "h":
+                for ln in GLOBAL_KEYS_HINT.splitlines():
+                    self.console.print(Text(ln, style="wizard.hint"))
+                self.console.print()
+                continue
+            if low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
+                self.warn("use 0 para voltar neste menu.")
+                continue
+            if has_zero and raw == "0":
                 cancel_callback()
                 continue
             if raw == "?" and help_callback:
@@ -527,13 +806,15 @@ class RichWizardUi:
                 continue
             try:
                 if not raw:
-                    n = default_index + 1
-                else:
-                    n = int(raw)
-                idx = int(n) - 1
-                if 0 <= idx < len(options):
+                    if menu_default_index is None:
+                        self.warn("indique um numero da tabela (ou 0 para voltar).")
+                        continue
+                    return options[menu_default_index]
+                num = int(raw)
+                idx = num - 1
+                if 0 <= idx < n_opt:
                     return options[idx]
-                self.warn(f"escolha entre 1 e {len(options)}!")
+                self.warn(f"escolha entre 1 e {n_opt}!")
             except (ValueError, TypeError):
                 self.warn("digite um numero valido!")
 
@@ -542,15 +823,40 @@ class RichWizardUi:
         message: str,
         default: bool = True,
         cancel_callback: Optional[Callable[[], None]] = None,
+        *,
+        allow_empty_default: bool = True,
     ) -> bool:
         default_str = "sim" if default else "nao"
         while True:
-            raw = self.console.input(f"{message} (s/n) [{default_str}]: ").strip()
-            if cancel_callback and raw.lower() in ("c", "cancel", "cancelar", "voltar", "back"):
+            self.console.print(Text(message, style="wizard.label"))
+            self.print_aux_internal_prompt(
+                cancel=cancel_callback is not None,
+                review=False,
+                require_explicit=not allow_empty_default,
+            )
+            self.console.print()
+            raw = self.ask_line(f"(s/n) [{default_str}]: ", default="").strip()
+            low = raw.lower()
+            if low == "h":
+                for ln in GLOBAL_KEYS_HINT.splitlines():
+                    self.console.print(Text(ln, style="wizard.hint"))
+                self.console.print()
+                continue
+            if cancel_callback and low in (
+                "c",
+                "cancel",
+                "cancelar",
+                "voltar",
+                "back",
+                "q",
+            ):
                 cancel_callback()
                 continue
             if not raw:
-                return default
+                if allow_empty_default:
+                    return default
+                self.warn("digite s ou n (ou c para cancelar).")
+                continue
             v = raw.lower()
             if v in ("s", "sim", "y", "yes"):
                 return True
@@ -559,66 +865,12 @@ class RichWizardUi:
             self.warn("digite 's' para sim ou 'n' para nao!")
 
     def render_main_menu(self, rows: Sequence[MenuRow], title: str = "opcoes") -> None:
-        self.console.print()
-        table = Table(
-            box=box.ROUNDED,
-            show_header=True,
-            show_lines=True,
-            header_style="bold rgb(240,212,168)",
-            border_style="rgb(95,25,35)",
-            expand=True,
-            pad_edge=True,
-            title=title,
-            title_style="wizard.muted",
-        )
-        table.add_column(
-            "#",
-            justify="center",
-            style="wizard.accent",
-            width=4,
-            no_wrap=True,
-        )
-        # modo numa so linha evita celulas multilinha que partem o alinhamento da tabela
-        table.add_column(
-            "modo",
-            style="bold default",
-            min_width=24,
-            max_width=36,
-            no_wrap=True,
-            overflow="ellipsis",
-        )
-        # separador visual entre "modo" e "resumo"
-        table.add_column(
-            "",
-            justify="center",
-            style="wizard.muted",
-            width=1,
-            no_wrap=True,
-        )
-        table.add_column(
-            "resumo",
-            style="wizard.muted",
-            ratio=1,
-            no_wrap=False,
-            overflow="fold",
-        )
-        term_w = int(getattr(self.console, "width", None) or 80)
-        # largura aproximada da celula resumo: terminal menos colunas fixas e bordas
-        resume_w = max(16, term_w - 52)
-        for key, titulo, desc in rows:
-            desc_cell = _menu_resume_two_lines(desc, resume_w)
-            table.add_row(key, titulo, "|", desc_cell)
-        self.console.print(table)
-        self.console.print()
+        render_menu_table_rich(self.console, rows, title=title)
 
     def render_help_section_menu(self, entries: Sequence[Tuple[str, str]], back_key: str = "0") -> None:
-        table = Table(box=box.SIMPLE, show_header=False, border_style="dim")
-        table.add_column("atalho", style="wizard.accent", width=6)
-        table.add_column("secao", style="")
-        for key, label in entries:
-            table.add_row(key, label)
-        table.add_row(back_key, "voltar ao menu principal")
-        self.console.print(table)
+        rows = _help_entries_to_menu_rows(entries, back_key)
+        render_menu_table_rich(self.console, rows, title="secoes de ajuda")
+        self.console.print(Text(PICK_LIST_SHORT_HINT, style="wizard.hint"))
         self.console.print()
 
     def render_documentation_page(

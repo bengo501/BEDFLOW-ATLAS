@@ -21,6 +21,61 @@ from typing import Dict, Any, Tuple
 import sys
 
 
+def _write_text_unix(path: Path, text: str) -> None:
+    """lf only: openfoam e bash no wsl falham com crlf (bad interpreter ^m)."""
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+
+
+def _foam_dictionary_header() -> str:
+    """banner completo antes de FoamFile (openfoam 1906+ rejeita cabecalho truncado)."""
+    return (
+        "/*--------------------------------*- C++ -*----------------------------------*\\\n"
+        "| =========                 |                                                 |\n"
+        "| \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |\n"
+        "|  \\\\    /   O peration     | Version:  v1906+                                |\n"
+        "|   \\\\  /    A nd           | Web:      www.OpenFOAM.org                      |\n"
+        "|    \\\\/     M anipulation  |                                                 |\n"
+        "\\*---------------------------------------------------------------------------*/\n"
+    )
+
+
+def _repo_root_for_hints() -> Path:
+    try:
+        from bedflow_local_paths import project_root
+
+        return project_root()
+    except ImportError:
+        return Path(__file__).resolve().parents[2]
+
+
+def _windows_path_to_wsl(path: Path) -> str:
+    s = str(path.resolve())
+    if len(s) >= 2 and s[1] == ":":
+        return f"/mnt/{s[0].lower()}{s[2:].replace(chr(92), '/')}"
+    return s.replace("\\", "/")
+
+
+OPENFOAM_HINT_FILE_NAME = "openfoam_wsl_bashrc.txt"
+
+
+def _ensure_openfoam_hint_file(repo_root: Path) -> Path:
+    """ficheiro opcional: uma linha com caminho absoluto wsl para etc/bashrc."""
+    p = repo_root / "local_data" / OPENFOAM_HINT_FILE_NAME
+    p.parent.mkdir(parents=True, exist_ok=True)
+    if not p.exists():
+        _write_text_unix(
+            p,
+            "# caminho absoluto no wsl para etc/bashrc do openfoam (apenas uma linha ativa)\n"
+            "# exemplos:\n"
+            "# /opt/openfoam11/etc/bashrc\n"
+            "# ubuntu apt (openfoam 1906 metapackage): /usr/share/openfoam/etc/bashrc\n"
+            "# /usr/lib/openfoam/openfoam2312/etc/bashrc\n"
+            "# ou exporte BEDFLOW_OPENFOAM_BASHRC nesse caminho antes de ./Allrun\n",
+        )
+    return p
+
+
 class OpenFOAMCaseGenerator:
     """classe para gerar e executar caso openfoam"""
     
@@ -69,6 +124,10 @@ class OpenFOAMCaseGenerator:
         if not blend_file.exists():
             raise FileNotFoundError(f"arquivo blend nao encontrado: {blend_file}")
         
+        stl_target = (self.output_dir / f"{self.case_name}.stl").resolve()
+        # literal python seguro: caminhos windows com \U \t etc. nao podem ir cru numa string "..."
+        _stl_literal = json.dumps(str(stl_target), ensure_ascii=False)
+
         # criar script python para executar no blender
         export_script = f"""
 import bpy
@@ -81,8 +140,10 @@ bpy.ops.object.select_all(action='DESELECT')
 bpy.ops.object.select_all(action='SELECT')
 
 # exportar para stl
-output_path = "{self.output_dir / f'{self.case_name}.stl'}"
-os.makedirs(os.path.dirname(output_path), exist_ok=True)
+output_path = {_stl_literal}
+_out_dir = os.path.dirname(output_path)
+if _out_dir:
+    os.makedirs(_out_dir, exist_ok=True)
 
 bpy.ops.export_mesh.stl(
     filepath=output_path,
@@ -96,8 +157,7 @@ print(f"STL exportado: {{output_path}}")
         
         # salvar script temporario
         script_path = self.output_dir / "export_stl.py"
-        with open(script_path, 'w') as f:
-            f.write(export_script)
+        _write_text_unix(script_path, export_script)
         
         # encontrar blender
         blender_paths = [
@@ -127,7 +187,7 @@ print(f"STL exportado: {{output_path}}")
         # limpar script temporario
         script_path.unlink()
         
-        stl_path = self.output_dir / f'{self.case_name}.stl'
+        stl_path = stl_target
         
         if result.returncode == 0 and stl_path.exists():
             size_mb = stl_path.stat().st_size / (1024 * 1024)
@@ -168,16 +228,26 @@ print(f"STL exportado: {{output_path}}")
     def create_mesh_dict(self):
         """criar dicionarios de geracao de malha"""
         print(f"\n[5/8] criando configuracao de malha")
-        
+
         # obter dimensoes do leito
-        diameter = self.params['bed']['diameter']
-        height = self.params['bed']['height']
-        
+        diameter = float(self.params["bed"]["diameter"])
+        height = float(self.params["bed"]["height"])
+
+        # cantos da caixa (bloco hex) — valores numericos: openfoam nao expande $xMin nem aceita xMin;
+        # como chave de primeiro nivel no blockmeshdict
+        xm = -diameter * 0.6
+        xM = diameter * 0.6
+        ym = -diameter * 0.6
+        yM = diameter * 0.6
+        zm = -height * 0.1
+        zM = height * 1.1
+        _v = lambda a: f"{a:.10g}"
+
         # criar blockmeshdict (malha de fundo)
         blockmesh = f"""/*--------------------------------*- C++ -*----------------------------------*\\
 | =========                 |                                                 |
 | \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\\\    /   O peration     | Version:  11                                    |
+|  \\\\    /   O peration     | Version:  v1906+                                |
 |   \\\\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\\\/     M anipulation  |                                                 |
 \\*---------------------------------------------------------------------------*/
@@ -190,24 +260,18 @@ FoamFile
 }}
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-// criar caixa ao redor do leito (20% maior)
-xMin {-diameter * 0.6};
-xMax {diameter * 0.6};
-yMin {-diameter * 0.6};
-yMax {diameter * 0.6};
-zMin {-height * 0.1};
-zMax {height * 1.1};
+convertToMeters 1;
 
 vertices
 (
-    ($xMin $yMin $zMin)
-    ($xMax $yMin $zMin)
-    ($xMax $yMax $zMin)
-    ($xMin $yMax $zMin)
-    ($xMin $yMin $zMax)
-    ($xMax $yMin $zMax)
-    ($xMax $yMax $zMax)
-    ($xMin $yMax $zMax)
+    ({_v(xm)} {_v(ym)} {_v(zm)})
+    ({_v(xM)} {_v(ym)} {_v(zm)})
+    ({_v(xM)} {_v(yM)} {_v(zm)})
+    ({_v(xm)} {_v(yM)} {_v(zm)})
+    ({_v(xm)} {_v(ym)} {_v(zM)})
+    ({_v(xM)} {_v(ym)} {_v(zM)})
+    ({_v(xM)} {_v(yM)} {_v(zM)})
+    ({_v(xm)} {_v(yM)} {_v(zM)})
 );
 
 blocks
@@ -226,12 +290,12 @@ boundary
         type wall;
         faces
         (
-            (0 3 2 1)  // bottom
-            (4 5 6 7)  // top
-            (0 4 7 3)  // left
-            (2 6 5 1)  // right
-            (1 5 4 0)  // front
-            (3 7 6 2)  // back
+            (0 3 2 1)
+            (4 5 6 7)
+            (0 4 7 3)
+            (2 6 5 1)
+            (1 5 4 0)
+            (3 7 6 2)
         );
     }}
 );
@@ -244,8 +308,7 @@ mergePatchPairs
 """
         
         # salvar blockmeshdict
-        with open(self.case_dir / "system" / "blockMeshDict", 'w') as f:
-            f.write(blockmesh)
+        _write_text_unix(self.case_dir / "system" / "blockMeshDict", blockmesh)
         
         print(f"  [OK] blockMeshDict criado")
         
@@ -367,8 +430,7 @@ mergeTolerance 1e-6;
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "system" / "snappyHexMeshDict", 'w') as f:
-            f.write(snappy)
+        _write_text_unix(self.case_dir / "system" / "snappyHexMeshDict", snappy)
         
         print(f"  [OK] snappyHexMeshDict criado")
     
@@ -384,8 +446,7 @@ mergeTolerance 1e-6;
         max_iterations = int(cfd.get('max_iterations', 1000))
         
         # controlDict
-        control = f"""/*--------------------------------*- C++ -*----------------------------------*\\
-FoamFile
+        control = _foam_dictionary_header() + f"""FoamFile
 {{
     version     2.0;
     format      ascii;
@@ -427,12 +488,10 @@ runTimeModifiable true;
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "system" / "controlDict", 'w') as f:
-            f.write(control)
+        _write_text_unix(self.case_dir / "system" / "controlDict", control)
         
         # fvSchemes
-        schemes = """/*--------------------------------*- C++ -*----------------------------------*\\
-FoamFile
+        schemes = _foam_dictionary_header() + """FoamFile
 {
     version     2.0;
     format      ascii;
@@ -476,12 +535,10 @@ snGradSchemes
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "system" / "fvSchemes", 'w') as f:
-            f.write(schemes)
+        _write_text_unix(self.case_dir / "system" / "fvSchemes", schemes)
         
         # fvSolution
-        solution = """/*--------------------------------*- C++ -*----------------------------------*\\
-FoamFile
+        solution = _foam_dictionary_header() + """FoamFile
 {
     version     2.0;
     format      ascii;
@@ -536,8 +593,7 @@ relaxationFactors
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "system" / "fvSolution", 'w') as f:
-            f.write(solution)
+        _write_text_unix(self.case_dir / "system" / "fvSolution", solution)
         
         print(f"  [OK] arquivos de controle criados")
     
@@ -550,8 +606,7 @@ relaxationFactors
         inlet_velocity = float(cfd.get('inlet_velocity', 0.1))
         
         # arquivo U (velocidade)
-        u_file = f"""/*--------------------------------*- C++ -*----------------------------------*\\
-FoamFile
+        u_file = _foam_dictionary_header() + f"""FoamFile
 {{
     version     2.0;
     format      ascii;
@@ -580,12 +635,10 @@ boundaryField
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "0" / "U", 'w') as f:
-            f.write(u_file)
+        _write_text_unix(self.case_dir / "0" / "U", u_file)
         
         # arquivo p (pressao)
-        p_file = """/*--------------------------------*- C++ -*----------------------------------*\\
-FoamFile
+        p_file = _foam_dictionary_header() + """FoamFile
 {
     version     2.0;
     format      ascii;
@@ -614,14 +667,12 @@ boundaryField
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "0" / "p", 'w') as f:
-            f.write(p_file)
+        _write_text_unix(self.case_dir / "0" / "p", p_file)
         
         # transportProperties
         fluid_viscosity = float(cfd.get('fluid_viscosity', 1.5e-5))
         
-        transport = f"""/*--------------------------------*- C++ -*----------------------------------*\\
-FoamFile
+        transport = _foam_dictionary_header() + f"""FoamFile
 {{
     version     2.0;
     format      ascii;
@@ -637,12 +688,10 @@ nu              {fluid_viscosity};
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "constant" / "transportProperties", 'w') as f:
-            f.write(transport)
+        _write_text_unix(self.case_dir / "constant" / "transportProperties", transport)
         
         # turbulenceProperties
-        turbulence = """/*--------------------------------*- C++ -*----------------------------------*\\
-FoamFile
+        turbulence = _foam_dictionary_header() + """FoamFile
 {
     version     2.0;
     format      ascii;
@@ -656,20 +705,137 @@ simulationType laminar;
 // ************************************************************************* //
 """
         
-        with open(self.case_dir / "constant" / "turbulenceProperties", 'w') as f:
-            f.write(turbulence)
+        _write_text_unix(self.case_dir / "constant" / "turbulenceProperties", turbulence)
         
         print(f"  [OK] condicoes iniciais criadas")
     
     def create_run_script(self):
         """criar script allrun para executar caso"""
         print(f"\n[8/8] criando script de execucao")
-        
-        allrun = """#!/bin/sh
+
+        repo = _repo_root_for_hints()
+        hint_disk = _ensure_openfoam_hint_file(repo)
+        hint_wsl_json = json.dumps(_windows_path_to_wsl(hint_disk))
+
+        allrun = (
+            """#!/usr/bin/env bash
+# hint: export BEDFLOW_OPENFOAM_BASHRC=/opt/openfoam11/etc/bashrc  ou edite:
+# """
+            + str(hint_disk).replace("\\", "/")
+            + """
+FOAM_USER_HINT_FILE="""
+            + hint_wsl_json
+            + """
+
 cd "${0%/*}" || exit 1
 
-# source openfoam
-source /opt/openfoam11/etc/bashrc
+foam_source_env() {
+  local b="" try="" n="" globs
+
+  if [ -n "${BEDFLOW_OPENFOAM_BASHRC:-}" ] && [ -f "$BEDFLOW_OPENFOAM_BASHRC" ]; then
+    # shellcheck source=/dev/null
+    source "$BEDFLOW_OPENFOAM_BASHRC"
+    return 0
+  fi
+  if [ -n "${WM_PROJECT_DIR:-}" ] && [ -f "${WM_PROJECT_DIR}/etc/bashrc" ]; then
+    # shellcheck source=/dev/null
+    source "${WM_PROJECT_DIR}/etc/bashrc"
+    return 0
+  fi
+  if [ -f "$FOAM_USER_HINT_FILE" ]; then
+    b=$(grep -v '^[[:space:]]*#' "$FOAM_USER_HINT_FILE" | grep -v '^[[:space:]]*$' | head -1 | sed 's/\\r//g')
+    b=$(echo "$b" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -n "$b" ] && [ -f "$b" ]; then
+      # shellcheck source=/dev/null
+      source "$b"
+      return 0
+    fi
+  fi
+
+  # ubuntu/debian: metapacote "openfoam" (ex. v1906) — dpkg -L aponta para /usr/share/openfoam/etc/bashrc
+  if [ -f /usr/share/openfoam/etc/bashrc ]; then
+    # shellcheck source=/dev/null
+    source /usr/share/openfoam/etc/bashrc
+    return 0
+  fi
+
+  for try in \\
+      /opt/openfoam12/etc/bashrc \\
+      /opt/openfoam11/etc/bashrc \\
+      /opt/openfoam10/etc/bashrc \\
+      /opt/openfoam9/etc/bashrc \\
+      /opt/openfoam8/etc/bashrc \\
+      /usr/lib/openfoam/openfoam2312/etc/bashrc \\
+      /usr/lib/openfoam/openfoam2306/etc/bashrc \\
+      /usr/lib/openfoam/openfoam2212/etc/bashrc \\
+      /usr/lib/openfoam/openfoam2112/etc/bashrc \\
+      /usr/lib/openfoam/openfoam2012/etc/bashrc \\
+      /usr/lib/openfoam/openfoam1912/etc/bashrc \\
+      /usr/lib/openfoam/openfoam1906/etc/bashrc \\
+      /usr/lib/openfoam/openfoam1812/etc/bashrc \\
+      /usr/lib/openfoam/openfoam1806/etc/bashrc
+  do
+    if [ -f "$try" ]; then
+      # shellcheck source=/dev/null
+      source "$try"
+      return 0
+    fi
+  done
+
+  shopt -s nullglob
+  globs=(/opt/openfoam*/etc/bashrc)
+  n=${#globs[@]}
+  shopt -u nullglob
+  if [ "$n" -gt 0 ] && command -v sort >/dev/null 2>&1; then
+    try=$(printf '%s\\n' "${globs[@]}" | sort -V 2>/dev/null | tail -1)
+    if [ -n "$try" ] && [ -f "$try" ]; then
+      # shellcheck source=/dev/null
+      source "$try"
+      return 0
+    fi
+  fi
+
+  shopt -s nullglob
+  globs=(/usr/lib/openfoam/openfoam*/etc/bashrc)
+  n=${#globs[@]}
+  shopt -u nullglob
+  if [ "$n" -gt 0 ] && command -v sort >/dev/null 2>&1; then
+    try=$(printf '%s\\n' "${globs[@]}" | sort -V 2>/dev/null | tail -1)
+    if [ -n "$try" ] && [ -f "$try" ]; then
+      # shellcheck source=/dev/null
+      source "$try"
+      return 0
+    fi
+  fi
+
+  for try in \\
+      "$HOME/OpenFOAM/OpenFOAM-v2412/etc/bashrc" \\
+      "$HOME/OpenFOAM/OpenFOAM-v2312/etc/bashrc" \\
+      "$HOME/OpenFOAM/OpenFOAM-v2306/etc/bashrc" \\
+      "$HOME/OpenFOAM/OpenFOAM-v2212/etc/bashrc" \\
+      "$HOME/OpenFOAM/OpenFOAM-v2112/etc/bashrc"
+  do
+    if [ -f "$try" ]; then
+      # shellcheck source=/dev/null
+      source "$try"
+      return 0
+    fi
+  done
+
+  if command -v blockMesh >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[ERRO] openfoam nao encontrado no wsl."
+  echo "  opcoes:"
+  echo "  1) sudo apt update && sudo apt install -y openfoam  (ou pacote openfoam.com / esp.org)"
+  echo "  2) no ficheiro (uma linha): $FOAM_USER_HINT_FILE"
+  echo "     ex: /usr/share/openfoam/etc/bashrc (ubuntu apt) ou /opt/openfoam11/etc/bashrc"
+  echo "  3) no ~/.bashrc: export BEDFLOW_OPENFOAM_BASHRC=/caminho/para/etc/bashrc"
+  return 1
+}
+
+foam_source_env || exit 1
 
 echo "========================================="
 echo " executando caso openfoam"
@@ -709,7 +875,7 @@ FOAM_PID=$!
 while kill -0 $FOAM_PID 2>/dev/null; do
     if [ -f log.simpleFoam ]; then
         LAST_TIME=$(grep "^Time = " log.simpleFoam | tail -1)
-        printf "\r   %s" "$LAST_TIME"
+        printf "\\r   %s" "$LAST_TIME"
     fi
     sleep 2
 done
@@ -739,10 +905,10 @@ touch caso.foam
 
 exit 0
 """
-        
+        )
+
         allrun_path = self.case_dir / "Allrun"
-        with open(allrun_path, 'w') as f:
-            f.write(allrun)
+        _write_text_unix(allrun_path, allrun)
         
         # tornar executavel (no wsl)
         try:
@@ -751,6 +917,10 @@ exit 0
             pass  # windows nao suporta chmod
         
         print(f"  [OK] script Allrun criado")
+        print(
+            f"  [i] se o wsl nao encontrar openfoam, instale-o ou "
+            f"coloque o caminho do etc/bashrc em: {hint_disk}"
+        )
     
     def run(self, blend_file: Path, execute_simulation: bool = True):
         """

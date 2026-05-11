@@ -585,10 +585,18 @@ packing {
                 </ul>
                 
                 <h3>3. visualizar resultado</h3>
+                <p>
+                    três modos principais: <strong>navegador</strong> (three.js no frontend, lista via api fastapi),
+                    <strong>desktop</strong> (script open3d para stl/obj/ply) e <strong>blender</strong>
+                    (cena .blend nativa; malhas cad importadas pelo script
+                    <code>scripts/blender_scripts/open_imported_mesh_gui.py</code>).
+                    documentação detalhada:
+                    <a href="../docs/visualizacao_3d_arquitetura.md">docs/visualizacao_3d_arquitetura.md</a>.
+                </p>
                 <ul>
-                    <li>abrir arquivo <code>.blend</code> no blender</li>
-                    <li>verificar geometria e empacotamento</li>
-                    <li>exportar para outros formatos se necessário</li>
+                    <li>no wizard, opção <strong>visualização 3d</strong> lista ficheiros (ex.: <code>local_data/models_3d/</code>)</li>
+                    <li>web: url com <code>?meshViewerId=…</code> — requer <code>npm run dev</code> e api em execução</li>
+                    <li>menu <strong>ajuda</strong> do wizard, opção 7: resumo dos modos e da tabela de formatos</li>
                 </ul>
                 
                 <h3>tempo estimado</h3>

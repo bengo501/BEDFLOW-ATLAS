@@ -36,12 +36,7 @@
     "damping": 0.1,
     "rest_velocity": 0.01,
     "max_time": 5.0,
-    "collision_margin": 0.001,
-    "gap": 0.0001,
-    "strict_validation": true,
-    "mesh_segmentos": 24,
-    "sphere_lat": 3,
-    "sphere_lon": 5
+    "collision_margin": 0.001
   },
   "export": {
     "formats": [
@@ -68,15 +63,5 @@
     "hash": "d02e981f",
     "compiler": "bed_compiler_antlr_standalone",
     "input_file": "C:\\Users\\joxto\\Downloads\\BEDFLOW-ATLAS-TCC-2\\_test_hex.bed"
-  },
-  "generation_backend": "pure_python",
-  "packing_mode": "hexagonal_3d",
-  "slice": {
-    "slice_enabled": true,
-    "slice_thickness": 0.002,
-    "slice_axis": "y",
-    "slice_position": 0.0,
-    "keep_only_intersecting_particles": true,
-    "preserve_original_packing": true
   }
 }

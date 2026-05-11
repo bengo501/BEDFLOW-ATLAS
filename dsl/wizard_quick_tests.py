@@ -38,11 +38,13 @@ from quick_test_rich import (
     render_error_panel,
     render_height_distribution,
     render_result_panel,
+    render_rigid_body_notice,
     render_step_title,
     render_technical_before,
     render_test_header,
     rich_available,
 )
+from wizard_terminal_ui import GLOBAL_KEYS_HINT
 from wizard_json_loader import (
     apply_quick_test_overrides,
     export_formats_for_blender,
@@ -68,9 +70,9 @@ _FIX_DIR = _REPO_ROOT / "scripts" / "python_modeling"
 
 # tuplos tecla texto mostrado no menu packing deve bater certo com normalize packing mode
 _PACKING_MENU = (
-    ("1", "spherical_packing"),
-    ("2", "hexagonal_3d"),
-    ("3", "rigid_body"),
+    ("1", "spherical_packing — colocacao por sorteio com distancia minima entre centros"),
+    ("2", "hexagonal_3d — grade regular filtrada ao cilindro"),
+    ("3", "rigid_body — queda e contacto no motor de fisica do blender"),
 )
 
 
@@ -119,6 +121,15 @@ def _default_backend_key(data: Optional[Dict[str, Any]]) -> str:
     return "1"
 
 
+def _packing_canonical_from_menu_label(label: str) -> str:
+    s = (label or "").strip()
+    if "—" in s:
+        return s.split("—", 1)[0].strip()
+    if " - " in s:
+        return s.split(" - ", 1)[0].strip()
+    return s
+
+
 def _default_packing_key(data: Dict[str, Any]) -> str:
     # escolhe linha do menu que casa com packing mode ou method dentro de packing
     pm = str(
@@ -127,28 +138,52 @@ def _default_packing_key(data: Dict[str, Any]) -> str:
         or "spherical_packing"
     ).strip()
     for key, val in _PACKING_MENU:
-        if val == pm:
+        if _packing_canonical_from_menu_label(val) == pm:
             return key
     return "1"
 
 
-def _prompt_choice(ui: Any, default_key: str, valid: List[str]) -> str:
-    # loop ate o utilizador dar tecla valida ou enter vazio para default
-    keys = ", ".join(valid)
+def _read_menu_key(
+    ui: Any,
+    console: Optional[Any],
+    *,
+    valid: List[str],
+) -> Optional[str]:
+    """le uma tecla de menu numerado; None se o utilizador premir 0 (voltar)."""
+    valid_s = set(valid)
+    keys_hint = " ".join(sorted(valid_s, key=lambda x: (int(x) if x.isdigit() else 999, x)))
     while True:
-        raw = ui.ask_line(f"opcao [{default_key}] ({keys}): ").strip()
+        raw = ui.ask_line(
+            f"opcao ({keys_hint}; 0 voltar; h ajuda): ",
+            default="",
+        ).strip()
+        low = raw.lower()
+        if low == "0":
+            return None
+        if low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
+            ui.warn("neste menu numerado use 0 para voltar.")
+            continue
+        if low == "h":
+            if console and rich_available():
+                from rich.text import Text as RT
+
+                console.print(RT(GLOBAL_KEYS_HINT, style="dim"))
+            else:
+                ui.muted(GLOBAL_KEYS_HINT)
+            continue
         if not raw:
-            return default_key
-        if raw in valid:
+            ui.warn("indique um numero da lista (ou 0 para voltar).")
+            continue
+        if raw in valid_s:
             return raw
-        ui.warn(f"use uma opcao valida: {keys}")
+        ui.warn(f"use uma opcao valida entre: {keys_hint}")
 
 
 def _map_packing(menu_key: str) -> str:
     # traduz numero do menu para string canonica usada no json
     for k, val in _PACKING_MENU:
         if k == menu_key:
-            return val
+            return _packing_canonical_from_menu_label(val)
     return "spherical_packing"
 
 
@@ -192,6 +227,84 @@ def _resolve_bed_input(raw: str, beds: List[Path]) -> Optional[Path]:
         return None
 
 
+def _pick_json_interactive(ui: Any, console: Optional[Any], files: List[Path]) -> Optional[Path]:
+    """menu numerado ou caminho manual; None cancelar."""
+    if files:
+        rows: List[Tuple[str, str]] = []
+        for i, p in enumerate(files, start=1):
+            try:
+                d = load_wizard_json(p)
+                pm = d.get("packing_mode") or (d.get("packing") or {}).get("method") or "?"
+                gb = d.get("generation_backend") or "?"
+            except OSError:
+                pm, gb = "?", "?"
+            rows.append((str(i), f"{p.name} — packing {pm} — backend {gb}"))
+        rows.append(("m", "caminho manual — ficheiro .json fora da lista"))
+        render_choice_table(
+            console,
+            f"ficheiros em {_FIX_DIR}",
+            rows,
+            None,
+        )
+        valid = [str(i) for i in range(1, len(files) + 1)] + ["m"]
+        k = _read_menu_key(ui, console, valid=valid)
+        if k is None:
+            return None
+        if k == "m":
+            raw = ui.ask_line(
+                "caminho .json ou etiqueta@caminho (c cancelar): ",
+                default="",
+            ).strip()
+            low = raw.lower()
+            if low in ("c", "cancel", "cancelar", "voltar", "back", "q"):
+                return None
+            chosen = _resolve_json_input(raw, files)
+            if not chosen or chosen.suffix.lower() != ".json":
+                render_error_panel(console, "json invalido ou inexistente")
+                return None
+            return chosen
+        return files[int(k) - 1].resolve()
+    ui.warn(f"nenhum test*.json em {_FIX_DIR}; indique o caminho completo.")
+    raw = ui.ask_line("caminho .json (c cancelar): ", default="").strip()
+    if raw.lower() in ("c", "cancel", "cancelar", "voltar", "back", "q"):
+        return None
+    chosen = _resolve_json_input(raw, files)
+    if not chosen or chosen.suffix.lower() != ".json":
+        render_error_panel(console, "json invalido ou inexistente")
+        return None
+    return chosen
+
+
+def _pick_bed_interactive(ui: Any, console: Optional[Any], beds: List[Path]) -> Optional[Path]:
+    if beds:
+        rows = [(str(i), f"{p.name} — {p}") for i, p in enumerate(beds, start=1)]
+        rows.append(("m", "caminho manual — ficheiro .bed fora da lista"))
+        render_choice_table(console, "ficheiros .bed (dsl / cwd / repo)", rows, None)
+        valid = [str(i) for i in range(1, len(beds) + 1)] + ["m"]
+        k = _read_menu_key(ui, console, valid=valid)
+        if k is None:
+            return None
+        if k == "m":
+            raw = ui.ask_line("caminho .bed (c cancelar): ", default="").strip()
+            if raw.lower() in ("c", "cancel", "cancelar", "voltar", "back", "q"):
+                return None
+            chosen = _resolve_bed_input(raw, beds)
+            if not chosen or chosen.suffix.lower() != ".bed":
+                render_error_panel(console, ".bed invalido ou inexistente")
+                return None
+            return chosen
+        return beds[int(k) - 1].resolve()
+    ui.warn("nenhum .bed encontrado; indique o caminho completo.")
+    raw = ui.ask_line("caminho .bed (c cancelar): ", default="").strip()
+    if raw.lower() in ("c", "cancel", "cancelar", "voltar", "back", "q"):
+        return None
+    chosen = _resolve_bed_input(raw, beds)
+    if not chosen or chosen.suffix.lower() != ".bed":
+        render_error_panel(console, ".bed invalido ou inexistente")
+        return None
+    return chosen
+
+
 def _post_label(key: str) -> str:
     # texto longo para o resumo tecnico antes de confirmar
     if key == "1":
@@ -206,14 +319,17 @@ def _exec_label(key: str) -> str:
     return "completa (.bed + json + modelo)" if key == "2" else "rapida (apenas modelo 3d)"
 
 
-def _ask_slice(ui: Any) -> Dict[str, Any]:
-    # thin slice opcional para testes rapidos
-    if not ui.confirm("ativar thin slice (pseudo 2d)?", default=False):
-        return {}
+def _ask_thin_slice_geometry(ui: Any) -> Dict[str, Any]:
+    """parametros da fatia fina (pseudo 2d); nao confundir com packing.method."""
+    ui.println()
+    ui.muted(
+        "geometria da fatia: escolhe o eixo normal ao plano de corte, a espessura 3d da "
+        "lamina e a posicao do centro da lamina ao longo desse eixo."
+    )
     axis = "y"
     while True:
         raw = ui.ask_line(
-            "eixo do corte: 1=x 2=y 3=z (ou letra) [2]: ",
+            "eixo normal ao plano da fatia: 1=x 2=y 3=z [2]: ",
             default="2",
         ).strip().lower()
         if raw in ("1", "x"):
@@ -225,11 +341,20 @@ def _ask_slice(ui: Any) -> Dict[str, Any]:
         if raw in ("3", "z"):
             axis = "z"
             break
-        ui.warn("use 1 ou x, 2 ou y, 3 ou z")
-    thick = ui.ask_line("espessura da fatia (m) [0.002]: ", default="0.002").strip() or "0.002"
-    pos = ui.ask_line("posicao central (m) [0.0]: ", default="0.0").strip() or "0.0"
-    keep_only = ui.confirm("manter apenas particulas que intersectam?", default=True)
-    preserve = ui.confirm("preservar coordenadas originais?", default=True)
+        ui.warn("use 1 ou x, 2 ou y, 3 ou z (0 no menu anterior cancela o fluxo, se disponivel)")
+    thick = ui.ask_line("espessura da fatia em metros [0.002]: ", default="0.002").strip() or "0.002"
+    pos = ui.ask_line(
+        "posicao do centro da fatia ao longo do eixo normal em metros [0.0]: ",
+        default="0.0",
+    ).strip() or "0.0"
+    keep_only = ui.confirm(
+        "manter apenas particulas que intersectam a fatia (fora da lamina remove-se)?",
+        default=True,
+    )
+    preserve = ui.confirm(
+        "preservar coordenadas originais das esferas (nao recentrar na lamina)?",
+        default=True,
+    )
     try:
         thick_f = float(thick)
     except Exception:
@@ -246,6 +371,35 @@ def _ask_slice(ui: Any) -> Dict[str, Any]:
         "keep_only_intersecting_particles": bool(keep_only),
         "preserve_original_packing": bool(preserve),
     }
+
+
+def _choose_geometry_mode(
+    ui: Any, console: Optional[Any], *, default_thin: bool = False
+) -> Tuple[str, Dict[str, Any]]:
+    """devolve (geometry_mode_label, slice_dict ou vazio). full_3d sem chaves slice."""
+    rows = [
+        ("1", "full_3d — volume cilindrico completo sem recorte por lamina"),
+        ("2", "pseudo_2d_thin_slice — lamina fina (dados em slice no json)"),
+    ]
+    render_choice_table(
+        console,
+        "modo geometrico de saida (independente do packing.method)",
+        rows,
+        "2" if default_thin else "1",
+    )
+    gk = _read_menu_key(ui, console, valid=["1", "2"])
+    if gk is None:
+        return "cancel", {}
+    if gk == "2":
+        return "pseudo_2d_thin_slice", _ask_thin_slice_geometry(ui)
+    return "full_3d", {}
+
+
+def _ask_slice(ui: Any) -> Dict[str, Any]:
+    """compat: activar fatia com confirmacao (fluxos antigos)."""
+    if not ui.confirm("ativar fatia fina pseudo 2d (geometry_mode)?", default=False):
+        return {}
+    return _ask_thin_slice_geometry(ui)
 
 
 def format_equivalent_test_command(
@@ -337,15 +491,21 @@ def execute_quick_test_noninteractive(
             generation_backend=backend_final,
         )
         data_final = load_wizard_json(work_json)
-        if slice_cfg:
+        if slice_cfg and slice_cfg.get("slice_enabled"):
             data_final["slice"] = slice_cfg
             with work_json.open("w", encoding="utf-8") as f:
                 json.dump(data_final, f, indent=2, ensure_ascii=False)
         wizard.params = json_to_wizard_params(data_final)
-        if slice_cfg:
+        if slice_cfg and slice_cfg.get("slice_enabled"):
             wizard.params["slice"] = slice_cfg
 
     if verbose:
+        _geom = (
+            "pseudo_2d_thin_slice"
+            if (slice_cfg and slice_cfg.get("slice_enabled"))
+            else "full_3d"
+        )
+        _sd = slice_cfg if _geom == "pseudo_2d_thin_slice" else None
         render_technical_before(
             console,
             data_final,
@@ -353,6 +513,8 @@ def execute_quick_test_noninteractive(
             input_path=str(original),
             backend=backend_final,
             packing=packing_final,
+            geometry_mode=_geom,
+            slice_detail=_sd,
             exec_label=_exec_label("2" if not quick else "1"),
             post_label="abrir blender" if open_blender else "nao abrir",
         )
@@ -366,7 +528,11 @@ def execute_quick_test_noninteractive(
             ),
             backend_final,
         )
-        render_ascii_section(console, ascii_pre)
+        render_ascii_section(
+            console,
+            ascii_pre,
+            title="secao transversal esquematica",
+        )
 
     run_json = work_json
     t_run0 = time.perf_counter()
@@ -457,12 +623,16 @@ def _open_blender_after(
             render_blender_open_confirmation(console, blend, "blend")
         return
     if stl and stl.is_file() and ui.confirm(
-        "gostaria de abrir o blender apos a geracao", default=False
+        "gostaria de abrir o blender apos a geracao",
+        default=False,
+        allow_empty_default=False,
     ):
         wizard.open_blender_gui_with_stl(stl)
         render_blender_open_confirmation(console, stl, "stl")
     elif blend and blend.is_file() and ui.confirm(
-        "gostaria de abrir o blender apos a geracao", default=False
+        "gostaria de abrir o blender apos a geracao",
+        default=False,
+        allow_empty_default=False,
     ):
         wizard.open_blender_gui_with_blend(blend)
         render_blender_open_confirmation(console, blend, "blend")
@@ -503,7 +673,7 @@ def _render_after_pure(
         ("backend usado", backend_effective),
         ("modo usado", str(obj.get("packing_method", packing_effective))),
     ]
-    render_result_panel(console, True, rows_out, title="resultado — python puro")
+    render_result_panel(console, True, rows_out, title="resultado python puro")
 
     centers_tbl = centers_from_sidecar(obj)
     tab_rows = [(i + 1, c[0], c[1], c[2]) for i, c in enumerate(centers_tbl[:10])]
@@ -525,7 +695,11 @@ def _render_after_pure(
     # so precisamos do diametro para escalar o desenho topo
     bed_dummy: Dict[str, Any] = {"diameter": d}
     ascii_top = ascii_cross_section_with_particles(bed_dummy, zc, grid=29)
-    render_ascii_section(console, ascii_top)
+    render_ascii_section(
+        console,
+        ascii_top,
+        title="vista em planta (distribuicao radial aproximada)",
+    )
 
 
 def _render_after_blender(
@@ -554,10 +728,14 @@ def _render_after_blender(
         ("backend usado", backend_effective),
         ("modo usado", str(rep.get("packing_method", packing_effective)) if rep else packing_effective),
     ]
-    render_result_panel(console, True, rows_out, title="resultado — blender")
+    render_result_panel(console, True, rows_out, title="resultado blender")
     tail = stdout.strip().splitlines()[-16:] if stdout else []
     body = "\n".join(tail) if tail else "(sem stdout capturado)"
-    render_ascii_section(console, "trecho saida blender:\n" + body)
+    render_ascii_section(
+        console,
+        "trecho saida blender:\n" + body,
+        title="log blender (ultimas linhas)",
+    )
 
 
 @dataclass
@@ -585,9 +763,12 @@ def run(wizard: "BedWizard") -> None:
     ui = wizard.ui
     console = get_console(ui)
     wizard.clear_screen()
-    ui.breadcrumbs("wizard", "testes rapidos")
+    ui.breadcrumbs("setup", "comecar", "testes rapidos")
     if console and rich_available():
-        render_test_header(console, "validacao rapida — 5 passos — enter aceita o padrao")
+        render_test_header(
+            console,
+            "fluxo guiado; em cada passo use 0 para cancelar; enter vazio nao confirma escolha",
+        )
     else:
         wizard.print_header("testes rapidos", "validacao rapida com preview no terminal")
 
@@ -596,12 +777,15 @@ def run(wizard: "BedWizard") -> None:
         console,
         "como carregar o cenario?",
         [
-            ("1", "json existente (test*.json na pasta de exemplos ou caminho)"),
-            ("2", "arquivo .bed (compilar antes da execucao)"),
+            ("1", "json existente — lista de exemplos ou caminho manual"),
+            ("2", "arquivo .bed — compila para json antes da execucao"),
         ],
-        "1",
+        None,
     )
-    in_key = _prompt_choice(ui, "1", ["1", "2"])
+    in_key = _read_menu_key(ui, console, valid=["1", "2"])
+    if in_key is None:
+        ui.muted("cancelado.")
+        return
 
     data_preview: Optional[Dict[str, Any]] = None
     original: Path
@@ -610,52 +794,9 @@ def run(wizard: "BedWizard") -> None:
 
     if input_is_json:
         files = _glob_test_jsons()
-        if files:
-            # tabela rich opcional com metadados lidos de cada fixture
-            if console and rich_available():
-                from rich.table import Table as RT
-                from rich import box as rbox
-
-                t = RT(
-                    title=f"exemplos em {_FIX_DIR.name}",
-                    box=rbox.SIMPLE,
-                    border_style="dim",
-                )
-                t.add_column("#", justify="right", width=4)
-                t.add_column("ficheiro", style="cyan")
-                t.add_column("packing", style="dim")
-                t.add_column("backend", style="dim")
-                for i, p in enumerate(files, 1):
-                    try:
-                        d = load_wizard_json(p)
-                        pm = d.get("packing_mode") or (d.get("packing") or {}).get("method") or "?"
-                        gb = d.get("generation_backend") or "?"
-                    except OSError:
-                        pm = "?"
-                        gb = "?"
-                    t.add_row(str(i), p.name, str(pm), str(gb))
-                console.print(t)
-            else:
-                ui.println("ficheiros test*.json / _test_*.json:")
-                for i, p in enumerate(files, 1):
-                    try:
-                        d = load_wizard_json(p)
-                        pm = d.get("packing_mode") or (d.get("packing") or {}).get("method") or "?"
-                        gb = d.get("generation_backend") or "?"
-                    except OSError:
-                        pm = "?"
-                        gb = "?"
-                    ui.muted(f"  {i}. {p.name}  | {pm}  | {gb}")
-        else:
-            ui.warn(f"nenhum test*.json em {_FIX_DIR}")
-        ui.muted("caminho manual ou etiqueta@caminho exemplo: _test_hex.json@scripts/python_modeling/_test_hex.json")
-        raw = ui.ask_line("numero ou caminho .json (vazio ou c cancelar): ").strip()
-        if not raw or raw.lower() in ("c", "cancel", "cancelar", "voltar", "back"):
-            ui.pause()
-            return
-        chosen = _resolve_json_input(raw, files)
-        if not chosen or chosen.suffix.lower() != ".json":
-            render_error_panel(console, "json invalido ou inexistente")
+        chosen = _pick_json_interactive(ui, console, files)
+        if chosen is None:
+            ui.muted("operacao interrompida.")
             ui.pause()
             return
         original = chosen
@@ -664,28 +805,9 @@ def run(wizard: "BedWizard") -> None:
             data_preview = load_wizard_json(work_json)
     else:
         beds = _glob_beds()
-        if beds:
-            if console and rich_available():
-                from rich.table import Table as RT
-                from rich import box as rbox
-
-                t = RT(title="ficheiros .bed (dsl / cwd / repo)", box=rbox.SIMPLE, border_style="dim")
-                t.add_column("#", justify="right", width=4)
-                t.add_column("caminho", style="cyan")
-                for i, p in enumerate(beds, 1):
-                    t.add_row(str(i), str(p))
-                console.print(t)
-            else:
-                ui.println("ficheiros .bed:")
-                for i, p in enumerate(beds, 1):
-                    ui.muted(f"  {i}. {p}")
-        raw = ui.ask_line("numero ou caminho .bed (vazio ou c cancelar): ").strip()
-        if not raw or raw.lower() in ("c", "cancel", "cancelar", "voltar", "back"):
-            ui.pause()
-            return
-        chosen_b = _resolve_bed_input(raw, beds)
-        if not chosen_b or chosen_b.suffix.lower() != ".bed":
-            render_error_panel(console, ".bed invalido ou inexistente")
+        chosen_b = _pick_bed_interactive(ui, console, beds)
+        if chosen_b is None:
+            ui.muted("operacao interrompida.")
             ui.pause()
             return
         original = chosen_b
@@ -706,71 +828,107 @@ def run(wizard: "BedWizard") -> None:
     render_step_title(console, "2", "backend de geracao")
     render_choice_table(
         console,
-        "motor de geometria",
+        "motor de geometria e exportacao",
         [
-            ("1", "pure_python — stl rapido ideal para validar colisao geometrica"),
-            ("2", "blender — cena completa rigid body mais realista"),
+            (
+                "1",
+                "pure_python — geracao cientifica rapida e leve (stl e validacao geometrica)",
+            ),
+            (
+                "2",
+                "blender — geracao visual completa e exportacao avancada "
+                "(stl, obj, blend; packing spherical, hexagonal ou rigid_body)",
+            ),
         ],
         _default_backend_key(data_preview),
     )
-    bk = _prompt_choice(ui, _default_backend_key(data_preview), ["1", "2"])
+    bk = _read_menu_key(
+        ui,
+        console,
+        valid=["1", "2"],
+    )
+    if bk is None:
+        ui.muted("cancelado.")
+        return
     backend = _map_backend(bk)
 
-    render_step_title(console, "3", "modo de distribuicao")
+    render_step_title(console, "3", "modo de distribuicao (packing.method)")
     render_choice_table(
         console,
-        "packing.method aplicado ao json de trabalho",
+        "empacotamento aplicado ao json de trabalho",
         [(k, v) for k, v in _PACKING_MENU],
         _default_packing_key(data_preview),
     )
-    pk = _prompt_choice(ui, _default_packing_key(data_preview), ["1", "2", "3"])
+    pk = _read_menu_key(
+        ui,
+        console,
+        valid=["1", "2", "3"],
+    )
+    if pk is None:
+        ui.muted("cancelado.")
+        return
     packing = _map_packing(pk)
+    if packing == "rigid_body":
+        render_rigid_body_notice(console)
 
-    render_step_title(console, "3b", "thin slice (pseudo 2d)")
-    slice_cfg = _ask_slice(ui)
+    slc_prev = dict(data_preview.get("slice") or {}) if data_preview else {}
+    default_thin = bool(slc_prev.get("slice_enabled"))
+    render_step_title(console, "4", "modo geometrico de saida (nao e packing)")
+    geom_label, slice_cfg = _choose_geometry_mode(ui, console, default_thin=default_thin)
+    if geom_label == "cancel":
+        ui.muted("cancelado.")
+        return
 
-    render_step_title(console, "4", "tipo de execucao")
+    render_step_title(console, "5", "tipo de execucao")
     render_choice_table(
         console,
         "profundidade do fluxo",
         [
-            ("1", "rapida — so modelo 3d a partir do json atual"),
+            ("1", "rapida — so modelo 3d a partir do json actual"),
             ("2", "completa — gerar .bed a partir dos params compilar patch e modelo"),
         ],
-        "1",
+        None,
     )
-    ex_key = _prompt_choice(ui, "1", ["1", "2"])
+    ex_key = _read_menu_key(ui, console, valid=["1", "2"])
+    if ex_key is None:
+        ui.muted("cancelado.")
+        return
     exec_full = ex_key == "2"
 
-    render_step_title(console, "5", "pos execucao (blender gui)")
+    render_step_title(console, "6", "pos execucao (blender gui)")
     render_choice_table(
         console,
         "abrir o blender no fim?",
         [
-            ("1", "perguntar antes de abrir (padrao)"),
+            ("1", "perguntar antes de abrir"),
             ("2", "abrir automaticamente com o modelo gerado"),
             ("3", "nao abrir"),
         ],
-        "1",
+        None,
     )
-    po_key = _prompt_choice(ui, "1", ["1", "2", "3"])
+    po_key = _read_menu_key(ui, console, valid=["1", "2", "3"])
+    if po_key is None:
+        ui.muted("cancelado.")
+        return
 
     with progress_phase(console, "aplicar overrides packing e generation_backend"):
-        # reescreve disco e recarrega dict alinhado ao que o motor vai ler
         apply_quick_test_overrides(
             work_json,
             packing_method=packing,
             generation_backend=backend,
         )
         data_final = load_wizard_json(work_json)
-        if slice_cfg:
+        if geom_label == "full_3d":
+            data_final.pop("slice", None)
+        elif slice_cfg:
             data_final["slice"] = slice_cfg
-            # persistir no json de trabalho para blender/pure python lerem
-            with work_json.open("w", encoding="utf-8") as f:
-                json.dump(data_final, f, indent=2, ensure_ascii=False)
+        with work_json.open("w", encoding="utf-8") as f:
+            json.dump(data_final, f, indent=2, ensure_ascii=False)
         wizard.params = json_to_wizard_params(data_final)
-        if slice_cfg:
+        if slice_cfg and geom_label != "full_3d":
             wizard.params["slice"] = slice_cfg
+        elif geom_label == "full_3d" and "slice" in wizard.params:
+            wizard.params.pop("slice", None)
 
     cfg = QuickTestConfig(
         input_is_json=input_is_json,
@@ -783,6 +941,7 @@ def run(wizard: "BedWizard") -> None:
     )
 
     input_lbl = "json" if cfg.input_is_json else "bed"
+    slice_detail = slice_cfg if geom_label == "pseudo_2d_thin_slice" else None
     render_technical_before(
         console,
         data_final,
@@ -790,6 +949,8 @@ def run(wizard: "BedWizard") -> None:
         input_path=str(cfg.original_source),
         backend=cfg.generation_backend,
         packing=cfg.packing_method,
+        geometry_mode=geom_label,
+        slice_detail=slice_detail,
         exec_label=_exec_label(ex_key),
         post_label=_post_label(po_key),
     )
@@ -797,23 +958,41 @@ def run(wizard: "BedWizard") -> None:
     particles = dict(data_final.get("particles") or {})
     pm = str(data_final.get("packing_mode") or (data_final.get("packing") or {}).get("method") or "?")
     ascii_pre = ascii_cross_section_schematic(bed, particles, pm, backend)
-    render_ascii_section(console, ascii_pre)
+    render_ascii_section(
+        console,
+        ascii_pre,
+        title="secao transversal esquematica (leito e particulas)",
+    )
+    if slice_detail:
+        note = (
+            f"fatia fina activa: eixo {slice_detail.get('slice_axis')} "
+            f"espessura {slice_detail.get('slice_thickness')} m "
+            f"centro {slice_detail.get('slice_position')} m"
+        )
+        render_ascii_section(console, note, title="geometria pseudo 2d (lamina)")
 
-    # texto mostrado ao utilizador sobre onde a colisao e verificada
     collision_note = (
-        "regras: spherical_packing e hexagonal_3d validam sem sobreposicao no motor cientifico; "
-        "rigid_body no blender usa corpos rigidos com colisao em paredes e tampas."
+        "colisao: spherical_packing e hexagonal_3d usam distancia minima no motor cientifico; "
+        "rigid_body delega ao blender (ver aviso acima se aplicavel)."
     )
     if console and rich_available():
         from rich.panel import Panel as RP
         from rich import box as rbox
 
-        console.print(RP(collision_note, title="colisao", border_style="dim", box=rbox.ROUNDED))
+        console.print(RP(collision_note, title="nota", border_style="rgb(95,25,35)", box=rbox.ROUNDED))
     else:
         print(collision_note)
 
-    if not ui.confirm("confirmar execucao", default=True):
-        ui.muted("cancelado")
+    raw_cf = ui.ask_line(
+        "confirmar execucao? (s/n) [s]  c ou q cancela: ",
+        default="s",
+    ).strip().lower()
+    if raw_cf in ("c", "q", "cancel", "cancelar", "voltar"):
+        ui.muted("cancelado.")
+        ui.pause()
+        return
+    if raw_cf in ("n", "nao", "no"):
+        ui.muted("execucao recusada.")
         ui.pause()
         return
 

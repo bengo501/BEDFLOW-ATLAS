@@ -20,6 +20,87 @@ for _p in (_REPO, _DSL_DIR):
 
 from bedflow_local_paths import resolve_validated_mesh_path, scan_project_mesh_files  # noqa: E402
 from bed_wizard import _WizardCancelled  # noqa: E402
+from wizard_terminal_ui import GLOBAL_KEYS_HINT, PICK_LIST_SHORT_HINT  # noqa: E402
+
+
+def render_view3d_education_panels(ui: Any, wizard: Any) -> None:
+    """painel de modos + tabela formato x modo (rich se disponivel)."""
+    console = getattr(ui, "console", None)
+    try:
+        from rich import box as rich_box
+        from rich.panel import Panel
+        from rich.table import Table
+    except ImportError:
+        Table = None  # type: ignore
+
+    if Table is None or console is None:
+        ui.println(
+            "[modos] web (three.js): stl obj ply gltf glb | "
+            "desktop (open3d): stl obj ply | "
+            "blender: todos; cad importa via open_imported_mesh_gui.py"
+        )
+        ui.println(
+            "[formato x modo] stl/obj/ply: web+desktop+blender | "
+            "gltf/glb: web+blender | blend: so blender"
+        )
+        return
+
+    modes_body = (
+        "[bold]web — three.js no frontend[/bold]\n"
+        "  objetivo: inspeccao rapida no browser sem instalar blender.\n"
+        "  vantagens: orbit controls, lista via api, sem disco extra.\n"
+        "  limitacoes: nao abre .blend; depende de api + npm run dev.\n"
+        "  formatos: stl, obj, ply, gltf, glb.\n\n"
+        "[bold]desktop — open3d (mesh_viewer_desktop.py)[/bold]\n"
+        "  objetivo: janela local leve.\n"
+        "  vantagens: bom para stl/obj/ply grandes.\n"
+        "  limitacoes: requer pip install open3d; sem gltf/glb.\n"
+        "  formatos: stl, obj, ply.\n\n"
+        "[bold]blender — gui[/bold]\n"
+        "  objetivo: edicao, materiais, exportacao avancada.\n"
+        "  vantagens: .blend nativo; malhas cad importadas automaticamente.\n"
+        "  limitacoes: binario blender; gltf depende do addon gltf no blender.\n"
+        "  formatos: todos os listados + cena .blend.\n"
+    )
+    console.print(
+        Panel(
+            modes_body,
+            title=wizard._t("view3d.education.modes_title", "modos de visualizacao"),
+            border_style="rgb(95,25,35)",
+        )
+    )
+
+    ft = Table(
+        title=wizard._t("view3d.education.matrix_title", "formato x modo"),
+        box=rich_box.ROUNDED,
+        show_header=True,
+        header_style="bold rgb(240,212,168)",
+        border_style="dim",
+    )
+    ft.add_column(
+        wizard._t("view3d.education.col_format", "formato"),
+        style="bold",
+        justify="left",
+    )
+    ft.add_column("web", justify="center")
+    ft.add_column("desktop", justify="center")
+    ft.add_column("blender", justify="center")
+    matrix = [
+        ("stl", "sim", "sim", "sim"),
+        ("obj", "sim", "sim", "sim"),
+        ("ply", "sim", "sim", "sim"),
+        ("gltf", "sim", "nao", "sim"),
+        ("glb", "sim", "nao", "sim"),
+        ("blend", "nao", "nao", "sim"),
+    ]
+    for row in matrix:
+        ft.add_row(*row)
+    console.print(ft)
+
+
+def print_visualization_modes_help(wizard: Any) -> None:
+    """menu ajuda opcao 7 — resumo dos modos 3d."""
+    render_view3d_education_panels(wizard.ui, wizard)
 
 
 def _env_frontend_url() -> str:
@@ -76,15 +157,28 @@ def run_visualization_mode(wizard: BedWizard) -> None:
         ui.println()
         ui.muted(wizard._t("view3d.scan_hint", ""))
         ui.println()
+        render_view3d_education_panels(ui, wizard)
+        ui.println()
+        ui.muted(PICK_LIST_SHORT_HINT + "  |  h ajuda global (teclas do wizard)")
+        ui.println()
 
         q = ui.ask_line(
             wizard._t(
                 "view3d.search",
-                "pesquisar (vazio=tudo, l=lista, c=menu principal): ",
+                "pesquisar (vazio=tudo, l=lista, 0 menu principal, h ajuda global): ",
             )
         ).strip()
-        if q.lower() == "c":
+        qlow = q.lower()
+        if qlow in ("c", "cancel", "cancelar", "voltar", "back", "q"):
             return
+        if qlow == "0":
+            ui.warn("neste passo use c para regressar ao menu principal.")
+            continue
+        if qlow == "h":
+            for ln in GLOBAL_KEYS_HINT.splitlines():
+                ui.muted(ln)
+            ui.pause("enter...")
+            continue
         filtered: List[Dict[str, Any]] = list(rows)
         qnorm = q.lower()
         # "lista" e sinonimos nao sao filtro — o utilizador espera ver todos os ficheiros
@@ -108,7 +202,9 @@ def run_visualization_mode(wizard: BedWizard) -> None:
             table.add_column("ficheiro")
             table.add_column("formato", justify="center")
             table.add_column("tamanho", justify="right")
-            table.add_column("mesh_id", overflow="fold")
+            table.add_column("mesh_id", overflow="fold", max_width=14)
+            table.add_column("origem", overflow="fold", max_width=20)
+            table.add_column("recomendado", overflow="fold", max_width=26)
             for i, r in enumerate(filtered, start=1):
                 table.add_row(
                     str(i),
@@ -116,19 +212,38 @@ def run_visualization_mode(wizard: BedWizard) -> None:
                     r["format"],
                     _format_size(int(r["size_bytes"])),
                     r["mesh_id"],
+                    str(r.get("source_hint") or "—"),
+                    str(r.get("recommended_modes") or "—"),
                 )
             _console.print(table)
         else:
             for i, r in enumerate(filtered, start=1):
-                ui.println(f"  {i:2}  [{r['format']}]  {r['filename']}  ({r['mesh_id']})")
+                ui.println(
+                    f"  {i:2}  [{r['format']}]  {r['filename']}  "
+                    f"| {r.get('source_hint', '')} | {r.get('recommended_modes', '')}"
+                )
 
         ui.println()
         pick = ui.ask_line(
-            wizard._t("view3d.pick", "numero do modelo (0=rever lista, c=menu principal): ")
+            wizard._t(
+                "view3d.pick",
+                "numero do modelo (0 voltar a pesquisa, 1-N escolher, h ajuda): ",
+            )
         ).strip()
-        if pick.lower() == "c":
-            return
-        if pick == "0" or not pick:
+        plow = pick.lower()
+        if plow in ("c", "q"):
+            ui.warn("use 0 para voltar a pesquisa ou ao menu principal conforme o passo.")
+            continue
+        if plow == "h":
+            for ln in GLOBAL_KEYS_HINT.splitlines():
+                ui.muted(ln)
+            ui.pause("enter...")
+            continue
+        if not pick:
+            ui.warn("indique um numero da lista ou 0 para voltar a pesquisa.")
+            ui.pause("enter...")
+            continue
+        if pick == "0":
             continue
         if not pick.isdigit() or int(pick) < 1 or int(pick) > len(filtered):
             ui.warn("numero invalido")
@@ -150,27 +265,32 @@ def run_visualization_mode(wizard: BedWizard) -> None:
                     f"[bold]{chosen['filename']}[/bold]\n"
                     f"path: {rel}\n"
                     f"id: {mid}\n"
-                    f"tamanho: {_format_size(int(chosen['size_bytes']))}",
+                    f"tamanho: {_format_size(int(chosen['size_bytes']))}\n"
+                    f"origem (heuristica): {chosen.get('source_hint', '—')}\n"
+                    f"recomendado: {chosen.get('recommended_modes', '—')}",
                     title=wizard._t("view3d.preview", "preview"),
                 )
             )
         else:
-            ui.println(f"ficheiro: {chosen['filename']}\npath: {rel}\nid: {mid}")
+            ui.println(
+                f"ficheiro: {chosen['filename']}\npath: {rel}\nid: {mid}\n"
+                f"origem: {chosen.get('source_hint', '—')}\n"
+                f"recomendado: {chosen.get('recommended_modes', '—')}"
+            )
 
         ui.println()
         lab_web = wizard._t("view3d.opt.web", "navegador (three.js no frontend)")
         lab_desk = wizard._t("view3d.opt.desktop", "visualizador desktop (open3d, stl/obj/ply)")
         lab_blend = wizard._t("view3d.opt.blender", "abrir no blender")
-        lab_back = wizard._t("view3d.opt.back", "voltar a lista")
         try:
             dest = wizard.get_choice(
                 wizard._t("view3d.choose_dest", "onde visualizar"),
-                [lab_web, lab_desk, lab_blend, lab_back],
-                0,
+                [lab_web, lab_desk, lab_blend],
+                None,
+                "",
+                with_param_review=False,
             )
         except _WizardCancelled:
-            continue
-        if dest == lab_back:
             continue
 
         ext = abs_path.suffix.lower()

@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader';
 import '../styles/ModelViewer.css';
 
 function ModelViewer({ modelPath }) {
@@ -12,70 +15,120 @@ function ModelViewer({ modelPath }) {
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
 
-  const loadModel = async (scene, modelPath) => {
+  const loadModel = async (scene, path) => {
     setLoading(true);
     setError(null);
 
+    const extMatch = /\.([a-z0-9]+)(\?|$)/i.exec(path || '');
+    const ext = extMatch ? extMatch[1].toLowerCase() : '';
+
+    const logBounds = (obj) => {
+      const box = new THREE.Box3().setFromObject(obj);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      console.log('modelo centro:', center, 'tamanho:', size);
+    };
+
     try {
-      // tentar carregar arquivo .glb (conversão do .blend para .glb)
-      const glbPath = modelPath.replace('.blend', '.glb');
-      
+      if (['stl', 'obj', 'ply', 'gltf', 'glb'].includes(ext)) {
+        const res = await fetch(path);
+        if (!res.ok) throw new Error(`http ${res.status}`);
+        const buffer = await res.arrayBuffer();
+        let root;
+        if (ext === 'stl') {
+          const geom = new STLLoader().parse(buffer);
+          geom.computeVertexNormals();
+          root = new THREE.Mesh(
+            geom,
+            new THREE.MeshStandardMaterial({
+              color: 0x8b7355,
+              metalness: 0.15,
+              roughness: 0.65,
+              side: THREE.DoubleSide,
+            }),
+          );
+        } else if (ext === 'obj') {
+          const text = new TextDecoder('utf-8').decode(buffer);
+          root = new OBJLoader().parse(text);
+          root.traverse((child) => {
+            if (child.isMesh && child.material && !child.material.vertexColors) {
+              child.material = new THREE.MeshStandardMaterial({
+                color: 0x7a9e9f,
+                metalness: 0.12,
+                roughness: 0.7,
+                side: THREE.DoubleSide,
+              });
+            }
+          });
+        } else if (ext === 'ply') {
+          const geom = new PLYLoader().parse(buffer);
+          geom.computeVertexNormals();
+          root = new THREE.Mesh(
+            geom,
+            new THREE.MeshStandardMaterial({
+              color: 0x6b8e8f,
+              metalness: 0.1,
+              roughness: 0.75,
+              side: THREE.DoubleSide,
+            }),
+          );
+        } else {
+          const loader = new GLTFLoader();
+          root = await new Promise((resolve, reject) => {
+            loader.parse(
+              buffer,
+              '',
+              (gltf) => resolve(gltf.scene),
+              (err) => reject(err || new Error('gltf parse')),
+            );
+          });
+        }
+        root.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        scene.add(root);
+        logBounds(root);
+        setLoading(false);
+        return;
+      }
+
+      const glbPath = path.replace(/\.blend$/i, '.glb');
       console.log('tentando carregar modelo glb:', glbPath);
-      
       const loader = new GLTFLoader();
-      
       loader.load(
         glbPath,
-        // onLoad
         (gltf) => {
-          console.log('modelo glb carregado com sucesso!', gltf);
-          
-          // adicionar modelo à cena
           const model = gltf.scene;
-          
-          // ajustar escala se necessário
           model.scale.set(1, 1, 1);
-          
-          // habilitar sombras
           model.traverse((child) => {
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
             }
           });
-          
           scene.add(model);
           setLoading(false);
-          
-          // calcular bounding box para ajustar câmera
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          
-          console.log('modelo centro:', center, 'tamanho:', size);
+          logBounds(model);
         },
-        // onProgress
         (xhr) => {
           const percentComplete = (xhr.loaded / xhr.total) * 100;
           console.log(`carregando modelo: ${percentComplete.toFixed(2)}%`);
         },
-        // onError
-        (error) => {
-          console.error('erro ao carregar modelo glb:', error);
-          console.log('fallback: mostrando geometria placeholder');
-          
-          // se falhar, mostrar placeholder representativo
+        (loadErr) => {
+          console.error('erro ao carregar modelo glb:', loadErr);
           createPlaceholderGeometry(scene);
           setLoading(false);
           setError('modelo glb não encontrado, mostrando preview representativo');
-        }
+        },
       );
-      
     } catch (err) {
       console.error('erro ao tentar carregar modelo:', err);
       createPlaceholderGeometry(scene);
       setLoading(false);
-      setError('erro ao carregar modelo');
+      setError(err.message || 'erro ao carregar modelo');
     }
   };
 

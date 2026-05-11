@@ -26,6 +26,14 @@ class MeshInfo(BaseModel):
     size_bytes: int
     mtime_iso: str
     format: str
+    source_hint: str = Field(
+        default="",
+        description="origem inferida por caminho/nome (heuristica)",
+    )
+    recommended_modes: str = Field(
+        default="",
+        description="modos de visualizacao sugeridos (web | desktop | blender)",
+    )
 
 
 class MeshListResponse(BaseModel):
@@ -43,6 +51,8 @@ def _to_mesh_info(row: Dict[str, Any]) -> MeshInfo:
         size_bytes=int(row["size_bytes"]),
         mtime_iso=ts,
         format=str(row["format"]),
+        source_hint=str(row.get("source_hint") or ""),
+        recommended_modes=str(row.get("recommended_modes") or ""),
     )
 
 
