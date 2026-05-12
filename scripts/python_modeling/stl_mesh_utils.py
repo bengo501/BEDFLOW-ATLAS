@@ -56,6 +56,43 @@ def uv_sphere(
     return verts, faces
 
 
+def box_mesh(
+    cx: float,
+    cy: float,
+    cz: float,
+    edge: float,
+) -> Tuple[List[vec3], List[tri]]:
+    """cubo alinhado aos eixos centrado em (cx,cy,cz); aresta edge em metros."""
+    if edge <= 0:
+        return [], []
+    h = edge / 2.0
+    verts: List[vec3] = [
+        (cx - h, cy - h, cz - h),
+        (cx + h, cy - h, cz - h),
+        (cx + h, cy + h, cz - h),
+        (cx - h, cy + h, cz - h),
+        (cx - h, cy - h, cz + h),
+        (cx + h, cy - h, cz + h),
+        (cx + h, cy + h, cz + h),
+        (cx - h, cy + h, cz + h),
+    ]
+    faces: List[tri] = [
+        (0, 2, 1),
+        (0, 3, 2),
+        (4, 5, 6),
+        (4, 6, 7),
+        (0, 1, 5),
+        (0, 5, 4),
+        (2, 3, 7),
+        (2, 7, 6),
+        (0, 4, 7),
+        (0, 7, 3),
+        (1, 2, 6),
+        (1, 6, 5),
+    ]
+    return verts, faces
+
+
 def merge_mesh(
     va: List[vec3], fa: List[tri], vb: List[vec3], fb: List[tri]
 ) -> Tuple[List[vec3], List[tri]]:

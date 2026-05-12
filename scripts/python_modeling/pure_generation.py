@@ -7,7 +7,7 @@
 #
 # no caminho cientifico nao ha motor fisico blender dentro deste ficheiro
 # as posicoes das esferas vem de funcoes em packed bed science
-# depois pure bed mesh constroi o cilindro tampas e esferas como malha triangular
+# depois pure bed mesh constroi o cilindro tampas e particulas como malha triangular
 # no fim exportamos stl binario e um json lateral com metadados
 #
 # o dominio geometrico chama se annulus bed domain
@@ -64,7 +64,10 @@ from modelo_cilindro import (  # noqa: E402
     simula_ate_tampa_fechar,
 )
 
-from packed_bed_science.geometry_math import AnnulusBedDomain, estimate_porosity  # noqa: E402
+from packed_bed_science.geometry_math import (  # noqa: E402
+    AnnulusBedDomain,
+    collision_radius_for_particle_kind,
+)
 from packed_bed_science.packing_hexagonal import generate_hexagonal_packing  # noqa: E402
 from packed_bed_science.packing_modes import (  # noqa: E402
     merge_root_packing_mode,
@@ -80,6 +83,7 @@ from bed_config import (  # noqa: E402
 )
 from pure_bed_mesh import build_packed_bed_model, export_model_data  # noqa: E402
 from stl_mesh_utils import (  # noqa: E402
+    box_mesh,
     cylinder_axis,
     filter_faces_by_slab,
     merge_mesh,
@@ -177,13 +181,14 @@ def load_bed_json(path: Path) -> Dict[str, Any]:
     bottom_t = _to_float(lids.get("bottom_thickness"), 0.003)
     top_t = _to_float(lids.get("top_thickness"), 0.003)
 
-    # gap e folga minima entre superficies de duas esferas vizinhas
+    # gap e folga minima entre superficies de duas particulas vizinhas (modos cientificos)
+    # o dominio usa raio equivalente circumscribed sphere para colisao
     gap = packing.get("gap")
     if gap is not None:
         gap_f = _to_float(gap, 0.0)
     else:
         gap_f = _to_float(packing.get("collision_margin"), 0.0)
-    # gap e o valor que define a folga minima entre esferas
+    # gap e o valor que define a folga minima entre particulas
     # ele entra tanto na geracao como na validacao
 
     slice_raw = data.get("slice") if isinstance(data, dict) else None
@@ -225,6 +230,7 @@ def load_bed_json(path: Path) -> Dict[str, Any]:
             data.get("generation_backend") if isinstance(data, dict) else None
         ),
         "slice": slice_cfg,
+        "particle_kind": str(particles.get("kind") or "sphere").strip().lower(),
     }
 
 
@@ -250,6 +256,9 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
     r_int = max(r_ext - p["wall_thickness"], p["particle_diameter"] * 0.51)
     # altura cilindro
     altura = p["height"]
+    pk = str(p.get("particle_kind") or "sphere").strip().lower()
+    d_char = float(p["particle_diameter"])
+    r_pack = collision_radius_for_particle_kind(pk, d_char)
 
     # parametros do tubo para malha com tampas incluidas no legacy
     p_cil = params_cilindro(
@@ -286,21 +295,30 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
         height=altura,
         bottom_cap_thickness=tb,
         top_cap_thickness=tt,
-        r_sphere=r_s,
+        r_sphere=r_pack,
         gap=gap_v,
     )
     centers_chk = [tuple(part.pos) for part in particulas_finais]
-    radii_chk = [r_s] * len(centers_chk)
+    radii_chk = [r_pack] * len(centers_chk)
     report_legacy = validate_configuration(centers_chk, radii_chk, domain_chk, gap_v)
     if p["strict_validation"] and not report_legacy.get("ok", False):
         raise RuntimeError(
             "validacao pos simulacao rigid body falhou: "
             + str(report_legacy.get("messages", []))[:500]
         )
-    # para cada particula final adiciona esfera uv
+    cyl_seg = max(12, min(32, int(p.get("mesh_segmentos", 48) // 2)))
     for part in particulas_finais:
         x, y, z = part.pos
-        sv, sf = uv_sphere(x, y, z, r_s, lat=p["sphere_lat"], lon=p["sphere_lon"])
+        if pk == "cube":
+            sv, sf = box_mesh(x, y, z, d_char)
+        elif pk == "cylinder":
+            sv, sf = cylinder_axis(
+                x, y, z, d_char * 0.5, d_char, axis="z", segments=cyl_seg
+            )
+        else:
+            sv, sf = uv_sphere(
+                x, y, z, r_s, lat=p["sphere_lat"], lon=p["sphere_lon"]
+            )
         verts, faces = merge_mesh(verts, faces, sv, sf)
 
     write_stl_binary(out_stl, verts, faces)
@@ -313,8 +331,13 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
     # isto nao repete a lista completa de centros para poupar tamanho em leitos grandes
     sidecar: Dict[str, Any] = {
         "packing_method": "rigid_body",
+        "particle_kind": pk,
+        "collision_model": "circumscribed_sphere",
+        "collision_radius_equiv": r_pack,
         "validation": report_legacy,
         "generation_wall_time_sec": elapsed,
+        "n_particles_requested": p["particle_count"],
+        "n_particles_placed": len(centers_chk),
         "n_spheres_requested": p["particle_count"],
         "n_spheres_placed": len(centers_chk),
         "sphere_centers_preview": [
@@ -337,6 +360,28 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
         json.dump(sidecar, fp, indent=2, ensure_ascii=False)
 
 
+def _porosity_volume_kind(
+    domain: AnnulusBedDomain,
+    centers: List[vec3],
+    particle_kind: str,
+    particle_diameter: float,
+) -> float:
+    """porosidade por volume de particula real (esfera/cubo/cilindro)."""
+    v_void = domain.annulus_volume_void()
+    if v_void <= 0:
+        return 0.0
+    n = len(centers)
+    d = float(particle_diameter)
+    k = (particle_kind or "sphere").strip().lower()
+    if k == "cube":
+        v_part = n * d * d * d
+    elif k == "cylinder":
+        v_part = n * math.pi * (d / 2.0) ** 2 * d
+    else:
+        v_part = n * (4.0 / 3.0) * math.pi * (d / 2.0) ** 3
+    return max(0.0, min(1.0, 1.0 - v_part / v_void))
+
+
 def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
     # modo cientifico sem fisica tipo blender
     # passo um calcula raios e altura e monta annulus bed domain
@@ -353,8 +398,9 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         raise ValueError("raio interno invalido verifique diameter e wall thickness")
     # altura util
     altura = p["height"]
-    # raio da esfera metade do diametro da particula
-    r_s = p["particle_diameter"] / 2.0
+    pk = str(p.get("particle_kind") or "sphere").strip().lower()
+    d_char = float(p["particle_diameter"])
+    r_pack = collision_radius_for_particle_kind(pk, d_char)
     # gap copiado do dicionario
     gap = p["gap"]
     # espessuras de tampa inferior e superior
@@ -369,7 +415,7 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         height=altura,
         bottom_cap_thickness=tb,
         top_cap_thickness=tt,
-        r_sphere=r_s,
+        r_sphere=r_pack,
         gap=gap,
     )
 
@@ -390,7 +436,7 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         gen = generate_spherical_packing(
             domain,
             p["particle_count"],
-            r_s,
+            r_pack,
             gap,
             random_seed=seed_i,
             max_placement_attempts=p["max_placement_attempts"],
@@ -408,7 +454,7 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         gen = generate_hexagonal_packing(
             domain,
             p["particle_count"],
-            r_s,
+            r_pack,
             gap,
             step_x=step_x_f,
         )
@@ -417,14 +463,13 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
 
     # centers e lista de tuplos xyz em metros
     centers = gen["centers"]
-    # radii repete o mesmo raio porque todas as esferas sao iguais neste fluxo
-    radii = [r_s] * len(centers)
+    radii = [r_pack] * len(centers)
     # validate configuration percorre pares e dominio
     # para cada par compara distancia com soma raios mais gap
     # para cada centro verifica se ainda esta dentro do volume permitido para a esfera inteira
     report_val = validate_configuration(centers, radii, domain, gap)
     # porosidade aproximada por volume
-    poros = estimate_porosity(domain, centers, r_s)
+    poros = _porosity_volume_kind(domain, centers, pk, d_char)
 
     # strict true transforma avisos de validacao em excecao
     strict = p["strict_validation"]
@@ -450,8 +495,9 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             height=altura,
             bottom_cap_thickness=tb,
             top_cap_thickness=tt,
-            sphere_centers=centers,
-            sphere_radius=r_s,
+            particle_centers=centers,
+            particle_diameter=d_char,
+            particle_kind=pk,
             segmentos_cil=seg,
             lat_sphere=p["sphere_lat"],
             lon_sphere=p["sphere_lon"],
@@ -460,9 +506,9 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         axis = str(slice_cfg.get("slice_axis") or "y").strip().lower()
         if axis not in ("x", "y", "z"):
             axis = "y"
-        thickness = _to_float(slice_cfg.get("slice_thickness"), r_s * 0.6)
+        thickness = _to_float(slice_cfg.get("slice_thickness"), r_pack * 0.6)
         if thickness <= 0:
-            thickness = r_s * 0.6
+            thickness = r_pack * 0.6
         pos = _to_float(slice_cfg.get("slice_position"), 0.0)
         keep_only = _coerce_bool(slice_cfg.get("keep_only_intersecting_particles"), True)
         preserve = _coerce_bool(slice_cfg.get("preserve_original_packing"), True)
@@ -474,8 +520,9 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             height=altura,
             bottom_cap_thickness=tb,
             top_cap_thickness=tt,
-            sphere_centers=[],
-            sphere_radius=r_s,
+            particle_centers=[],
+            particle_diameter=d_char,
+            particle_kind=pk,
             segmentos_cil=seg,
             lat_sphere=p["sphere_lat"],
             lon_sphere=p["sphere_lon"],
@@ -494,14 +541,18 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         ai = 0 if axis == "x" else (1 if axis == "y" else 2)
         v_all: List[vec3] = list(v_shell)
         f_all: List[tri] = list(f_shell)
+        r_ax = d_char * 0.5
         for (x, y, z) in centers:
             coord = (x, y, z)[ai]
             d = abs(coord - pos)
-            if d > (r_s + thickness / 2.0):
+            if d > (r_ax + thickness / 2.0):
                 if keep_only:
                     continue
                 continue
-            rs = math.sqrt(max(0.0, r_s * r_s - d * d))
+            if pk == "sphere":
+                rs = math.sqrt(max(0.0, (d_char * 0.5) ** 2 - d * d))
+            else:
+                rs = d_char * 0.5
             if rs <= 0:
                 continue
             if preserve:
@@ -542,11 +593,16 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
     # tambem verifica cada centro dentro do anel cilindrico com folga para tampas
     extra: Dict[str, Any] = {
         "packing_method": method,
+        "particle_kind": pk,
+        "collision_model": "circumscribed_sphere",
+        "collision_radius_equiv": r_pack,
         "validation": report_val,
         "porosity_estimate": poros,
         "generation": gen_public,
         "generation_wall_time_sec": elapsed,
         "gap_convention": "center_distance >= r1+r2+gap",
+        "n_particles_requested": p["particle_count"],
+        "n_particles_placed": len(centers),
         "n_spheres_requested": p["particle_count"],
         "n_spheres_placed": len(centers),
         "sphere_centers_preview": [
@@ -586,7 +642,7 @@ def generate_packed_bed_stl(
 # resumo final para quem le o ficheiro inteiro
 # tubo oco vem de malha parametrizada por segmentos
 # tampas sao volumes curtos
-# esferas sao uv sphere com lat e lon controlaveis
+# particulas sao esfera uv cubo ou cilindro conforme particles kind
 # spherical e aleatorio com rejeicao
 # hexagonal e grade cortada ao cilindro
 # validate configuration fecha o ciclo de seguranca geometrica

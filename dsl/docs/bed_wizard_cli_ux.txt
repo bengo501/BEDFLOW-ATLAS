@@ -36,7 +36,7 @@ depois:
 - opcao 3 — templates e editor: apenas json em dsl/wizard_templates ou editor .bed
   temporario com notepad/nano/vim.
 - opcao 4 — testes rapidos: fluxo proprio com preview rich, independente de templates.
-- opcoes 5 e 6 — geracao 3d (blender) e pipeline completo (mantem semantica).
+- opcoes 5 e 6 — geracao 3d (motor blender ou python no json) e pipeline completo.
 - opcao 0 — voltar ao menu principal.
 
 funcao renomeada conceptualmente: templates_editor_menu (substitui templates_e_testes_menu).

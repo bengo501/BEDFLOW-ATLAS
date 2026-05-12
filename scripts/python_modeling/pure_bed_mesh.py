@@ -9,7 +9,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from stl_mesh_utils import merge_mesh, tri, vec3, uv_sphere, write_stl_binary
+from stl_mesh_utils import (
+    box_mesh,
+    cylinder_axis,
+    merge_mesh,
+    tri,
+    vec3,
+    uv_sphere,
+    write_stl_binary,
+)
 
 __all__ = [
     "MeshData",
@@ -198,14 +206,37 @@ def meshdata_to_lists(m: MeshData) -> Tuple[List[vec3], List[tri]]:
     return list(m.vertices), list(m.faces)
 
 
+def _append_particle_mesh(
+    vx: List[vec3],
+    fx: List[tri],
+    cx: float,
+    cy: float,
+    cz: float,
+    particle_diameter: float,
+    particle_kind: str,
+    lat_sphere: int,
+    lon_sphere: int,
+) -> Tuple[List[vec3], List[tri]]:
+    pk = (particle_kind or "sphere").strip().lower()
+    d = float(particle_diameter)
+    if pk == "cube":
+        sv, sf = box_mesh(cx, cy, cz, d)
+    elif pk == "cylinder":
+        sv, sf = cylinder_axis(cx, cy, cz, d * 0.5, d, axis="z", segments=20)
+    else:
+        sv, sf = uv_sphere(cx, cy, cz, d * 0.5, lat=lat_sphere, lon=lon_sphere)
+    return merge_mesh(vx, fx, sv, sf)
+
+
 def build_packed_bed_model(
     r_ext: float,
     r_int: float,
     height: float,
     bottom_cap_thickness: float,
     top_cap_thickness: float,
-    sphere_centers: List[vec3],
-    sphere_radius: float,
+    particle_centers: List[vec3],
+    particle_diameter: float,
+    particle_kind: str = "sphere",
     segmentos_cil: int = 48,
     lat_sphere: int = 4,
     lon_sphere: int = 6,
@@ -228,14 +259,15 @@ def build_packed_bed_model(
     # merge das tampas sobre o tubo
     v, f = merge_mesh(v, f, cap_i.vertices, cap_i.faces)
     v, f = merge_mesh(v, f, cap_s.vertices, cap_s.faces)
-    # para cada centro conhecido adiciona uma esfera discretizada
-    for i, c in enumerate(sphere_centers):
+    pk = (particle_kind or "sphere").strip().lower()
+    for c in particle_centers:
         sx, sy, sz = c
-        sv, sf = uv_sphere(sx, sy, sz, sphere_radius, lat=lat_sphere, lon=lon_sphere)
-        v, f = merge_mesh(v, f, sv, sf)
-    # meta guarda contagem e medidas principais para json lateral
+        v, f = _append_particle_mesh(
+            v, f, sx, sy, sz, particle_diameter, pk, lat_sphere, lon_sphere
+        )
     meta = {
-        "n_spheres": len(sphere_centers),
+        "n_particles": len(particle_centers),
+        "particle_kind": pk,
         "r_ext": r_ext,
         "r_int": r_int,
         "height": height,

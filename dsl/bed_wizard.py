@@ -94,7 +94,7 @@ class BedWizard:
             "menu.title.main": "opcoes",
             "menu.title.start": "comecar",
             "menu.main.start.title": "comecar",
-            "menu.main.start.desc": "questionario, templates, testes rapidos, geracao 3d no blender ou pipeline completo",
+            "menu.main.start.desc": "questionario, templates, testes rapidos, geracao 3d (motor no fim) ou pipeline completo",
             "menu.main.view3d.title": "visualizacao 3d",
             "menu.main.view3d.desc": "listar malhas geradas; ver no browser (three.js), open3d ou blender",
             "menu.main.help.title": "ajuda",
@@ -106,15 +106,15 @@ class BedWizard:
             "menu.main.exit.title": "sair",
             "menu.main.exit.desc": "encerrar o wizard",
             "menu.start.smart.title": "assistente inteligente",
-            "menu.start.smart.desc": "perguntas curtas para guiar ao .bed, modelo 3d no blender ou pipeline openfoam",
+            "menu.start.smart.desc": "perguntas curtas para guiar ao .bed, modelo 3d ou pipeline openfoam",
             "menu.start.q.title": "questionario interativo",
             "menu.start.q.desc": "passo a passo; gera .bed; cfd opcional; export configuravel",
             "menu.start.tpl.title": "templates e editor",
             "menu.start.tpl.desc": "carregar json em dsl/wizard_templates ou editor .bed classico com ficheiro temporario",
             "menu.start.quick.title": "testes rapidos",
             "menu.start.quick.desc": "validar json ou .bed existente; preview rich; python puro ou blender; sem misturar com templates",
-            "menu.start.blender.title": "geracao 3d (blender)",
-            "menu.start.blender.desc": "sem cfd; export como no questionario; escolhe como abrir o blender no fim",
+            "menu.start.blender.title": "geracao 3d",
+            "menu.start.blender.desc": "sem cfd; mesma ordem do questionario; motor blender ou python no meio; export no fim; como abrir o blender no fim se aplicavel",
             "menu.start.pipe.title": "pipeline completo (avancado)",
             "menu.start.pipe.desc": "bed + blender + caso openfoam + simulacao no wsl; longo; requisitos elevados",
             "menu.start.back.title": "voltar",
@@ -149,7 +149,7 @@ class BedWizard:
             "menu.title.main": "options",
             "menu.title.start": "start",
             "menu.main.start.title": "start",
-            "menu.main.start.desc": "questionnaire, templates, quick tests, 3d generation in blender or full pipeline",
+            "menu.main.start.desc": "questionnaire, templates, quick tests, 3d generation (engine at end) or full pipeline",
             "menu.main.view3d.title": "3d visualization",
             "menu.main.view3d.desc": "list generated meshes; open in browser (three.js), open3d or blender",
             "menu.main.help.title": "help",
@@ -161,15 +161,15 @@ class BedWizard:
             "menu.main.exit.title": "exit",
             "menu.main.exit.desc": "close the wizard",
             "menu.start.smart.title": "smart assistant",
-            "menu.start.smart.desc": "short questions to guide to .bed, 3d blender model, or openfoam pipeline",
+            "menu.start.smart.desc": "short questions to guide to .bed, 3d model, or openfoam pipeline",
             "menu.start.q.title": "interactive questionnaire",
             "menu.start.q.desc": "step-by-step; generates .bed; optional cfd; configurable export",
             "menu.start.tpl.title": "templates and editor",
             "menu.start.tpl.desc": "load json from dsl/wizard_templates or classic .bed temp-file editor",
             "menu.start.quick.title": "quick tests",
             "menu.start.quick.desc": "validate existing json or .bed; rich preview; pure python or blender; separate from templates",
-            "menu.start.blender.title": "3d generation (blender)",
-            "menu.start.blender.desc": "no cfd; export like questionnaire; choose blender open policy at end",
+            "menu.start.blender.title": "3d generation",
+            "menu.start.blender.desc": "no cfd; same questionnaire order; blender or python engine mid-flow; export before end; blender open policy at end if applicable",
             "menu.start.pipe.title": "full pipeline (advanced)",
             "menu.start.pipe.desc": "bed + blender + openfoam case + wsl simulation; long; heavy requirements",
             "menu.start.back.title": "back",
@@ -360,7 +360,7 @@ class BedWizard:
                 'exemplo': 'sphere (esfera), cube (cubo), cylinder (cilindro)'
             },
             'particles.diameter': {
-                'desc': 'diametro das particulas esfericas',
+                'desc': 'diametro caracteristico da particula (esfera: diametro; cubo/cilindro: referencia da malha)',
                 'min': 0.0001, 'max': 0.5, 'unit': 'm',
                 'exemplo': 'particula de 5mm = 0.005m'
             },
@@ -455,9 +455,9 @@ class BedWizard:
                 'exemplo': '0.001m = 1mm de margem'
             },
             'packing.gap': {
-                'desc': 'folga minima entre superficies das esferas (modos cientificos)',
+                'desc': 'folga minima entre superficies das particulas nos modos cientificos (colisao aproximada por esfera circunscrita)',
                 'min': 0.0, 'max': 0.01, 'unit': 'm',
-                'exemplo': '0.0001m = 0.1 mm entre esferas'
+                'exemplo': '0.0001m = 0.1 mm entre superficies'
             },
             'packing.random_seed': {
                 'desc': 'seed para spherical_packing',
@@ -470,7 +470,7 @@ class BedWizard:
                 'exemplo': '200000'
             },
             'packing.strict_validation': {
-                'desc': 'se true, falha se geometria invalida ou faltam esferas',
+                'desc': 'se true, falha se geometria invalida ou faltam particulas face ao pedido',
                 'exemplo': 'true recomendado para cfd'
             },
             'packing.step_x': {
@@ -812,17 +812,17 @@ class BedWizard:
             ):
                 self.skip_questionnaire_after_load = True
                 self.ui.muted(
-                    "fluxo curto: parametros iguais ao ficheiro; "
-                    "exportacao, fatia e cfd nao serao repedidos nesta sessao."
+                    "fluxo curto: parametros iguais ao ficheiro; packing, geometria, motor, export e "
+                    "propriedades extra das particulas nao serao repedidos nesta sessao."
                 )
         else:
             self.ui.warn("nao foi possivel carregar; a seguir sem carregar")
 
     def _hint_fluxo_questionario(self) -> None:
         self.ui.muted(
-            "ordem: leito e tampas → particulas → export → motor de geracao → "
-            "geometry_mode (full 3d ou fatia) → packing_method e detalhes → "
-            "cfd opcional → nome do ficheiro → confirmacao."
+            "ordem: leito e tampas → tipo/count/diametro da particula → packing_method e detalhes → "
+            "geometry_mode (full 3d ou fatia) → motor de geracao (blender ou python puro) → export → "
+            "propriedades extra das particulas → cfd opcional → nome do ficheiro → confirmacao."
         )
 
     def _hint_fluxo_template(self) -> None:
@@ -833,8 +833,9 @@ class BedWizard:
 
     def _hint_fluxo_blender(self) -> None:
         self.ui.muted(
-            "ordem: leito → tampas → particulas → export → geometry_mode → "
-            "packing_method → nome .bed → como abrir o blender → confirmacao."
+            "ordem: leito → tampas → tipo/count/diametro → packing_method → geometry_mode → "
+            "generation_backend → export → propriedades extra das particulas → "
+            "nome .bed → como abrir o blender → confirmacao."
         )
 
     def show_param_help(self, param_key: str):
@@ -1378,7 +1379,7 @@ class BedWizard:
             elif field == "gap":
                 pk["gap"] = float(
                     self.get_number_input(
-                        "gap entre esferas",
+                        "gap entre superficies das particulas",
                         str(pk.get("gap", "0.0001")),
                         "m",
                         False,
@@ -1529,7 +1530,7 @@ class BedWizard:
         # modos cientificos reutilizam defaults silenciosos no texto .bed compativel com o motor
         opts = list(PACKING_MODE_CHOICES)
         ph = (lambda k: k) if with_param_help else (lambda _k: "")
-        self.print_section("empacotamento (packing_method)")
+        self.print_section("etapa 4: empacotamento (packing_method)")
         method_raw = self.get_choice(
             "packing_method",
             opts,
@@ -1607,8 +1608,8 @@ class BedWizard:
         pack = {"method": method, **self._packing_physics_defaults_for_file()}
         if method == "spherical_packing":
             pack["gap"] = float(
-                self.get_number_input(
-                    "gap minimo entre esferas",
+                    self.get_number_input(
+                        "gap minimo entre superficies das particulas (centros usam raio equivalente)",
                     self._default_from_loaded("packing.gap", "0.0001"),
                     "m",
                     False,
@@ -1640,7 +1641,7 @@ class BedWizard:
         elif method == "hexagonal_3d":
             pack["gap"] = float(
                 self.get_number_input(
-                    "gap entre centros na grade hexagonal",
+                    "gap entre centros na grade hexagonal (folga entre superficies; raio equivalente no dominio)",
                     self._default_from_loaded("packing.gap", "0.0001"),
                     "m",
                     False,
@@ -1664,7 +1665,7 @@ class BedWizard:
 
     def _questionnaire_export_section(self) -> None:
         """mesma secao export do questionario completo — reutilizada pelo modo blender."""
-        self.print_section("exportacao")
+        self.print_section("etapa 7: exportacao")
         wall_modes = ["surface", "solid"]
         fluid_modes = ["none", "cavity"]
         self.params.setdefault("export", {})
@@ -1740,7 +1741,7 @@ class BedWizard:
 
     def _questionnaire_geometry_mode_section(self) -> None:
         """geometry_mode e independente de packing_method (full 3d vs lamina fina)."""
-        self.print_section("geometry_mode")
+        self.print_section("etapa 5: geometry_mode")
         opts = [
             "full_3d — volume completo",
             "pseudo_2d_thin_slice — fatia fina (pseudo 2d)",
@@ -1765,9 +1766,19 @@ class BedWizard:
             self.params["geometry_mode"] = "pseudo_2d_thin_slice"
             self._fill_slice_params_interactive()
 
-    def _questionnaire_generation_backend_section(self) -> None:
+    def _questionnaire_generation_backend_section(
+        self, *, geracao_3d_flow: bool = False
+    ) -> None:
         """metadado consumido pelo json compilado; nao confunde com packing_method."""
-        self.print_section("motor de geracao")
+        self.print_section("etapa 6: motor de geracao")
+        if geracao_3d_flow:
+            self.ui.muted(
+                "neste menu (geracao 3d) o habitual e escolher blender; enter vazio mantem a "
+                "linha destacada (por defeito opcao 1 = blender se o ficheiro nao pedir python puro). "
+                "generation_backend e o metadado no .json que diz ao pipeline quem materializa a malha; "
+                "pure_python e para gerar stl em python sem leito_extracao."
+            )
+            self.ui.println()
         opts = [
             "blender — malha via blender",
             "pure_python — malha sem abrir blender",
@@ -1782,9 +1793,9 @@ class BedWizard:
             "pure_python" if "pure" in pick.lower() else "blender"
         )
 
-    def _questionnaire_bed_lids_particles_core(self) -> None:
-        """leito cilindrico, tampas e particulas — partilhado pelo questionario e pelo modo blender."""
-        self.print_section("geometria do leito")
+    def _questionnaire_bed_and_lids(self) -> None:
+        """leito cilindrico e tampas — primeiro bloco do questionario 3d."""
+        self.print_section("etapa 1: geometria do leito")
         self.params.setdefault("bed", {})
         bd = self.params["bed"]
         bd["diameter"] = self.get_number_input(
@@ -1829,7 +1840,7 @@ class BedWizard:
             "bed.roughness",
         )
 
-        self.print_section("tampas")
+        self.print_section("etapa 2: tampas")
         lid_types = ["flat", "hemispherical", "none"]
         self.params.setdefault("lids", {})
         ld = self.params["lids"]
@@ -1867,7 +1878,9 @@ class BedWizard:
             "lids.seal_clearance",
         )
 
-        self.print_section("particulas")
+    def _questionnaire_particle_shape_and_count(self) -> None:
+        """tipo geometrico, diametro e count — antes do packing."""
+        self.print_section("etapa 3: forma e quantidade das particulas")
         particle_kinds = ["sphere", "cube", "cylinder"]
         self.params.setdefault("particles", {})
         pt = self.params["particles"]
@@ -1878,7 +1891,7 @@ class BedWizard:
             "particles.kind",
         )
         pt["diameter"] = self.get_number_input(
-            "diametro das particulas",
+            "diametro caracteristico das particulas",
             self._default_from_loaded("particles.diameter", "0.005"),
             "m",
             True,
@@ -1893,62 +1906,100 @@ class BedWizard:
                 "particles.count",
             )
         )
-        pt["target_porosity"] = self.get_number_input(
-            "porosidade alvo",
-            self._default_from_loaded("particles.target_porosity", "0.4"),
-            "",
-            False,
-            "particles.target_porosity",
+
+    def _questionnaire_particles_properties_tail(self, packing_method: str) -> None:
+        """porosidade/densidade/massa/seed; atrito e similares so para rigid_body."""
+        self.print_section("etapa 8: propriedades adicionais das particulas")
+        self.params.setdefault("particles", {})
+        pt = self.params["particles"]
+        pt["target_porosity"] = float(
+            self.get_number_input(
+                "porosidade alvo",
+                self._default_from_loaded("particles.target_porosity", "0.4"),
+                "",
+                False,
+                "particles.target_porosity",
+            )
         )
-        pt["density"] = self.get_number_input(
-            "densidade do material",
-            self._default_from_loaded("particles.density", "2500.0"),
-            "kg/m3",
-            True,
-            "particles.density",
+        pt["density"] = float(
+            self.get_number_input(
+                "densidade do material",
+                self._default_from_loaded("particles.density", "2500.0"),
+                "kg/m3",
+                True,
+                "particles.density",
+            )
         )
-        pt["mass"] = self.get_number_input(
-            "massa das particulas",
-            self._default_from_loaded("particles.mass", "0.0"),
-            "g",
-            False,
-            "particles.mass",
+        pt["mass"] = float(
+            self.get_number_input(
+                "massa das particulas",
+                self._default_from_loaded("particles.mass", "0.0"),
+                "g",
+                False,
+                "particles.mass",
+            )
         )
-        pt["restitution"] = self.get_number_input(
-            "coeficiente de restituicao",
-            self._default_from_loaded("particles.restitution", "0.3"),
-            "",
-            False,
-            "particles.restitution",
-        )
-        pt["friction"] = self.get_number_input(
-            "coeficiente de atrito",
-            self._default_from_loaded("particles.friction", "0.5"),
-            "",
-            False,
-            "particles.friction",
-        )
-        pt["rolling_friction"] = self.get_number_input(
-            "atrito de rolamento",
-            self._default_from_loaded("particles.rolling_friction", "0.1"),
-            "",
-            False,
-            "particles.rolling_friction",
-        )
-        pt["linear_damping"] = self.get_number_input(
-            "amortecimento linear",
-            self._default_from_loaded("particles.linear_damping", "0.1"),
-            "",
-            False,
-            "particles.linear_damping",
-        )
-        pt["angular_damping"] = self.get_number_input(
-            "amortecimento angular",
-            self._default_from_loaded("particles.angular_damping", "0.1"),
-            "",
-            False,
-            "particles.angular_damping",
-        )
+        pm = normalize_packing_mode(str(packing_method or ""))
+        if pm == "rigid_body":
+            pt["restitution"] = float(
+                self.get_number_input(
+                    "coeficiente de restituicao",
+                    self._default_from_loaded("particles.restitution", "0.3"),
+                    "",
+                    False,
+                    "particles.restitution",
+                )
+            )
+            pt["friction"] = float(
+                self.get_number_input(
+                    "coeficiente de atrito",
+                    self._default_from_loaded("particles.friction", "0.5"),
+                    "",
+                    False,
+                    "particles.friction",
+                )
+            )
+            pt["rolling_friction"] = float(
+                self.get_number_input(
+                    "atrito de rolamento",
+                    self._default_from_loaded("particles.rolling_friction", "0.1"),
+                    "",
+                    False,
+                    "particles.rolling_friction",
+                )
+            )
+            pt["linear_damping"] = float(
+                self.get_number_input(
+                    "amortecimento linear",
+                    self._default_from_loaded("particles.linear_damping", "0.1"),
+                    "",
+                    False,
+                    "particles.linear_damping",
+                )
+            )
+            pt["angular_damping"] = float(
+                self.get_number_input(
+                    "amortecimento angular",
+                    self._default_from_loaded("particles.angular_damping", "0.1"),
+                    "",
+                    False,
+                    "particles.angular_damping",
+                )
+            )
+        else:
+            pt["restitution"] = float(
+                self._default_from_loaded("particles.restitution", "0.3")
+            )
+            pt["friction"] = float(self._default_from_loaded("particles.friction", "0.5"))
+            pt["rolling_friction"] = float(
+                self._default_from_loaded("particles.rolling_friction", "0.1")
+            )
+            pt["linear_damping"] = float(
+                self._default_from_loaded("particles.linear_damping", "0.1")
+            )
+            pt["angular_damping"] = float(
+                self._default_from_loaded("particles.angular_damping", "0.1")
+            )
         pt["seed"] = int(
             self.get_number_input(
                 "seed para reproducibilidade",
@@ -1961,11 +2012,13 @@ class BedWizard:
 
     def _fill_params_from_questionnaire(self) -> None:
         """preenche self.params com todas as secoes do questionario (sem nome de arquivo nem salvar)."""
-        self._questionnaire_bed_lids_particles_core()
-        self._questionnaire_export_section()
-        self._questionnaire_generation_backend_section()
-        self._questionnaire_geometry_mode_section()
+        self._questionnaire_bed_and_lids()
+        self._questionnaire_particle_shape_and_count()
         self.params["packing"] = self._collect_packing_params(with_param_help=True)
+        self._questionnaire_geometry_mode_section()
+        self._questionnaire_generation_backend_section()
+        self._questionnaire_export_section()
+        self._questionnaire_particles_properties_tail(self.params["packing"]["method"])
 
         self.print_section("parametros cfd (opcional)")
         if self.get_boolean("incluir parametros cfd?", False):
@@ -2463,23 +2516,25 @@ cfd {
             return False
     
     def _questionnaire_blender_bed_lids_particles_packing(self) -> None:
-        """leito, export, geometry_mode e packing — mesmo encadeamento do questionario (sem cfd)."""
-        self._questionnaire_bed_lids_particles_core()
-        self._questionnaire_export_section()
-        self._questionnaire_generation_backend_section()
-        self._questionnaire_geometry_mode_section()
+        """mesmo encadeamento do questionario completo (sem cfd)."""
+        self._questionnaire_bed_and_lids()
+        self._questionnaire_particle_shape_and_count()
         self.params["packing"] = self._collect_packing_params(with_param_help=True)
+        self._questionnaire_geometry_mode_section()
+        self._questionnaire_generation_backend_section(geracao_3d_flow=True)
+        self._questionnaire_export_section()
+        self._questionnaire_particles_properties_tail(self.params["packing"]["method"])
 
     def blender_generation_mode(self) -> None:
         """questionario 3d sem cfd; export igual ao questionario; escolha de abertura do blender."""
         try:
             self.clear_screen()
-            self.print_header("geracao 3d (blender)", "sem cfd; export configuravel como no questionario")
-            self.ui.breadcrumbs("wizard", "blender-3d")
+            self.print_header("geracao 3d", "sem cfd; export configuravel; motor no json (blender ou python puro)")
+            self.ui.breadcrumbs("wizard", "geracao-3d")
             self.ui.muted("parametros cfd nao sao pedidos neste modo.")
             self._hint_fluxo_blender()
             self.ui.println()
-            self._maybe_load_existing_bed(caption="geracao 3d (blender)")
+            self._maybe_load_existing_bed(caption="geracao 3d")
             if not self.skip_questionnaire_after_load:
                 self._questionnaire_blender_bed_lids_particles_packing()
             self.ui.hint("secao cfd omitida neste modo")
@@ -2508,7 +2563,7 @@ cfd {
     def _confirm_and_generate_blender(self, open_policy: str) -> None:
         """open_policy: never | ask | always — gera .bed, compila, executa blender."""
         self.clear_screen()
-        self.print_header("confirmacao", "geracao 3d no blender")
+        self.print_header("confirmacao", "geracao 3d")
         self.ui.breadcrumbs("wizard", "blender", "confirmar")
         fmts = self.params.get("export", {}).get("formats") or []
         fmt_s = ", ".join(str(x) for x in fmts)
@@ -3435,7 +3490,7 @@ cfd {
                 "o que pretende fazer agora",
                 [
                     "gerar .bed com questionario completo (cfd opcional)",
-                    "gerar modelo 3d sem cfd (mesmo questionario que o modo blender)",
+                    "gerar modelo 3d sem cfd (mesmo fluxo que geracao 3d no menu comecar)",
                     "pipeline completo (questionario + blender + openfoam no wsl)",
                 ],
                 None,

@@ -28,6 +28,21 @@ def euclidean_distance(
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 
 
+def collision_radius_for_particle_kind(kind: str, characteristic_diameter: float) -> float:
+    """raio equivalente para testes de colisao nos packers (esfera circunscrita, conservador)."""
+    k = (kind or "sphere").strip().lower()
+    d = float(characteristic_diameter)
+    if d <= 0:
+        return 1e-9
+    if k == "sphere":
+        return d * 0.5
+    if k == "cube":
+        return d * math.sqrt(3.0) * 0.5
+    if k == "cylinder":
+        return d * 0.5
+    return d * 0.5
+
+
 def sphere_center_clearance(radius_a: float, radius_b: float, gap: float) -> float:
     # devolve distancia minima permitida entre dois centros de esfera
     # radius a e raio da primeira esfera em metros

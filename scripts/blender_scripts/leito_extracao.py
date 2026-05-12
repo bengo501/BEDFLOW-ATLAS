@@ -6,6 +6,7 @@ import sys
 import argparse
 import time
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 # o blender executa este arquivo como script entao o diretorio do arquivo precisa estar no sys path
 # assim o python acha a pasta packed_bed_science ao lado deste arquivo
@@ -14,7 +15,7 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 # modulos sem bpy definem matematica validacao e algoritmos de posicao
-from packed_bed_science.geometry_math import AnnulusBedDomain, estimate_porosity
+from packed_bed_science.geometry_math import AnnulusBedDomain, estimate_porosity, collision_radius_for_particle_kind
 from packed_bed_science.packing_modes import merge_root_packing_mode, packing_method_from_section
 from packed_bed_science.validation import validate_configuration
 from packed_bed_science.packing_spherical import generate_spherical_packing
@@ -24,7 +25,7 @@ from packed_bed_science.packing_hexagonal import generate_hexagonal_packing
 from packed_bed_science.blender_build import (
     create_hollow_cylinder,
     create_caps,
-    create_spheres,
+    create_particles_by_kind,
 )
 
 # =============
@@ -110,31 +111,25 @@ def criar_tampa(posicao_z, diametro=0.025, espessura=0.003, nome="tampa", tem_co
 # ==================
 # Criar particulas =
 # =========================================================================================
-def criar_particulas(quantidade=30, raio_leito=0.0125, altura_leito=0.1, raio_particula=0.001):
-    # cria particulas esfericas que vao cair no leito    
-    # parametros: quantidade: numero de particulas
-    #             raio_leito: raio interno do leito
-    #             altura_leito: altura do leito
-    #             raio_particula: raio de cada particula
-    particulas = []
-    
-    #criar particulas 
-    for i in range(quantidade):
-        # posicao aleatoria acima do leito para as particulas cairem
+def criar_particulas(
+    quantidade=30,
+    raio_leito=0.0125,
+    altura_leito=0.1,
+    raio_particula=0.001,
+    kind: str = "sphere",
+    diametro_particula: Optional[float] = None,
+):
+    # posicoes iniciais acima do leito; malha conforme kind (instancias partilhadas)
+    d = float(diametro_particula) if diametro_particula is not None else float(raio_particula) * 2.0
+    k = (kind or "sphere").strip().lower()
+    posicoes: list = []
+    for i in range(int(quantidade)):
         x = random.uniform(-raio_leito * 0.7, raio_leito * 0.7)
         y = random.uniform(-raio_leito * 0.7, raio_leito * 0.7)
-        z = altura_leito + 0.02 + (i * 0.005)  # espacar verticalmente para evitar sobreposicao
-        
-        # criar particula esferica
-        bpy.ops.mesh.primitive_uv_sphere_add(
-            radius=raio_particula,
-            location=(x, y, z)
-        )
-        particula = bpy.context.active_object
-        particula.name = f"particula_{i+1:02d}"
-        particulas.append(particula)
-    
-    print(f"{quantidade} particulas criadas")
+        z = altura_leito + 0.02 + (i * 0.005)
+        posicoes.append((x, y, z))
+    particulas = create_particles_by_kind(k, posicoes, d)
+    print(f"{len(particulas)} particulas ({k}) criadas")
     return particulas
 # =========================================================================================
 
@@ -472,9 +467,20 @@ def _coerce_bool(v, default=True):
     return default
 
 
-def aplicar_thin_slice(slice_cfg: dict, *, altura: float, raio_ext: float) -> None:
-    # aplica um corte booleano (intersect) com um cubo fino para manter apenas uma fatia 3d
-    # eixo do corte define o eixo normal da fatia (x/y/z)
+def aplicar_thin_slice(
+    slice_cfg: dict,
+    *,
+    altura: float,
+    raio_ext: float,
+    particle_centers: Optional[List[Tuple[float, float, float]]] = None,
+    particle_diameter: float = 0.005,
+    particle_kind: str = "sphere",
+) -> None:
+    # leito e tampas: boolean intersect com cubo fino (mesma ideia que filter_faces_by_slab no python)
+    # particulas: nao usar boolean em instancias com mesh partilhada (corrompe todas);
+    # remove-se as malhas 3d e criam-se cilindros finissimos (discos) no plano de corte, alinhado a pure_generation
+    from mathutils import Euler
+
     if not isinstance(slice_cfg, dict):
         return
     if not _coerce_bool(slice_cfg.get("slice_enabled"), False):
@@ -486,11 +492,17 @@ def aplicar_thin_slice(slice_cfg: dict, *, altura: float, raio_ext: float) -> No
     if thickness <= 0:
         thickness = 0.002
     pos = _coerce_float(slice_cfg.get("slice_position"), 0.0)
+    keep_only = _coerce_bool(slice_cfg.get("keep_only_intersecting_particles"), True)
+    preserve = _coerce_bool(slice_cfg.get("preserve_original_packing"), True)
+
+    pk = (particle_kind or "sphere").strip().lower()
+    d_char = float(particle_diameter)
+    r_ax = d_char * 0.5
+    ai = 0 if axis == "x" else (1 if axis == "y" else 2)
 
     # dimensoes grandes para cobrir o modelo todo, exceto na direcao do corte
     big = max(altura * 2.0, raio_ext * 4.0, 1.0)
     dims = [big, big, big]
-    ai = 0 if axis == "x" else (1 if axis == "y" else 2)
     dims[ai] = thickness
     loc = [0.0, 0.0, altura / 2.0]
     loc[ai] = pos
@@ -500,23 +512,110 @@ def aplicar_thin_slice(slice_cfg: dict, *, altura: float, raio_ext: float) -> No
     cutter.name = "thin_slice_cutter"
     cutter.scale = (dims[0] / 2.0, dims[1] / 2.0, dims[2] / 2.0)
 
-    # aplicar boolean intersect em todos os meshes exceto o cutter
-    targets = [o for o in bpy.data.objects if o.type == "MESH" and o.name != cutter.name]
-    for obj in targets:
+    part_prefix = "particula"
+    bed_targets = [
+        o
+        for o in bpy.data.objects
+        if o.type == "MESH" and o.name != cutter.name and not o.name.lower().startswith(part_prefix)
+    ]
+    for obj in bed_targets:
         try:
             mod = obj.modifiers.new(name="thin_slice", type="BOOLEAN")
             mod.operation = "INTERSECT"
             mod.object = cutter
+            if hasattr(mod, "solver"):
+                try:
+                    mod.solver = "EXACT"
+                except Exception:
+                    pass
             bpy.context.view_layer.objects.active = obj
             bpy.ops.object.modifier_apply(modifier=mod.name)
         except Exception as e:
-            print(f"aviso: boolean falhou em {obj.name}: {e}")
+            print(f"aviso: boolean fatia falhou em {obj.name}: {e}")
 
-    # remover cutter
+    parts = [
+        o
+        for o in bpy.data.objects
+        if o.type == "MESH" and o.name.lower().startswith(part_prefix)
+    ]
+    parts.sort(key=lambda o: o.name)
+
+    if len(parts) > 0:
+        if particle_centers is not None and len(particle_centers) == len(parts):
+            centers_final: List[Tuple[float, float, float]] = [
+                (float(t[0]), float(t[1]), float(t[2])) for t in particle_centers
+            ]
+        else:
+            if particle_centers is not None:
+                print(
+                    "aviso fatia: lista de centros nao coincide com particulas na cena; "
+                    "usa matrix_world de cada objeto"
+                )
+            centers_final = [tuple(o.matrix_world.translation) for o in parts]
+    else:
+        centers_final = (
+            [(float(t[0]), float(t[1]), float(t[2])) for t in particle_centers]
+            if particle_centers
+            else []
+        )
+
+    for o in parts:
+        try:
+            bpy.data.objects.remove(o, do_unlink=True)
+        except Exception:
+            pass
+
     try:
         bpy.data.objects.remove(cutter, do_unlink=True)
     except Exception:
         pass
+
+    if axis == "z":
+        rot = Euler((0.0, 0.0, 0.0), "XYZ")
+    elif axis == "y":
+        rot = Euler((math.pi / 2.0, 0.0, 0.0), "XYZ")
+    else:
+        rot = Euler((0.0, math.pi / 2.0, 0.0), "XYZ")
+
+    disc_verts = 24
+    n_discs = 0
+    for idx, (x, y, z) in enumerate(centers_final, start=1):
+        coord = (x, y, z)[ai]
+        d_plane = abs(coord - pos)
+        if d_plane > (r_ax + thickness / 2.0):
+            if keep_only:
+                continue
+            continue
+        if pk == "sphere":
+            rs = math.sqrt(max(0.0, r_ax**2 - d_plane**2))
+        else:
+            rs = r_ax
+        if rs <= 1e-9:
+            continue
+        if preserve:
+            cx, cy, cz = x, y, z
+        else:
+            if axis == "x":
+                cx, cy, cz = pos, y, z
+            elif axis == "y":
+                cx, cy, cz = x, pos, z
+            else:
+                cx, cy, cz = x, y, pos
+        bpy.ops.mesh.primitive_cylinder_add(
+            vertices=disc_verts,
+            radius=rs,
+            depth=thickness,
+            location=(cx, cy, cz),
+            rotation=rot,
+        )
+        disc = bpy.context.active_object
+        disc.name = f"slice_disc_{idx:04d}"
+        n_discs += 1
+
+    print(
+        f"fatia pseudo-2d: leito/tampas cortados por boolean; "
+        f"{n_discs} discos finos (eixo {axis}) substituem particulas 3d na lamina"
+    )
 
 
 def _salvar_relatorio_packing(output_path: Path, relatorio: dict):
@@ -691,6 +790,7 @@ def main_com_parametros():
     espessura = _coerce_float(bed_raw.get("wall_thickness"), 0.002)
     num_particulas = _coerce_int(particles_raw.get("count"), 100)
     diametro_particula = _coerce_float(particles_raw.get("diameter"), 0.005)
+    particle_kind = str(particles_raw.get("kind") or "sphere").strip().lower()
     esp_tampa_inf = _coerce_float(lids_raw.get("bottom_thickness"), 0.003)
     esp_tampa_sup = _coerce_float(lids_raw.get("top_thickness"), 0.003)
 
@@ -699,18 +799,27 @@ def main_com_parametros():
     print(f"  diametro: {diametro}m")
     print(f"  espessura parede: {espessura}m")
     print(f"  particulas: {num_particulas}")
+    print(f"  tipo particula: {particle_kind}")
     print(f"  diametro particula: {diametro_particula}m")
 
     metodo = _packing_method_name(packing_raw)
     print(f"  metodo empacotamento: {metodo}")
 
+    def _log_particle_plural(k: str) -> str:
+        return {"sphere": "esferas", "cube": "cubos", "cylinder": "cilindros"}.get(
+            (k or "sphere").lower(), "particulas"
+        )
+
     try:
         limpar_cena()
+
+        # centros do packing cientifico para fatia 2d (evita depender de matrix_world)
+        centers_for_slice: Optional[List[Tuple[float, float, float]]] = None
 
         # raios usados igual no ramo cientifico e no ramo fisico para coerencia
         raio_ext = diametro / 2.0
         raio_int = raio_ext - espessura
-        raio_particula = diametro_particula / 2.0
+        raio_equiv = collision_radius_for_particle_kind(particle_kind, diametro_particula)
         # gap explicito vence se nao existir usamos collision margin do packing fisico antigo
         if packing_raw.get("gap") is not None:
             gap = _coerce_float(packing_raw.get("gap"), 0.0)
@@ -722,7 +831,7 @@ def main_com_parametros():
         # passos mentais ler parametros montar domain igual ao pure generation
         # chamar generate spherical packing ou generate hexagonal packing
         # validate configuration confere pares e dominio com a mesma matematica python
-        # depois create hollow cylinder create caps e create spheres materializam na cena
+        # depois create hollow cylinder create caps e create_particles_by_kind materializam na cena
         # gap e distancia extra entre superficies exigida entre centros usamos sphere center clearance no gerador
         if metodo in ("spherical_packing", "hexagonal_3d"):
             # aqui nao rodamos rigid body nem bake porque as posicoes ja sao finais
@@ -735,7 +844,7 @@ def main_com_parametros():
                 height=altura,
                 bottom_cap_thickness=esp_tampa_inf,
                 top_cap_thickness=esp_tampa_sup,
-                r_sphere=raio_particula,
+                r_sphere=raio_equiv,
                 gap=gap,
             )
 
@@ -752,7 +861,7 @@ def main_com_parametros():
                 gen = generate_spherical_packing(
                     domain,
                     num_particulas,
-                    raio_particula,
+                    raio_equiv,
                     gap,
                     random_seed=seed_i,
                     max_placement_attempts=max_att,
@@ -771,30 +880,36 @@ def main_com_parametros():
                 gen = generate_hexagonal_packing(
                     domain,
                     num_particulas,
-                    raio_particula,
+                    raio_equiv,
                     gap,
                     step_x=step_x_f,
                 )
             t_gen = time.perf_counter() - t0_gen
             centers = gen["centers"]
+            centers_for_slice = list(centers)
             # lista de raios repetidos prepara validacao para futuro raio variavel
-            radii = [raio_particula] * len(centers)
+            radii = [raio_equiv] * len(centers)
 
             # strict true faz o script levantar erro se geometria invalida ou faltar esferas no modo esferico
             strict = _coerce_bool(packing_raw.get("strict_validation"), True)
             # validate configuration percorre pares e checa point in domain de novo
             report_val = validate_configuration(centers, radii, domain, gap)
 
-            poros = estimate_porosity(domain, centers, raio_particula)
+            poros = estimate_porosity(domain, centers, raio_equiv)
             # dicionario serializado no json lateral sem incluir a lista enorme de centros duas vezes
             relatorio = {
                 "packing_method": metodo,
+                "particle_kind": particle_kind,
+                "collision_model": "circumscribed_sphere_radius",
+                "collision_radius_m": raio_equiv,
                 "generation": {k: v for k, v in gen.items() if k != "centers"},
                 "generation_wall_time_sec": t_gen,
                 "gap_convention": "center_distance >= r1+r2+gap",
                 "validation": report_val,
                 "porosity_estimate": poros,
                 "annulus_void_volume_m3": domain.annulus_volume_void(),
+                "n_particles_placed": len(centers),
+                "n_particles_requested": num_particulas,
                 "n_spheres_placed": len(centers),
                 "n_spheres_requested": num_particulas,
             }
@@ -832,8 +947,11 @@ def main_com_parametros():
                 esp_tampa_sup,
                 top_has_collision=True,
             )
-            print(f"esferas: {len(centers)} malhas mesh compartilhada")
-            particulas = create_spheres(centers, raio_particula)
+            _plural = _log_particle_plural(particle_kind)
+            print(f"{_plural}: {len(centers)} malhas mesh compartilhada")
+            particulas = create_particles_by_kind(
+                particle_kind, centers, diametro_particula
+            )
 
         else:
             # fluxo legado com corpos rigidos para quem ainda quer queda e bake
@@ -865,7 +983,9 @@ def main_com_parametros():
                 quantidade=num_particulas,
                 raio_leito=raio_leito,
                 altura_leito=altura,
-                raio_particula=raio_particula,
+                raio_particula=diametro_particula / 2.0,
+                kind=particle_kind,
+                diametro_particula=diametro_particula,
             )
             print(f"{len(particulas)} particulas criadas")
 
@@ -925,7 +1045,14 @@ def main_com_parametros():
             print("particulas acomodadas bake aplicado pronto exportacao\n")
 
         # aplicar thin slice no fim (ambos os ramos ja criaram os meshes)
-        aplicar_thin_slice(slice_cfg, altura=altura, raio_ext=raio_ext)
+        aplicar_thin_slice(
+            slice_cfg,
+            altura=altura,
+            raio_ext=raio_ext,
+            particle_centers=centers_for_slice,
+            particle_diameter=diametro_particula,
+            particle_kind=particle_kind,
+        )
 
         # ambos os ramos chegam aqui com objetos na cena prontos para salvar
         if args.output:

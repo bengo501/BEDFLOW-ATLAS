@@ -123,3 +123,74 @@ def create_spheres(
         coll.objects.link(o)
         objs.append(o)
     return objs
+
+
+def create_cubes(
+    centers: List[Tuple[float, float, float]],
+    edge: float,
+    name_prefix: str = "particula",
+) -> List[Any]:
+    """cubos com mesh datablock partilhado (instancias)."""
+    if not centers or edge <= 0:
+        return []
+    objs: List[Any] = []
+    bpy.ops.mesh.primitive_cube_add(size=edge, location=centers[0])
+    base_obj = bpy.context.active_object
+    base_obj.name = f"{name_prefix}_01"
+    objs.append(base_obj)
+    coll = bpy.context.collection
+    for idx, loc in enumerate(centers[1:], start=2):
+        o = base_obj.copy()
+        o.data = base_obj.data
+        o.location = loc
+        o.name = f"{name_prefix}_{idx:02d}"
+        coll.objects.link(o)
+        objs.append(o)
+    return objs
+
+
+def create_cylinders(
+    centers: List[Tuple[float, float, float]],
+    diameter: float,
+    name_prefix: str = "particula",
+    vertices: int = 24,
+) -> List[Any]:
+    """cilindros ao longo de z; altura igual ao diametro (parametro unico do json)."""
+    if not centers or diameter <= 0:
+        return []
+    r = diameter / 2.0
+    depth = diameter
+    objs: List[Any] = []
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=vertices,
+        radius=r,
+        depth=depth,
+        location=centers[0],
+    )
+    base_obj = bpy.context.active_object
+    base_obj.name = f"{name_prefix}_01"
+    objs.append(base_obj)
+    coll = bpy.context.collection
+    for idx, loc in enumerate(centers[1:], start=2):
+        o = base_obj.copy()
+        o.data = base_obj.data
+        o.location = loc
+        o.name = f"{name_prefix}_{idx:02d}"
+        coll.objects.link(o)
+        objs.append(o)
+    return objs
+
+
+def create_particles_by_kind(
+    kind: str,
+    centers: List[Tuple[float, float, float]],
+    diameter: float,
+    name_prefix: str = "particula",
+) -> List[Any]:
+    """despacho por particles.kind: sphere | cube | cylinder."""
+    k = (kind or "sphere").strip().lower()
+    if k == "cube":
+        return create_cubes(centers, diameter, name_prefix=name_prefix)
+    if k == "cylinder":
+        return create_cylinders(centers, diameter, name_prefix=name_prefix)
+    return create_spheres(centers, diameter / 2.0, name_prefix=name_prefix)
