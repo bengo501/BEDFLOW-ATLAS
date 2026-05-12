@@ -149,20 +149,17 @@ def _read_menu_key(
     *,
     valid: List[str],
 ) -> Optional[str]:
-    """le uma tecla de menu numerado; None se o utilizador premir 0 (voltar)."""
+    """le uma tecla de menu numerado; None se o utilizador premir 0 ou c (voltar)."""
     valid_s = set(valid)
     keys_hint = " ".join(sorted(valid_s, key=lambda x: (int(x) if x.isdigit() else 999, x)))
     while True:
         raw = ui.ask_line(
-            f"opcao ({keys_hint}; 0 voltar; h ajuda): ",
+            f"opcao ({keys_hint}; 0 ou c voltar; h ajuda): ",
             default="",
         ).strip()
         low = raw.lower()
-        if low == "0":
+        if low == "0" or low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
             return None
-        if low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
-            ui.warn("neste menu numerado use 0 para voltar.")
-            continue
         if low == "h":
             if console and rich_available():
                 from rich.text import Text as RT
@@ -172,7 +169,7 @@ def _read_menu_key(
                 ui.muted(GLOBAL_KEYS_HINT)
             continue
         if not raw:
-            ui.warn("indique um numero da lista (ou 0 para voltar).")
+            ui.warn("indique um numero da lista (0 ou c voltar).")
             continue
         if raw in valid_s:
             return raw

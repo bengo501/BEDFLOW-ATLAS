@@ -19,7 +19,7 @@ from pathlib import Path  # para trabalhar com caminhos de arquivos
 # list sequencia ordenada por exemplo lista de strings do menu
 # optional t significa valor do tipo t ou none quando algo e opcional
 # tuple par ou tupla fixa por exemplo atalho titulo descricao do menu
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 # pasta onde este ficheiro bed wizard py vive normalmente dsl na raiz do repo
 _DSL_DIR = Path(__file__).resolve().parent
@@ -131,10 +131,11 @@ class BedWizard:
             "view3d.title": "visualizacao 3d",
             "view3d.subtitle": "malhas geradas pelo projeto (python, blender, pipeline)",
             "view3d.crumb": "visualizacao 3d",
-            "view3d.search": "pesquisar (vazio=tudo, l=lista, c menu principal, h ajuda global): ",
+            "view3d.search": "pesquisar:",
             "view3d.scan_hint": "origem da lista: scan em local_data/models_3d (prioridade), depois aux, simulations, generated/* e ficheiros *.stl/*.obj/*.blend na raiz do repo (ver bedflow_local_paths.scan_project_mesh_files).",
+            "view3d.footer_hint": "0 ou c menu principal  ·  l lista  ·  ? ajuda do campo  ·  h ajuda global",
             "view3d.table_title": "modelos",
-            "view3d.pick": "numero do modelo (0 voltar a pesquisa, 1-N escolher, h ajuda): ",
+            "view3d.pick": "numero do modelo:",
             "view3d.preview": "resumo",
             "view3d.choose_dest": "onde visualizar",
             "view3d.opt.web": "navegador (three.js no frontend)",
@@ -185,10 +186,11 @@ class BedWizard:
             "view3d.title": "3d visualization",
             "view3d.subtitle": "meshes from python, blender or full pipeline",
             "view3d.crumb": "3d view",
-            "view3d.search": "search (empty=all, l=list, c main menu, h global help): ",
+            "view3d.search": "search:",
             "view3d.scan_hint": "list source: scan local_data/models_3d first, then aux, simulations, generated/* and mesh files at repo root (see bedflow_local_paths.scan_project_mesh_files).",
+            "view3d.footer_hint": "0 or c main menu  ·  l list  ·  ? field help  ·  h global help",
             "view3d.table_title": "models",
-            "view3d.pick": "model number (0 back to search, 1-N pick, h help): ",
+            "view3d.pick": "model number:",
             "view3d.preview": "summary",
             "view3d.choose_dest": "open in",
             "view3d.opt.web": "browser (three.js)",
@@ -596,13 +598,24 @@ class BedWizard:
         if tok in ("c", "cancel", "cancelar", "voltar", "back", "q"):
             raise _WizardCancelled()
 
-    def _print_internal_field_aux(self, *, review: bool = True) -> None:
+    def _print_internal_field_aux(
+        self, *, review: bool = True, extras: Sequence[str] = ()
+    ) -> None:
         fn = getattr(self.ui, "print_aux_internal_prompt", None)
+        eb = tuple(x for x in extras if (x or "").strip())
         if callable(fn):
-            fn(cancel=self._cancel_enabled, review=review, require_explicit=False)
+            fn(
+                cancel=self._cancel_enabled,
+                review=review,
+                require_explicit=False,
+                extra_bits=eb,
+            )
         else:
             for ln in _internal_prompt_aux_lines(
-                cancel=self._cancel_enabled, review=review, require_explicit=False
+                cancel=self._cancel_enabled,
+                review=review,
+                require_explicit=False,
+                extra_bits=eb,
             ):
                 print(ln)
 
@@ -744,7 +757,7 @@ class BedWizard:
         bed_path: Optional[Path] = None
         while True:
             self.ui.println()
-            self._print_internal_field_aux(review=False)
+            self._print_internal_field_aux(review=False, extras=("l lista",))
             self.ui.println()
             raw = self.ui.ask_line("caminho .bed (numero ou caminho): ").strip()
             if not raw:
@@ -2806,16 +2819,32 @@ cfd {
             _emit_launch_summary(
                 "abrir no blender — novo projeto e importacao",
                 f"formato detectado: {suf}\n"
-                f"fluxo: novo .blend (startup) → importar malha → enquadrar vista\n"
+                f"fluxo: limpar cena por omissao → importar malha → enquadrar vista\n"
                 f"caminho:\n  {p}\n"
                 f"script:\n  {import_script}\n"
                 f"comando:\n  {blender_exe} --python ... -- <caminho>",
             )
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            log_hint = Path(tempfile.gettempdir()) / "bedflow_blender_import.log"
+            launch_log = Path(tempfile.gettempdir()) / "bedflow_blender_subprocess.log"
+            try:
+                with open(launch_log, "ab") as lf:
+                    lf.write(
+                        f"\n--- launch {p.name} ---\n{' '.join(cmd)}\n".encode(
+                            "utf-8", errors="replace"
+                        )
+                    )
+                    subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT)
+            except OSError as oe:
+                self.ui.warn(f"nao foi possivel abrir registo de subprocesso ({oe}); a lancar sem registo.")
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.ui.ok(
                 "blender lancado; abre-se um projeto novo e de seguida importa-se o modelo."
             )
-            self.ui.muted("se falhar, verifique a versao do blender (3.6+ / 4.x) e a consola do blender.")
+            self.ui.muted(
+                f"se o blender fechar ou nao importar, veja o registo:\n  {log_hint}\n"
+                f"saida stderr/stdout do processo (se houver):\n  {launch_log}\n"
+                "e a versao do blender (3.6+ / 4.x)."
+            )
         except Exception as e:
             self.ui.err(f"erro ao lancar blender: {e}")
             self.ui.hint(f"tente manualmente:\n  {blender_exe} {mesh_path}")
@@ -3250,7 +3279,7 @@ cfd {
             self.clear_screen()
             self.print_header(
                 "documentacao",
-                "texto extraido do html — teclas: p pagina anterior, enter ou n seguinte, q sair",
+                "texto extraido do html — teclas no rodape desta pagina",
             )
             self.ui.breadcrumbs("wizard", "documentacao")
             if edge_msg:
@@ -3260,13 +3289,14 @@ cfd {
             is_last = idx >= total - 1
             if is_last:
                 ctl = (
-                    "ultima pagina — enter fecha."
+                    "ultima pagina — prima enter para fechar."
                     if standalone
-                    else "ultima pagina — enter volta ao menu principal."
+                    else "ultima pagina — prima enter para voltar ao menu principal."
                 )
             else:
                 ctl = (
-                    "enter ou n = pagina seguinte | p = pagina anterior | q = sair"
+                    "c sair · ? ajuda do campo · h ajuda global · "
+                    "enter ou n pagina seguinte · p pagina anterior"
                 )
             self.ui.render_documentation_page(bloco, idx, total, ctl)
             if is_last:
@@ -3277,9 +3307,20 @@ cfd {
                 )
                 self.ui.pause(fim)
                 break
-            raw = self.ui.ask_line("acao (enter/n/p/q): ", default="n").strip().lower()
-            if raw == "q":
+            raw = self.ui.ask_line("acao: ", default="n").strip().lower()
+            if raw in ("q", "c", "cancel", "cancelar", "sair"):
                 break
+            if raw == "h":
+                self.ui.hint(GLOBAL_KEYS_HINT)
+                self.ui.pause("enter...")
+                continue
+            if raw == "?":
+                self.ui.muted(
+                    "documentacao: enter ou n avanca; p recua; c ou q termina; "
+                    "h mostra ajuda global do wizard."
+                )
+                self.ui.pause("enter...")
+                continue
             if raw == "p":
                 if idx > 0:
                     idx -= 1

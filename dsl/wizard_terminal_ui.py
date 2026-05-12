@@ -43,7 +43,7 @@ MenuRow = Tuple[str, str, str]
 # texto completo de ajuda (h em confirm, pick_from_list e menus que reutilizam a constante)
 GLOBAL_KEYS_HINT = (
     "menus numerados (tabelas com 0 1 2 …):\n"
-    "- 0 regressa ou cancela esse passo.\n"
+    "- 0 ou c regressa ou cancela esse passo (equivalentes neste menu).\n"
     "- 1–n escolhe a linha; enter vazio so confirma quando o menu indicar padrao explicito.\n"
     "- ? ajuda do campo (se existir), * rever parametros (quando activo), h este texto.\n\n"
     "perguntas internas (s/n, caminhos, numeros):\n"
@@ -53,8 +53,8 @@ GLOBAL_KEYS_HINT = (
     "no menu principal da aplicacao, 0 encerra."
 )
 
-# linha curta sob listas numeradas (detalhe completo so com tecla h)
-PICK_LIST_SHORT_HINT = "h ajuda global  |  0 voltar"
+# linha curta sob listas numeradas / ecra de ajuda por seccoes (detalhe completo com h)
+PICK_LIST_SHORT_HINT = "0 ou c voltar  ·  ? ajuda do campo  ·  h ajuda global"
 
 
 def _numeric_menu_aux_lines(
@@ -68,7 +68,7 @@ def _numeric_menu_aux_lines(
     """linhas discretas por baixo da tabela de menu numerado."""
     parts: List[str] = []
     if has_zero_back:
-        parts.append("0 voltar")
+        parts.append("0 ou c voltar")
     parts.append(f"1–{n_opt} escolher")
     if help_callback:
         parts.append("? ajuda do campo")
@@ -83,14 +83,34 @@ def _numeric_menu_aux_lines(
     return lines
 
 
+def view3d_mesh_pick_aux_lines(n_models: int) -> List[str]:
+    """rodape do passo 'escolher modelo' no modo visualizacao 3d (sem tabela 0)."""
+    n = max(1, int(n_models))
+    row1 = (
+        "0 ou c voltar a pesquisa  ·  "
+        f"1–{n} escolher  ·  "
+        "? ajuda do campo  ·  "
+        "h ajuda global"
+    )
+    return [row1, "enter vazio nao escolhe linha"]
+
+
 def _internal_prompt_aux_lines(
-    *, cancel: bool, review: bool, require_explicit: bool = False
+    *,
+    cancel: bool,
+    review: bool,
+    require_explicit: bool = False,
+    extra_bits: Sequence[str] = (),
 ) -> List[str]:
     bits = ["h ajuda"]
     if cancel:
         bits.append("c cancelar")
     if review:
         bits.append("* rever parametros")
+    for x in extra_bits:
+        t = (x or "").strip()
+        if t:
+            bits.append(t)
     lines = ["  " + "  ·  ".join(bits)]
     if require_explicit:
         lines.append("  enter vazio nao confirma; digite s ou n")
@@ -405,10 +425,18 @@ class PlainWizardUi:
             print(ln)
 
     def print_aux_internal_prompt(
-        self, *, cancel: bool, review: bool, require_explicit: bool = False
+        self,
+        *,
+        cancel: bool,
+        review: bool,
+        require_explicit: bool = False,
+        extra_bits: Sequence[str] = (),
     ) -> None:
         for ln in _internal_prompt_aux_lines(
-            cancel=cancel, review=review, require_explicit=require_explicit
+            cancel=cancel,
+            review=review,
+            require_explicit=require_explicit,
+            extra_bits=extra_bits,
         ):
             print(ln)
 
@@ -502,10 +530,11 @@ class PlainWizardUi:
                         print(f"  {ln}")
                     print()
                     continue
-                if low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
-                    print("  aviso: neste menu numerado use 0 para voltar.")
-                    continue
-                if has_zero and raw == "0":
+                if has_zero and (
+                    raw == "0"
+                    or low
+                    in ("c", "q", "cancel", "cancelar", "voltar", "back")
+                ):
                     cancel_callback()
                     continue
                 if raw == "?" and help_callback:
@@ -516,7 +545,9 @@ class PlainWizardUi:
                     continue
                 if not raw:
                     if menu_default_index is None:
-                        print("  aviso: indique um numero da tabela (ou 0 para voltar).")
+                        print(
+                            "  aviso: indique um numero da tabela (0 ou c voltar)."
+                        )
                         continue
                     return options[menu_default_index]
                 idx = int(raw) - 1
@@ -695,10 +726,18 @@ class RichWizardUi:
             self.console.print(Text(ln, style="wizard.muted"))
 
     def print_aux_internal_prompt(
-        self, *, cancel: bool, review: bool, require_explicit: bool = False
+        self,
+        *,
+        cancel: bool,
+        review: bool,
+        require_explicit: bool = False,
+        extra_bits: Sequence[str] = (),
     ) -> None:
         for ln in _internal_prompt_aux_lines(
-            cancel=cancel, review=review, require_explicit=require_explicit
+            cancel=cancel,
+            review=review,
+            require_explicit=require_explicit,
+            extra_bits=extra_bits,
         ):
             self.console.print(Text(ln, style="wizard.muted"))
 
@@ -792,10 +831,10 @@ class RichWizardUi:
                     self.console.print(Text(ln, style="wizard.hint"))
                 self.console.print()
                 continue
-            if low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
-                self.warn("use 0 para voltar neste menu.")
-                continue
-            if has_zero and raw == "0":
+            if has_zero and (
+                raw == "0"
+                or low in ("c", "q", "cancel", "cancelar", "voltar", "back")
+            ):
                 cancel_callback()
                 continue
             if raw == "?" and help_callback:
@@ -807,7 +846,7 @@ class RichWizardUi:
             try:
                 if not raw:
                     if menu_default_index is None:
-                        self.warn("indique um numero da tabela (ou 0 para voltar).")
+                        self.warn("indique um numero da tabela (0 ou c voltar).")
                         continue
                     return options[menu_default_index]
                 num = int(raw)

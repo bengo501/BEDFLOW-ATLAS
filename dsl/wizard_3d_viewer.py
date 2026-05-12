@@ -20,7 +20,7 @@ for _p in (_REPO, _DSL_DIR):
 
 from bedflow_local_paths import resolve_validated_mesh_path, scan_project_mesh_files  # noqa: E402
 from bed_wizard import _WizardCancelled  # noqa: E402
-from wizard_terminal_ui import GLOBAL_KEYS_HINT, PICK_LIST_SHORT_HINT  # noqa: E402
+from wizard_terminal_ui import GLOBAL_KEYS_HINT, view3d_mesh_pick_aux_lines  # noqa: E402
 
 
 def render_view3d_education_panels(ui: Any, wizard: Any) -> None:
@@ -159,22 +159,19 @@ def run_visualization_mode(wizard: BedWizard) -> None:
         ui.println()
         render_view3d_education_panels(ui, wizard)
         ui.println()
-        ui.muted(PICK_LIST_SHORT_HINT + "  |  h ajuda global (teclas do wizard)")
+        ui.muted(
+            wizard._t(
+                "view3d.footer_hint",
+                "0 ou c menu principal  ·  l lista  ·  ? ajuda do campo  ·  h ajuda global",
+            )
+        )
         ui.println()
 
-        q = ui.ask_line(
-            wizard._t(
-                "view3d.search",
-                "pesquisar (vazio=tudo, l=lista, 0 menu principal, h ajuda global): ",
-            )
-        ).strip()
+        q = ui.ask_line(wizard._t("view3d.search", "pesquisar:")).strip()
         qlow = q.lower()
-        if qlow in ("c", "cancel", "cancelar", "voltar", "back", "q"):
+        if qlow in ("c", "cancel", "cancelar", "voltar", "back", "q") or qlow == "0":
             return
-        if qlow == "0":
-            ui.warn("neste passo use c para regressar ao menu principal.")
-            continue
-        if qlow == "h":
+        if qlow == "?" or qlow == "h":
             for ln in GLOBAL_KEYS_HINT.splitlines():
                 ui.muted(ln)
             ui.pause("enter...")
@@ -224,26 +221,26 @@ def run_visualization_mode(wizard: BedWizard) -> None:
                 )
 
         ui.println()
-        pick = ui.ask_line(
-            wizard._t(
-                "view3d.pick",
-                "numero do modelo (0 voltar a pesquisa, 1-N escolher, h ajuda): ",
-            )
-        ).strip()
+        for ln in view3d_mesh_pick_aux_lines(len(filtered)):
+            if getattr(ui, "_rich", False) and getattr(ui, "console", None):
+                from rich.text import Text as _RT
+
+                ui.console.print(_RT(ln, style="wizard.muted"))
+            else:
+                ui.muted(ln)
+        ui.println()
+        pick = ui.ask_line(wizard._t("view3d.pick", "numero do modelo:")).strip()
         plow = pick.lower()
-        if plow in ("c", "q"):
-            ui.warn("use 0 para voltar a pesquisa ou ao menu principal conforme o passo.")
-            continue
-        if plow == "h":
+        if plow == "?" or plow == "h":
             for ln in GLOBAL_KEYS_HINT.splitlines():
                 ui.muted(ln)
             ui.pause("enter...")
             continue
         if not pick:
-            ui.warn("indique um numero da lista ou 0 para voltar a pesquisa.")
+            ui.warn("indique um numero da lista ou 0/c para voltar a pesquisa.")
             ui.pause("enter...")
             continue
-        if pick == "0":
+        if pick == "0" or plow in ("c", "q", "cancel", "cancelar", "voltar", "back"):
             continue
         if not pick.isdigit() or int(pick) < 1 or int(pick) > len(filtered):
             ui.warn("numero invalido")

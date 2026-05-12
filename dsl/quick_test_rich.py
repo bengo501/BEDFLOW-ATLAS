@@ -160,7 +160,7 @@ def render_choice_table(
         ref_line = (
             f"referencia do ficheiro (so informativo, nao e escolha automatica): [{reference_key}]\n"
         )
-    tail = f"{ref_line}{PICK_LIST_SHORT_HINT}  |  digite o numero; 0 cancelar o fluxo"
+    tail = f"{ref_line}{PICK_LIST_SHORT_HINT}  ·  introduza o numero da opcao"
     if console and _RICH:
         console.print(Text(caption, style="bold rgb(240,212,168)"))
         render_menu_table_rich(console, menu_rows, title="opcoes")
