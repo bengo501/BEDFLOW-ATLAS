@@ -44,7 +44,7 @@ from quick_test_rich import (
     render_test_header,
     rich_available,
 )
-from wizard_terminal_ui import GLOBAL_KEYS_HINT
+from wizard_terminal_ui import global_keys_hint
 from wizard_json_loader import (
     apply_quick_test_overrides,
     export_formats_for_blender,
@@ -148,6 +148,7 @@ def _read_menu_key(
     console: Optional[Any],
     *,
     valid: List[str],
+    lang: str = "pt",
 ) -> Optional[str]:
     """le uma tecla de menu numerado; None se o utilizador premir 0 ou c (voltar)."""
     valid_s = set(valid)
@@ -161,12 +162,13 @@ def _read_menu_key(
         if low == "0" or low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
             return None
         if low == "h":
+            hint = global_keys_hint(lang)
             if console and rich_available():
                 from rich.text import Text as RT
 
-                console.print(RT(GLOBAL_KEYS_HINT, style="dim"))
+                console.print(RT(hint, style="dim"))
             else:
-                ui.muted(GLOBAL_KEYS_HINT)
+                ui.muted(hint)
             continue
         if not raw:
             ui.warn("indique um numero da lista (0 ou c voltar).")
@@ -224,7 +226,9 @@ def _resolve_bed_input(raw: str, beds: List[Path]) -> Optional[Path]:
         return None
 
 
-def _pick_json_interactive(ui: Any, console: Optional[Any], files: List[Path]) -> Optional[Path]:
+def _pick_json_interactive(
+    ui: Any, console: Optional[Any], files: List[Path], *, lang: str = "pt"
+) -> Optional[Path]:
     """menu numerado ou caminho manual; None cancelar."""
     if files:
         rows: List[Tuple[str, str]] = []
@@ -244,7 +248,7 @@ def _pick_json_interactive(ui: Any, console: Optional[Any], files: List[Path]) -
             None,
         )
         valid = [str(i) for i in range(1, len(files) + 1)] + ["m"]
-        k = _read_menu_key(ui, console, valid=valid)
+        k = _read_menu_key(ui, console, valid=valid, lang=lang)
         if k is None:
             return None
         if k == "m":
@@ -272,13 +276,15 @@ def _pick_json_interactive(ui: Any, console: Optional[Any], files: List[Path]) -
     return chosen
 
 
-def _pick_bed_interactive(ui: Any, console: Optional[Any], beds: List[Path]) -> Optional[Path]:
+def _pick_bed_interactive(
+    ui: Any, console: Optional[Any], beds: List[Path], *, lang: str = "pt"
+) -> Optional[Path]:
     if beds:
         rows = [(str(i), f"{p.name} — {p}") for i, p in enumerate(beds, start=1)]
         rows.append(("m", "caminho manual — ficheiro .bed fora da lista"))
         render_choice_table(console, "ficheiros .bed (dsl / cwd / repo)", rows, None)
         valid = [str(i) for i in range(1, len(beds) + 1)] + ["m"]
-        k = _read_menu_key(ui, console, valid=valid)
+        k = _read_menu_key(ui, console, valid=valid, lang=lang)
         if k is None:
             return None
         if k == "m":
@@ -371,7 +377,7 @@ def _ask_thin_slice_geometry(ui: Any) -> Dict[str, Any]:
 
 
 def _choose_geometry_mode(
-    ui: Any, console: Optional[Any], *, default_thin: bool = False
+    ui: Any, console: Optional[Any], *, default_thin: bool = False, lang: str = "pt"
 ) -> Tuple[str, Dict[str, Any]]:
     """devolve (geometry_mode_label, slice_dict ou vazio). full_3d sem chaves slice."""
     rows = [
@@ -384,7 +390,7 @@ def _choose_geometry_mode(
         rows,
         "2" if default_thin else "1",
     )
-    gk = _read_menu_key(ui, console, valid=["1", "2"])
+    gk = _read_menu_key(ui, console, valid=["1", "2"], lang=lang)
     if gk is None:
         return "cancel", {}
     if gk == "2":
@@ -779,7 +785,7 @@ def run(wizard: "BedWizard") -> None:
         ],
         None,
     )
-    in_key = _read_menu_key(ui, console, valid=["1", "2"])
+    in_key = _read_menu_key(ui, console, valid=["1", "2"], lang=wizard.lang)
     if in_key is None:
         ui.muted("cancelado.")
         return
@@ -791,7 +797,7 @@ def run(wizard: "BedWizard") -> None:
 
     if input_is_json:
         files = _glob_test_jsons()
-        chosen = _pick_json_interactive(ui, console, files)
+        chosen = _pick_json_interactive(ui, console, files, lang=wizard.lang)
         if chosen is None:
             ui.muted("operacao interrompida.")
             ui.pause()
@@ -802,7 +808,7 @@ def run(wizard: "BedWizard") -> None:
             data_preview = load_wizard_json(work_json)
     else:
         beds = _glob_beds()
-        chosen_b = _pick_bed_interactive(ui, console, beds)
+        chosen_b = _pick_bed_interactive(ui, console, beds, lang=wizard.lang)
         if chosen_b is None:
             ui.muted("operacao interrompida.")
             ui.pause()
@@ -843,6 +849,7 @@ def run(wizard: "BedWizard") -> None:
         ui,
         console,
         valid=["1", "2"],
+        lang=wizard.lang,
     )
     if bk is None:
         ui.muted("cancelado.")
@@ -860,6 +867,7 @@ def run(wizard: "BedWizard") -> None:
         ui,
         console,
         valid=["1", "2", "3"],
+        lang=wizard.lang,
     )
     if pk is None:
         ui.muted("cancelado.")
@@ -871,7 +879,9 @@ def run(wizard: "BedWizard") -> None:
     slc_prev = dict(data_preview.get("slice") or {}) if data_preview else {}
     default_thin = bool(slc_prev.get("slice_enabled"))
     render_step_title(console, "4", "modo geometrico de saida (nao e packing)")
-    geom_label, slice_cfg = _choose_geometry_mode(ui, console, default_thin=default_thin)
+    geom_label, slice_cfg = _choose_geometry_mode(
+        ui, console, default_thin=default_thin, lang=wizard.lang
+    )
     if geom_label == "cancel":
         ui.muted("cancelado.")
         return
@@ -886,7 +896,7 @@ def run(wizard: "BedWizard") -> None:
         ],
         None,
     )
-    ex_key = _read_menu_key(ui, console, valid=["1", "2"])
+    ex_key = _read_menu_key(ui, console, valid=["1", "2"], lang=wizard.lang)
     if ex_key is None:
         ui.muted("cancelado.")
         return
@@ -903,7 +913,7 @@ def run(wizard: "BedWizard") -> None:
         ],
         None,
     )
-    po_key = _read_menu_key(ui, console, valid=["1", "2", "3"])
+    po_key = _read_menu_key(ui, console, valid=["1", "2", "3"], lang=wizard.lang)
     if po_key is None:
         ui.muted("cancelado.")
         return

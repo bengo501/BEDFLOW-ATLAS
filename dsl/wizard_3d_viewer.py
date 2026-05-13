@@ -20,7 +20,7 @@ for _p in (_REPO, _DSL_DIR):
 
 from bedflow_local_paths import resolve_validated_mesh_path, scan_project_mesh_files  # noqa: E402
 from bed_wizard import _WizardCancelled  # noqa: E402
-from wizard_terminal_ui import GLOBAL_KEYS_HINT, view3d_mesh_pick_aux_lines  # noqa: E402
+from wizard_terminal_ui import global_keys_hint, view3d_mesh_pick_aux_lines  # noqa: E402
 
 
 def render_view3d_education_panels(ui: Any, wizard: Any) -> None:
@@ -133,10 +133,7 @@ def run_visualization_mode(wizard: BedWizard) -> None:
     ui = wizard.ui
     rows = scan_project_mesh_files(max_files=500)
     if not rows:
-        ui.warn(
-            "nenhuma malha encontrada em local_data/models_3d, generated/3d/output, "
-            "simulations, aux ou batch. gere um modelo primeiro."
-        )
+        ui.warn(wizard._t("view3d.warn_none", ""))
         ui.pause("enter...")
         return
 
@@ -153,7 +150,7 @@ def run_visualization_mode(wizard: BedWizard) -> None:
             wizard._t("view3d.title", "visualizacao 3d"),
             wizard._t("view3d.subtitle", "malhas geradas pelo projeto"),
         )
-        ui.breadcrumbs("wizard", wizard._t("view3d.crumb", "visualizacao 3d"))
+        ui.breadcrumbs("setup", wizard._t("view3d.crumb", "visualizacao 3d"))
         ui.println()
         ui.muted(wizard._t("view3d.scan_hint", ""))
         ui.println()
@@ -172,7 +169,7 @@ def run_visualization_mode(wizard: BedWizard) -> None:
         if qlow in ("c", "cancel", "cancelar", "voltar", "back", "q") or qlow == "0":
             return
         if qlow == "?" or qlow == "h":
-            for ln in GLOBAL_KEYS_HINT.splitlines():
+            for ln in global_keys_hint(wizard.lang).splitlines():
                 ui.muted(ln)
             ui.pause("enter...")
             continue
@@ -196,12 +193,12 @@ def run_visualization_mode(wizard: BedWizard) -> None:
                 show_lines=True,
             )
             table.add_column("#", style="bold", justify="right")
-            table.add_column("ficheiro")
-            table.add_column("formato", justify="center")
-            table.add_column("tamanho", justify="right")
+            table.add_column(wizard._t("view3d.col.file", "ficheiro"))
+            table.add_column(wizard._t("view3d.col.format", "formato"), justify="center")
+            table.add_column(wizard._t("view3d.col.size", "tamanho"), justify="right")
             table.add_column("mesh_id", overflow="fold", max_width=14)
-            table.add_column("origem", overflow="fold", max_width=20)
-            table.add_column("recomendado", overflow="fold", max_width=26)
+            table.add_column(wizard._t("view3d.col.origin", "origem"), overflow="fold", max_width=20)
+            table.add_column(wizard._t("view3d.col.rec", "recomendado"), overflow="fold", max_width=26)
             for i, r in enumerate(filtered, start=1):
                 table.add_row(
                     str(i),
@@ -225,25 +222,25 @@ def run_visualization_mode(wizard: BedWizard) -> None:
             if getattr(ui, "_rich", False) and getattr(ui, "console", None):
                 from rich.text import Text as _RT
 
-                ui.console.print(_RT(ln, style="wizard.muted"))
+                ui.console.print(_RT(ln, style="setup.muted"))
             else:
                 ui.muted(ln)
         ui.println()
         pick = ui.ask_line(wizard._t("view3d.pick", "numero do modelo:")).strip()
         plow = pick.lower()
         if plow == "?" or plow == "h":
-            for ln in GLOBAL_KEYS_HINT.splitlines():
+            for ln in global_keys_hint(wizard.lang).splitlines():
                 ui.muted(ln)
             ui.pause("enter...")
             continue
         if not pick:
-            ui.warn("indique um numero da lista ou 0/c para voltar a pesquisa.")
+            ui.warn(wizard._t("view3d.warn_pick_idx", ""))
             ui.pause("enter...")
             continue
         if pick == "0" or plow in ("c", "q", "cancel", "cancelar", "voltar", "back"):
             continue
         if not pick.isdigit() or int(pick) < 1 or int(pick) > len(filtered):
-            ui.warn("numero invalido")
+            ui.warn(wizard._t("view3d.warn_num_invalid", ""))
             ui.pause("enter...")
             continue
         chosen = filtered[int(pick) - 1]
@@ -251,7 +248,7 @@ def run_visualization_mode(wizard: BedWizard) -> None:
         mid = chosen["mesh_id"]
         abs_path = resolve_validated_mesh_path(rel)
         if abs_path is None:
-            ui.err("caminho invalido")
+            ui.err(wizard._t("view3d.err_path_invalid", ""))
             ui.pause("enter...")
             continue
 
@@ -293,54 +290,50 @@ def run_visualization_mode(wizard: BedWizard) -> None:
         ext = abs_path.suffix.lower()
         if dest == lab_web:
             if ext == ".blend":
-                ui.warn(
-                    "ficheiro .blend nao carrega no three.js diretamente. "
-                    "exporte gltf/glb ou use blender."
-                )
+                ui.warn(wizard._t("view3d.warn_blend_web", ""))
                 ui.pause("enter...")
                 continue
             if ext not in (".stl", ".obj", ".ply", ".gltf", ".glb"):
-                ui.warn("formato nao suportado no visualizador web.")
+                ui.warn(wizard._t("view3d.warn_web_fmt", ""))
                 ui.pause("enter...")
                 continue
             fe = _env_frontend_url()
             api = _env_api_url()
             if not _try_http_ok(f"{api}/api/status"):
                 ui.warn(
-                    f"api nao respondeu em {api}. inicie: uvicorn backend.app.main:app "
-                    f"e o frontend (npm run dev). url usada: {fe}"
+                    wizard._t("view3d.warn_api", "").format(api=api, fe=fe)
                 )
             url = f"{fe}/?meshViewerId={mid}"
-            ui.ok(f"abrindo: {url}")
+            ui.ok(wizard._t("view3d.ok_opening", "").format(url=url))
             webbrowser.open(url)
             ui.pause("enter...")
 
         elif dest == lab_desk:
             if ext == ".blend":
-                ui.warn("use a opcao blender para ficheiros .blend.")
+                ui.warn(wizard._t("view3d.warn_blend_desk", ""))
                 ui.pause("enter...")
                 continue
             script = _REPO / "scripts" / "python_modeling" / "mesh_viewer_desktop.py"
             if not script.is_file():
-                ui.err(f"script nao encontrado: {script}")
+                ui.err(wizard._t("view3d.err_script", "").format(path=str(script)))
                 ui.pause("enter...")
                 continue
-            ui.muted(f"executando: python {script.name} {abs_path}")
+            ui.muted(
+                wizard._t("view3d.exec_viewer", "").format(
+                    script=script.name, path=str(abs_path)
+                )
+            )
             rc = subprocess.call([sys.executable, str(script), str(abs_path)])
             if rc == 2:
-                ui.warn(
-                    "open3d nao disponivel: na raiz do repo execute "
-                    "pip install -r requirements-visualizacao.txt "
-                    "(no windows pode precisar de caminhos longos ou venv curto — ver comentarios nesse ficheiro)"
-                )
+                ui.warn(wizard._t("view3d.warn_open3d", ""))
             elif rc != 0:
-                ui.warn(f"visualizador terminou com codigo {rc}")
+                ui.warn(wizard._t("view3d.warn_viewer_rc", "").format(rc=rc))
             ui.pause("enter...")
 
         elif dest == lab_blend:
             exe = wizard.find_blender_executable()
             if not exe:
-                ui.warn("blender nao encontrado no path.")
+                ui.warn(wizard._t("view3d.warn_blender_missing", ""))
                 ui.pause("enter...")
                 continue
             wizard.open_blender_with_file(exe, abs_path)

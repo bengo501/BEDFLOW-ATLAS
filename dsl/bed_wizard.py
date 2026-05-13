@@ -60,9 +60,9 @@ from wizard_json_loader import (
 from wizard_quick_tests import run as wizard_quick_tests_run
 from wizard_template_engine import list_template_names, load_template
 from wizard_terminal_ui import (
-    GLOBAL_KEYS_HINT,
     MenuRow,
     _internal_prompt_aux_lines,
+    global_keys_hint,
     make_terminal_ui,
     prompt_toolkit_available,
     render_menu_table_plain,
@@ -89,12 +89,12 @@ class BedWizard:
 
     _I18N: Dict[str, Dict[str, str]] = {
         "pt": {
-            "app.title": "wizard de parametrizacao",
+            "app.title": "setup de parametrizacao",
             "app.subtitle": "leitos empacotados — arquivos .bed / antlr / blender / openfoam",
             "menu.title.main": "opcoes",
             "menu.title.start": "comecar",
             "menu.main.start.title": "comecar",
-            "menu.main.start.desc": "questionario, templates, testes rapidos, geracao 3d (motor no fim) ou pipeline completo",
+            "menu.main.start.desc": "questionario, templates, testes rapidos, geracao 3d (motor no inicio) ou pipeline completo",
             "menu.main.view3d.title": "visualizacao 3d",
             "menu.main.view3d.desc": "listar malhas geradas; ver no browser (three.js), open3d ou blender",
             "menu.main.help.title": "ajuda",
@@ -104,7 +104,7 @@ class BedWizard:
             "menu.main.lang.title": "idioma",
             "menu.main.lang.desc": "trocar portugues/ingles",
             "menu.main.exit.title": "sair",
-            "menu.main.exit.desc": "encerrar o wizard",
+            "menu.main.exit.desc": "encerrar o setup",
             "menu.start.smart.title": "assistente inteligente",
             "menu.start.smart.desc": "perguntas curtas para guiar ao .bed, modelo 3d ou pipeline openfoam",
             "menu.start.q.title": "questionario interativo",
@@ -114,20 +114,52 @@ class BedWizard:
             "menu.start.quick.title": "testes rapidos",
             "menu.start.quick.desc": "validar json ou .bed existente; preview rich; python puro ou blender; sem misturar com templates",
             "menu.start.blender.title": "geracao 3d",
-            "menu.start.blender.desc": "sem cfd; mesma ordem do questionario; motor blender ou python no meio; export no fim; como abrir o blender no fim se aplicavel",
+            "menu.start.blender.desc": "sem cfd; primeiro escolhes blender ou python; mesmo questionario; compila e gera no fim",
             "menu.start.pipe.title": "pipeline completo (avancado)",
             "menu.start.pipe.desc": "bed + blender + caso openfoam + simulacao no wsl; longo; requisitos elevados",
             "menu.start.back.title": "voltar",
             "menu.start.back.desc": "regressa ao menu principal",
             "prompt.main.choice": "opcao (1-5 ou 0 sair, h ajuda): ",
+            "main.warn_empty": "indique 1 a 5 ou 0 para sair.",
+            "main.warn_exit_key": "use 0 para sair da aplicacao.",
+            "main.bye": "ate logo!",
             "prompt.start.choice": "opcao (0-6, h ajuda): ",
             "lang.header": "idioma",
-            "lang.subtitle": "trocar idioma do wizard",
+            "lang.subtitle": "trocar idioma do setup",
             "lang.current": "idioma atual",
             "lang.choose": "escolha o idioma",
             "lang.pt": "portugues",
             "lang.en": "ingles",
             "lang.ok": "idioma atualizado",
+            "help.title": "ajuda",
+            "help.subtitle": "parametros do arquivo .bed",
+            "help.top_hint": "escolha 1-7 para ver cada seccao ou visualizacao 3d; 0 regressa ao menu principal; h ajuda global.",
+            "help.prompt": "opcao (1-7, 0 voltar, h ajuda): ",
+            "help.use0": "use 0 para regressar ao menu principal.",
+            "help.detail_sub": "detalhes dos campos",
+            "help.view3d_title": "ajuda: visualizacao 3d",
+            "help.view3d_subtitle": "modos web, desktop e blender",
+            "help.sec.bed": "geometria do leito",
+            "help.sec.lids": "tampas",
+            "help.sec.particles": "particulas",
+            "help.sec.packing": "empacotamento",
+            "help.sec.export": "exportacao",
+            "help.sec.cfd": "simulacao cfd",
+            "help.sec.view3d": "visualizacao 3d (modos e formatos)",
+            "docs.title": "documentacao",
+            "docs.subtitle": "texto extraido do html — teclas no rodape desta pagina",
+            "docs.ctl_last_standalone": "ultima pagina — prima enter para fechar.",
+            "docs.ctl_last_menu": "ultima pagina — prima enter para voltar ao menu principal.",
+            "docs.ctl_nav": "c sair · ? ajuda do campo · h ajuda global · enter ou n pagina seguinte · p pagina anterior",
+            "docs.pause_exit_standalone": "enter para sair...",
+            "docs.pause_exit_menu": "enter para voltar ao menu principal...",
+            "docs.action_prompt": "acao: ",
+            "docs.edge_first": "ja esta na primeira pagina.",
+            "docs.field_help": "documentacao: enter ou n avanca; p recua; c ou q termina; h mostra ajuda global do setup.",
+            "docs.err_missing": "arquivo de documentacao nao encontrado",
+            "docs.err_expected": "caminho esperado",
+            "help.detail_prefix": "ajuda:",
+            "help.invalid": "opcao invalida",
             "view3d.title": "visualizacao 3d",
             "view3d.subtitle": "malhas geradas pelo projeto (python, blender, pipeline)",
             "view3d.crumb": "visualizacao 3d",
@@ -142,14 +174,33 @@ class BedWizard:
             "view3d.opt.desktop": "visualizador desktop (open3d: stl/obj/ply)",
             "view3d.opt.blender": "abrir no blender",
             "view3d.opt.back": "voltar a lista",
+            "view3d.warn_none": "nenhuma malha encontrada em local_data/models_3d, generated/3d/output, simulations, aux ou batch. gere um modelo primeiro.",
+            "view3d.warn_pick_idx": "indique um numero da lista ou 0/c para voltar a pesquisa.",
+            "view3d.warn_num_invalid": "numero invalido",
+            "view3d.err_path_invalid": "caminho invalido",
+            "view3d.warn_blend_web": "ficheiro .blend nao carrega no three.js diretamente. exporte gltf/glb ou use blender.",
+            "view3d.warn_web_fmt": "formato nao suportado no visualizador web.",
+            "view3d.warn_api": "api nao respondeu em {api}. inicie: uvicorn backend.app.main:app e o frontend (npm run dev). url usada: {fe}",
+            "view3d.warn_blend_desk": "use a opcao blender para ficheiros .blend.",
+            "view3d.err_script": "script nao encontrado: {path}",
+            "view3d.warn_open3d": "open3d nao disponivel: na raiz do repo execute pip install -r requirements-visualizacao.txt (no windows pode precisar de caminhos longos ou venv curto — ver comentarios nesse ficheiro)",
+            "view3d.warn_viewer_rc": "visualizador terminou com codigo {rc}",
+            "view3d.warn_blender_missing": "blender nao encontrado no path.",
+            "view3d.col.file": "ficheiro",
+            "view3d.col.format": "formato",
+            "view3d.col.size": "tamanho",
+            "view3d.col.origin": "origem",
+            "view3d.col.rec": "recomendado",
+            "view3d.ok_opening": "abrindo: {url}",
+            "view3d.exec_viewer": "executando: python {script} {path}",
         },
         "en": {
-            "app.title": "parameter wizard",
+            "app.title": "parameter setup",
             "app.subtitle": "packed beds — .bed / antlr / blender / openfoam",
             "menu.title.main": "options",
             "menu.title.start": "start",
             "menu.main.start.title": "start",
-            "menu.main.start.desc": "questionnaire, templates, quick tests, 3d generation (engine at end) or full pipeline",
+            "menu.main.start.desc": "questionnaire, templates, quick tests, 3d generation (engine first) or full pipeline",
             "menu.main.view3d.title": "3d visualization",
             "menu.main.view3d.desc": "list generated meshes; open in browser (three.js), open3d or blender",
             "menu.main.help.title": "help",
@@ -159,7 +210,7 @@ class BedWizard:
             "menu.main.lang.title": "language",
             "menu.main.lang.desc": "toggle portuguese/english",
             "menu.main.exit.title": "exit",
-            "menu.main.exit.desc": "close the wizard",
+            "menu.main.exit.desc": "close setup",
             "menu.start.smart.title": "smart assistant",
             "menu.start.smart.desc": "short questions to guide to .bed, 3d model, or openfoam pipeline",
             "menu.start.q.title": "interactive questionnaire",
@@ -169,20 +220,52 @@ class BedWizard:
             "menu.start.quick.title": "quick tests",
             "menu.start.quick.desc": "validate existing json or .bed; rich preview; pure python or blender; separate from templates",
             "menu.start.blender.title": "3d generation",
-            "menu.start.blender.desc": "no cfd; same questionnaire order; blender or python engine mid-flow; export before end; blender open policy at end if applicable",
+            "menu.start.blender.desc": "no cfd; pick blender or python first; same questionnaire; compile and generate at end",
             "menu.start.pipe.title": "full pipeline (advanced)",
             "menu.start.pipe.desc": "bed + blender + openfoam case + wsl simulation; long; heavy requirements",
             "menu.start.back.title": "back",
             "menu.start.back.desc": "return to main menu",
             "prompt.main.choice": "choice (1-5 or 0 exit, h help): ",
+            "main.warn_empty": "enter 1 to 5 or 0 to exit.",
+            "main.warn_exit_key": "use 0 to exit the application.",
+            "main.bye": "goodbye!",
             "prompt.start.choice": "choice (0-6, h help): ",
             "lang.header": "language",
-            "lang.subtitle": "change wizard language",
+            "lang.subtitle": "change setup language",
             "lang.current": "current language",
             "lang.choose": "choose language",
             "lang.pt": "portuguese",
             "lang.en": "english",
             "lang.ok": "language updated",
+            "help.title": "help",
+            "help.subtitle": ".bed file parameters",
+            "help.top_hint": "choose 1-7 for each section or 3d view; 0 returns to main menu; h global help.",
+            "help.prompt": "option (1-7, 0 back, h help): ",
+            "help.use0": "use 0 to return to the main menu.",
+            "help.detail_sub": "field details",
+            "help.view3d_title": "help: 3d visualization",
+            "help.view3d_subtitle": "web, desktop and blender modes",
+            "help.sec.bed": "bed geometry",
+            "help.sec.lids": "lids",
+            "help.sec.particles": "particles",
+            "help.sec.packing": "packing",
+            "help.sec.export": "export",
+            "help.sec.cfd": "cfd simulation",
+            "help.sec.view3d": "3d visualization (modes and formats)",
+            "docs.title": "documentation",
+            "docs.subtitle": "text extracted from html — keys in the footer of this page",
+            "docs.ctl_last_standalone": "last page — press enter to close.",
+            "docs.ctl_last_menu": "last page — press enter to return to the main menu.",
+            "docs.ctl_nav": "c exit · ? field help · h global help · enter or n next page · p previous page",
+            "docs.pause_exit_standalone": "enter to exit...",
+            "docs.pause_exit_menu": "enter to return to the main menu...",
+            "docs.action_prompt": "action: ",
+            "docs.edge_first": "already on the first page.",
+            "docs.field_help": "documentation: enter or n forward; p back; c or q quit; h shows global setup help.",
+            "docs.err_missing": "documentation file not found",
+            "docs.err_expected": "expected path",
+            "help.detail_prefix": "help:",
+            "help.invalid": "invalid option",
             "view3d.title": "3d visualization",
             "view3d.subtitle": "meshes from python, blender or full pipeline",
             "view3d.crumb": "3d view",
@@ -197,6 +280,25 @@ class BedWizard:
             "view3d.opt.desktop": "desktop viewer (open3d: stl/obj/ply)",
             "view3d.opt.blender": "open in blender",
             "view3d.opt.back": "back to list",
+            "view3d.warn_none": "no meshes found under local_data/models_3d, generated/3d/output, simulations, aux or batch. generate a model first.",
+            "view3d.warn_pick_idx": "enter a list number or 0/c to return to search.",
+            "view3d.warn_num_invalid": "invalid number",
+            "view3d.err_path_invalid": "invalid path",
+            "view3d.warn_blend_web": ".blend does not load in three.js directly. export gltf/glb or use blender.",
+            "view3d.warn_web_fmt": "format not supported in the web viewer.",
+            "view3d.warn_api": "api did not respond at {api}. start: uvicorn backend.app.main:app and the frontend (npm run dev). url used: {fe}",
+            "view3d.warn_blend_desk": "use the blender option for .blend files.",
+            "view3d.err_script": "script not found: {path}",
+            "view3d.warn_open3d": "open3d unavailable: at repo root run pip install -r requirements-visualizacao.txt (on windows you may need long paths or a short venv — see comments in that file)",
+            "view3d.warn_viewer_rc": "viewer exited with code {rc}",
+            "view3d.warn_blender_missing": "blender not found on path.",
+            "view3d.col.file": "file",
+            "view3d.col.format": "format",
+            "view3d.col.size": "size",
+            "view3d.col.origin": "source",
+            "view3d.col.rec": "recommended",
+            "view3d.ok_opening": "opening: {url}",
+            "view3d.exec_viewer": "running: python {script} {path}",
         },
     }
 
@@ -297,6 +399,8 @@ class BedWizard:
         self.skip_questionnaire_after_load = False
         self.lang = BedWizard._normalize_lang_code("pt")
         self._load_wizard_ui_lang()
+        if hasattr(self.ui, "set_ui_lang"):
+            self.ui.set_ui_lang(self.lang)
         
         # dicionario com informacoes de ajuda para cada parametro
         self.param_help = {
@@ -546,11 +650,13 @@ class BedWizard:
         }
         
     def _wizard_lang_pref_path(self) -> Path:
-        return local_data_root() / "wizard_ui_lang.txt"
+        return local_data_root() / "setup_ui_lang.txt"
 
     def _load_wizard_ui_lang(self) -> None:
         try:
-            p = self._wizard_lang_pref_path()
+            p_new = local_data_root() / "setup_ui_lang.txt"
+            p_old = local_data_root() / "wizard_ui_lang.txt"
+            p = p_new if p_new.is_file() else p_old
             if not p.is_file():
                 return
             self.lang = BedWizard._normalize_lang_code(p.read_text(encoding="utf-8"))
@@ -833,9 +939,9 @@ class BedWizard:
 
     def _hint_fluxo_blender(self) -> None:
         self.ui.muted(
-            "ordem: leito → tampas → tipo/count/diametro → packing_method → geometry_mode → "
-            "generation_backend → export → propriedades extra das particulas → "
-            "nome .bed → como abrir o blender → confirmacao."
+            "ordem: motor (blender ou python) → leito → tampas → tipo/count/diametro → packing_method → "
+            "geometry_mode → export → propriedades extra das particulas → "
+            "nome .bed → confirmacao (e politica de abrir blender no fim se aplicavel)."
         )
 
     def show_param_help(self, param_key: str):
@@ -1092,7 +1198,7 @@ class BedWizard:
         while True:
             self.clear_screen()
             self.print_header("rever parametros", "0 ou c = voltar ao questionario")
-            self.ui.breadcrumbs("wizard", "revisao")
+            self.ui.breadcrumbs("setup", "revisao")
             items = [
                 x
                 for x in self._iter_filled_param_paths()
@@ -1767,10 +1873,22 @@ class BedWizard:
             self._fill_slice_params_interactive()
 
     def _questionnaire_generation_backend_section(
-        self, *, geracao_3d_flow: bool = False
+        self,
+        *,
+        geracao_3d_flow: bool = False,
+        locked_backend: Optional[str] = None,
     ) -> None:
         """metadado consumido pelo json compilado; nao confunde com packing_method."""
         self.print_section("etapa 6: motor de geracao")
+        if locked_backend is not None:
+            b = normalize_generation_backend(locked_backend)
+            self.params["generation_backend"] = b
+            self.ui.muted(
+                f"motor fixo neste fluxo: {b} (coerente com a escolha no inicio; "
+                "o .json gravara generation_backend)."
+            )
+            self.ui.println()
+            return
         if geracao_3d_flow:
             self.ui.muted(
                 "neste menu (geracao 3d) o habitual e escolher blender; enter vazio mantem a "
@@ -2068,7 +2186,7 @@ class BedWizard:
             self.print_header(
                 "questionario interativo", "parametrizacao do leito passo a passo"
             )
-            self.ui.breadcrumbs("wizard", "questionario")
+            self.ui.breadcrumbs("setup", "questionario")
             self._hint_fluxo_questionario()
             self.ui.println()
             self._maybe_load_existing_bed(caption="questionario")
@@ -2097,7 +2215,7 @@ class BedWizard:
         """
         self.clear_screen()
         self.print_header("editor de template", "edicao de modelo .bed")
-        self.ui.breadcrumbs("wizard", "template")
+        self.ui.breadcrumbs("setup", "template")
         self._hint_fluxo_template()
         self.ui.println()
 
@@ -2294,7 +2412,7 @@ cfd {
         """confirmar parametros configurados e salvar arquivo"""
         self.clear_screen()
         self.print_header("confirmacao", "revise antes de salvar o .bed")
-        self.ui.breadcrumbs("wizard", "questionario", "confirmacao")
+        self.ui.breadcrumbs("setup", "questionario", "confirmacao")
         self.ui.println("parametros configurados:")
         self.ui.println()
         self.ui.println(f"  leito: {self.params['bed']['diameter']} m x {self.params['bed']['height']} m")
@@ -2349,7 +2467,7 @@ cfd {
 
     def generate_bed_content(self) -> str:
         """gerar conteudo do arquivo .bed a partir dos parametros configurados"""
-        lines = ["// arquivo .bed gerado pelo wizard"]
+        lines = ["// arquivo .bed gerado pelo setup"]
         lines.append("")
         
         # secao bed - parametros geometricos do leito
@@ -2515,33 +2633,47 @@ cfd {
             print(f"  erro: erro inesperado: {e}")
             return False
     
-    def _questionnaire_blender_bed_lids_particles_packing(self) -> None:
+    def _questionnaire_blender_bed_lids_particles_packing(
+        self,
+        *,
+        geracao_3d_flow: bool = False,
+        locked_generation_backend: Optional[str] = None,
+    ) -> None:
         """mesmo encadeamento do questionario completo (sem cfd)."""
         self._questionnaire_bed_and_lids()
         self._questionnaire_particle_shape_and_count()
         self.params["packing"] = self._collect_packing_params(with_param_help=True)
         self._questionnaire_geometry_mode_section()
-        self._questionnaire_generation_backend_section(geracao_3d_flow=True)
+        self._questionnaire_generation_backend_section(
+            geracao_3d_flow=geracao_3d_flow and locked_generation_backend is None,
+            locked_backend=locked_generation_backend,
+        )
         self._questionnaire_export_section()
         self._questionnaire_particles_properties_tail(self.params["packing"]["method"])
 
-    def blender_generation_mode(self) -> None:
-        """questionario 3d sem cfd; export igual ao questionario; escolha de abertura do blender."""
-        try:
-            self.clear_screen()
-            self.print_header("geracao 3d", "sem cfd; export configuravel; motor no json (blender ou python puro)")
-            self.ui.breadcrumbs("wizard", "geracao-3d")
-            self.ui.muted("parametros cfd nao sao pedidos neste modo.")
-            self._hint_fluxo_blender()
-            self.ui.println()
-            self._maybe_load_existing_bed(caption="geracao 3d")
-            if not self.skip_questionnaire_after_load:
-                self._questionnaire_blender_bed_lids_particles_packing()
-            self.ui.hint("secao cfd omitida neste modo")
-            _blend_out = "leito_blender.bed"
-            if self.output_file:
-                _blend_out = Path(self.output_file).name
-            self.output_file = self.get_input("nome do arquivo de saida", _blend_out)
+    def _generation_3d_continue(self, backend: str) -> None:
+        """apos escolher motor: carregar opcional, questionario com backend fixo, nome .bed, confirmacao."""
+        backend = normalize_generation_backend(backend)
+        self._maybe_load_existing_bed(caption="geracao 3d")
+        self.params["generation_backend"] = backend
+        if not self.skip_questionnaire_after_load:
+            self._questionnaire_blender_bed_lids_particles_packing(
+                geracao_3d_flow=False,
+                locked_generation_backend=backend,
+            )
+        else:
+            self.ui.muted(
+                "questionario saltado: o motor escolhido no inicio aplica-se ao ficheiro carregado."
+            )
+        self.ui.hint("secao cfd omitida neste modo")
+        default_bed = (
+            "leito_blender.bed" if backend == "blender" else "leito_python.bed"
+        )
+        _out = default_bed
+        if self.output_file:
+            _out = Path(self.output_file).name
+        self.output_file = self.get_input("nome do arquivo de saida", _out)
+        if backend == "blender":
             opt_nunca = "nao abrir o blender apos gerar"
             opt_perg = "perguntar se deseja abrir o blender apos gerar"
             opt_auto = "abrir o blender automaticamente apos gerar"
@@ -2557,14 +2689,78 @@ cfd {
             else:
                 policy = "never"
             self._confirm_and_generate_blender(open_policy=policy)
+        else:
+            opt_nunca = "nao abrir o blender apos gerar o stl"
+            opt_perg = "perguntar se deseja abrir o blender com o stl"
+            opt_auto = "abrir o blender automaticamente com o stl"
+            escolha = self.get_choice(
+                "comportamento apos gerar o stl (python puro)",
+                [opt_nunca, opt_perg, opt_auto],
+                None,
+            )
+            if escolha == opt_auto:
+                policy = "always"
+            elif escolha == opt_perg:
+                policy = "ask"
+            else:
+                policy = "never"
+            self._confirm_and_generate_python(open_policy=policy)
+
+    def generation_3d_mode(self) -> None:
+        """unico fluxo 3d sem cfd: primeiro motor (blender ou python), depois questionario e geracao."""
+        try:
+            self.clear_screen()
+            self.print_header(
+                "geracao 3d",
+                "sem cfd; primeiro escolhes o motor; depois o mesmo questionario de geometria e empacotamento",
+            )
+            self.ui.breadcrumbs("setup", "geracao-3d")
+            self.ui.muted("parametros cfd nao sao pedidos neste modo.")
+            self._hint_fluxo_blender()
+            self.ui.println()
+            motor = self.get_choice(
+                "motor para materializar a malha 3d",
+                [
+                    "blender — leito_extracao em segundo plano (blend/stl conforme export)",
+                    "python puro — stl via scripts/python_modeling (sem motor blender)",
+                ],
+                0,
+                "",
+            )
+            backend = (
+                "pure_python"
+                if ("python" in motor.lower() or "puro" in motor.lower())
+                else "blender"
+            )
+            self._generation_3d_continue(backend)
         except _WizardCancelled:
             self.ui.muted("cancelado.")
+
+    def python_generation_mode(self) -> None:
+        """atalho: mesmo fluxo que geracao 3d com motor python fixo (sem pergunta blender vs python)."""
+        try:
+            self.clear_screen()
+            self.print_header(
+                "geracao 3d (python puro)",
+                "sem cfd; motor fixo python; stl via packed bed science; podes abrir o stl no blender no fim",
+            )
+            self.ui.breadcrumbs("setup", "geracao-3d", "python")
+            self.ui.muted("parametros cfd nao sao pedidos neste modo.")
+            self._hint_fluxo_blender()
+            self.ui.println()
+            self._generation_3d_continue("pure_python")
+        except _WizardCancelled:
+            self.ui.muted("cancelado.")
+
+    def blender_generation_mode(self) -> None:
+        """compat: redirecciona para generation_3d_mode (escolha de motor no inicio)."""
+        self.generation_3d_mode()
 
     def _confirm_and_generate_blender(self, open_policy: str) -> None:
         """open_policy: never | ask | always — gera .bed, compila, executa blender."""
         self.clear_screen()
         self.print_header("confirmacao", "geracao 3d")
-        self.ui.breadcrumbs("wizard", "blender", "confirmar")
+        self.ui.breadcrumbs("setup", "blender", "confirmar")
         fmts = self.params.get("export", {}).get("formats") or []
         fmt_s = ", ".join(str(x) for x in fmts)
         self.ui.println("resumo:")
@@ -2616,7 +2812,65 @@ cfd {
                 allow_empty_default=False,
             ):
                 self.open_blender_gui_with_blend(blend_path)
-    
+
+    def _confirm_and_generate_python(self, open_policy: str) -> None:
+        """open_policy: never | ask | always — gera .bed, compila, gera stl em python puro."""
+        self.clear_screen()
+        self.print_header("confirmacao", "geracao 3d (python puro)")
+        self.ui.breadcrumbs("setup", "python", "confirmar")
+        fmts = self.params.get("export", {}).get("formats") or []
+        fmt_s = ", ".join(str(x) for x in fmts)
+        stem = Path(self.output_file).stem if self.output_file else "leito"
+        out_stl = (Path.cwd() / f"{stem}_pure.stl").resolve()
+        self.ui.println("resumo:")
+        self.ui.muted(
+            f"  leito: {self.params['bed']['diameter']} m x {self.params['bed']['height']} m"
+        )
+        self.ui.muted(
+            f"  particulas: {self.params['particles']['count']} {self.params['particles']['kind']}"
+        )
+        self.ui.muted(f"  empacotamento: {self.params['packing']['method']} | export: {fmt_s}")
+        self.ui.muted(f"  stl previsto: {out_stl}")
+        self.ui.println()
+        if open_policy == "always":
+            self.ui.hint("apos gerar, o blender abre com o stl (se o executavel existir)")
+            self.ui.println()
+        if not self.get_boolean(
+            "continuar com geracao em python puro (stl)?",
+            True,
+            allow_empty_default=False,
+        ):
+            self.ui.muted("operacao cancelada.")
+            return
+        self.save_bed_file()
+        self.ui.section("compilando .bed")
+        if not self.verify_and_compile():
+            self.ui.err("nao foi possivel compilar o arquivo")
+            return
+        jpath = Path(str(Path(self.output_file).resolve()) + ".json")
+        patch_compiled_json_packing(jpath, self.params)
+        patch_compiled_json_export(jpath, self.params)
+        patch_compiled_json_metadata(jpath, self.params)
+        patch_compiled_json_slice(jpath, self.params)
+        self.ui.section("gerando stl em python puro")
+        ok, stl_path = self.run_pure_python_with_json_path(jpath, out_stl=out_stl)
+        if not ok or not stl_path:
+            self.ui.err("falha na geracao python pura (ver mensagens na consola)")
+            return
+        self.ui.ok(f"stl: {stl_path}")
+        if open_policy == "always":
+            self.ui.section("concluido")
+            self.open_blender_gui_with_stl(stl_path)
+            self.ui.muted("blender em segundo plano com o stl importado")
+            return
+        if open_policy == "ask":
+            if self.get_boolean(
+                "gostaria de abrir o blender com o stl gerado?",
+                False,
+                allow_empty_default=False,
+            ):
+                self.open_blender_gui_with_stl(stl_path)
+
     def find_blender_executable(self) -> Optional[str]:
         # procura instalacoes tipicas no windows por caminho absoluto
         # se nenhuma existir tenta blender no path via shutil which
@@ -2911,43 +3165,47 @@ cfd {
     def show_help_menu(self):
         """mostrar menu de ajuda com informacoes sobre parametros"""
         self.clear_screen()
-        self.print_header("ajuda", "parametros do arquivo .bed")
-        self.ui.breadcrumbs("wizard", "ajuda")
-        self.ui.hint(
-            "escolha 1-7 para ver cada seccao ou visualizacao 3d; 0 regressa ao menu principal; h ajuda global."
+        self.print_header(
+            self._t("help.title", "ajuda"),
+            self._t("help.subtitle", "parametros do arquivo .bed"),
         )
+        self.ui.breadcrumbs("setup", self._t("help.title", "ajuda"))
+        self.ui.hint(self._t("help.top_hint", ""))
 
         sections = {
-            '1': ('bed', 'geometria do leito'),
-            '2': ('lids', 'tampas'),
-            '3': ('particles', 'particulas'),
-            '4': ('packing', 'empacotamento'),
-            '5': ('export', 'exportacao'),
-            '6': ('cfd', 'simulacao cfd'),
-            '7': ('view3d', 'visualizacao 3d (modos e formatos)'),
+            "1": ("bed", self._t("help.sec.bed", "geometria do leito")),
+            "2": ("lids", self._t("help.sec.lids", "tampas")),
+            "3": ("particles", self._t("help.sec.particles", "particulas")),
+            "4": ("packing", self._t("help.sec.packing", "empacotamento")),
+            "5": ("export", self._t("help.sec.export", "exportacao")),
+            "6": ("cfd", self._t("help.sec.cfd", "simulacao cfd")),
+            "7": ("view3d", self._t("help.sec.view3d", "visualizacao 3d (modos e formatos)")),
         }
-        
+
         entries = [(k, v[1]) for k, v in sections.items()]
         self.ui.render_help_section_menu(entries, back_key="0")
-        choice = self.ui.ask_line("opcao (1-7, 0 voltar, h ajuda): ").strip()
+        choice = self.ui.ask_line(self._t("help.prompt", "")).strip()
 
         if choice.lower() == "h":
-            self.ui.hint(GLOBAL_KEYS_HINT)
+            self.ui.hint(global_keys_hint(self.lang))
             self.ui.pause("enter...")
             self.show_help_menu()
             return
         if choice == "0":
             return
         if choice.lower() in ("c", "cancel", "cancelar", "voltar", "q"):
-            self.ui.warn("use 0 para regressar ao menu principal.")
+            self.ui.warn(self._t("help.use0", ""))
             self.ui.pause("enter...")
             return
         if choice == "7":
             from wizard_3d_viewer import print_visualization_modes_help
 
             self.clear_screen()
-            self.print_header("ajuda: visualizacao 3d", "modos web, desktop e blender")
-            self.ui.breadcrumbs("wizard", "ajuda", "view3d")
+            self.print_header(
+                self._t("help.view3d_title", "ajuda: visualizacao 3d"),
+                self._t("help.view3d_subtitle", "modos web, desktop e blender"),
+            )
+            self.ui.breadcrumbs("setup", self._t("help.title", "ajuda"), "view3d")
             print_visualization_modes_help(self)
             self.ui.pause()
             self.show_help_menu()
@@ -2955,8 +3213,12 @@ cfd {
         elif choice in sections:
             section_key, section_desc = sections[choice]
             self.clear_screen()
-            self.print_header(f"ajuda: {section_desc}", "detalhes dos campos")
-            self.ui.breadcrumbs("wizard", "ajuda", section_key)
+            pfx = self._t("help.detail_prefix", "ajuda:")
+            self.print_header(
+                f"{pfx} {section_desc}",
+                self._t("help.detail_sub", "detalhes dos campos"),
+            )
+            self.ui.breadcrumbs("setup", self._t("help.title", "ajuda"), section_key)
             
             for param_key, param_info in sorted(self.param_help.items()):
                 if param_key.startswith(f"{section_key}."):
@@ -2975,7 +3237,7 @@ cfd {
             self.ui.pause()
             self.show_help_menu()
         else:
-            self.ui.warn("opcao invalida")
+            self.ui.warn(self._t("help.invalid", "opcao invalida"))
             self.ui.pause()
             self.show_help_menu()
     
@@ -2983,7 +3245,7 @@ cfd {
         """modo pipeline completo - gera modelo 3d, cria caso cfd e executa simulacao"""
         self.clear_screen()
         self.print_header("pipeline completo", "modelagem 3d + caso openfoam + simulacao")
-        self.ui.breadcrumbs("wizard", "pipeline")
+        self.ui.breadcrumbs("setup", "pipeline")
         self.ui.println("etapas resumidas:")
         self.ui.muted(
             "1) questionario do leito  2) gerar e compilar .bed  3) blender  "
@@ -3318,10 +3580,16 @@ cfd {
         """mostra documentacao (extraida do html) paginada neste terminal."""
         from wizard_doc_terminal import html_file_to_plain, paginate_plain
 
-        doc_path = Path(__file__).parent / "documentacao.html"
+        dsl_dir = Path(__file__).parent
+        lang = BedWizard._normalize_lang_code(getattr(self, "lang", None))
+        doc_path = dsl_dir / "documentacao.html"
+        if lang == "en":
+            en_path = dsl_dir / "documentacao_en.html"
+            if en_path.is_file():
+                doc_path = en_path
         if not doc_path.exists():
-            self.ui.err("arquivo de documentacao nao encontrado")
-            self.ui.muted(f"caminho esperado: {doc_path}")
+            self.ui.err(self._t("docs.err_missing", "arquivo de documentacao nao encontrado"))
+            self.ui.muted(f"{self._t('docs.err_expected', 'caminho esperado')}: {doc_path}")
             self.ui.pause()
             return
         
@@ -3333,10 +3601,10 @@ cfd {
         while idx < total:
             self.clear_screen()
             self.print_header(
-                "documentacao",
-                "texto extraido do html — teclas no rodape desta pagina",
+                self._t("docs.title", "documentacao"),
+                self._t("docs.subtitle", ""),
             )
-            self.ui.breadcrumbs("wizard", "documentacao")
+            self.ui.breadcrumbs("setup", self._t("docs.title", "documentacao"))
             if edge_msg:
                 self.ui.warn(edge_msg)
                 edge_msg = ""
@@ -3344,43 +3612,37 @@ cfd {
             is_last = idx >= total - 1
             if is_last:
                 ctl = (
-                    "ultima pagina — prima enter para fechar."
+                    self._t("docs.ctl_last_standalone", "")
                     if standalone
-                    else "ultima pagina — prima enter para voltar ao menu principal."
+                    else self._t("docs.ctl_last_menu", "")
                 )
             else:
-                ctl = (
-                    "c sair · ? ajuda do campo · h ajuda global · "
-                    "enter ou n pagina seguinte · p pagina anterior"
-                )
+                ctl = self._t("docs.ctl_nav", "")
             self.ui.render_documentation_page(bloco, idx, total, ctl)
             if is_last:
                 fim = (
-                    "enter para sair..."
+                    self._t("docs.pause_exit_standalone", "")
                     if standalone
-                    else "enter para voltar ao menu principal..."
+                    else self._t("docs.pause_exit_menu", "")
                 )
                 self.ui.pause(fim)
                 break
-            raw = self.ui.ask_line("acao: ", default="n").strip().lower()
+            raw = self.ui.ask_line(self._t("docs.action_prompt", ""), default="n").strip().lower()
             if raw in ("q", "c", "cancel", "cancelar", "sair"):
                 break
             if raw == "h":
-                self.ui.hint(GLOBAL_KEYS_HINT)
+                self.ui.hint(global_keys_hint(self.lang))
                 self.ui.pause("enter...")
                 continue
             if raw == "?":
-                self.ui.muted(
-                    "documentacao: enter ou n avanca; p recua; c ou q termina; "
-                    "h mostra ajuda global do wizard."
-                )
+                self.ui.muted(self._t("docs.field_help", ""))
                 self.ui.pause("enter...")
                 continue
             if raw == "p":
                 if idx > 0:
                     idx -= 1
                 else:
-                    edge_msg = "ja esta na primeira pagina."
+                    edge_msg = self._t("docs.edge_first", "")
                 continue
             idx += 1
 
@@ -3388,7 +3650,7 @@ cfd {
         """submenu comecar (fluxos operacionais)."""
         self.ui.clear()
         self.ui.header(
-            self._t("app.title", "wizard de parametrizacao"),
+            self._t("app.title", "setup de parametrizacao"),
             self._t("app.subtitle", "leitos empacotados — arquivos .bed / antlr / blender / openfoam"),
         )
         self.ui.breadcrumbs("setup", self._t("menu.title.start", "comecar"))
@@ -3410,7 +3672,7 @@ cfd {
             choice = self.ui.ask_line(self._t("prompt.start.choice", "opcao (0-6): ")).strip()
             low = choice.lower()
             if low == "h":
-                self.ui.hint(GLOBAL_KEYS_HINT)
+                self.ui.hint(global_keys_hint(self.lang))
                 self.ui.pause("enter...")
                 continue
             if choice == "0":
@@ -3429,7 +3691,7 @@ cfd {
                 elif choice == "4":
                     self.tests_quick_menu()
                 elif choice == "5":
-                    self.blender_generation_mode()
+                    self.generation_3d_mode()
                 elif choice == "6":
                     self.pipeline_completo_mode()
                 else:
@@ -3490,7 +3752,7 @@ cfd {
                 "o que pretende fazer agora",
                 [
                     "gerar .bed com questionario completo (cfd opcional)",
-                    "gerar modelo 3d sem cfd (mesmo fluxo que geracao 3d no menu comecar)",
+                    "gerar modelo 3d sem cfd (igual a comecar opcao 5 — motor no inicio)",
                     "pipeline completo (questionario + blender + openfoam no wsl)",
                 ],
                 None,
@@ -3499,23 +3761,7 @@ cfd {
                 self.interactive_mode()
                 return
             if objetivo.startswith("gerar modelo 3d"):
-                backend = self.get_choice(
-                    "backend preferido para o modelo 3d",
-                    [
-                        "blender (recomendado para o leito completo neste projeto)",
-                        "python puro (gera .bed no questionario; depois use testes rapidos com o .json)",
-                    ],
-                    None,
-                )
-                if backend.startswith("blender"):
-                    self.blender_generation_mode()
-                else:
-                    self.ui.hint(
-                        "fluxo sugerido: questionario interativo para gerar e compilar o .bed; "
-                        "depois menu comecar > testes rapidos com o .json."
-                    )
-                    self.ui.println()
-                    self.interactive_mode()
+                self.generation_3d_mode()
                 return
             if objetivo.startswith("pipeline"):
                 self.ui.warn(
@@ -3538,7 +3784,7 @@ cfd {
         """tela inicial estilo navegador (barra + tabela de modos)."""
         self.ui.clear()
         self.ui.header(
-            self._t("app.title", "wizard de parametrizacao"),
+            self._t("app.title", "setup de parametrizacao"),
             self._t("app.subtitle", "leitos empacotados — arquivos .bed / antlr / blender / openfoam"),
         )
         if not rich_available():
@@ -3555,8 +3801,8 @@ cfd {
     def language_mode(self) -> None:
         self.lang = BedWizard._normalize_lang_code(self.lang)
         self.clear_screen()
-        self.print_header(self._t("lang.header", "idioma"), self._t("lang.subtitle", "trocar idioma do wizard"))
-        self.ui.breadcrumbs("wizard", self._t("lang.header", "idioma"))
+        self.print_header(self._t("lang.header", "idioma"), self._t("lang.subtitle", "trocar idioma do setup"))
+        self.ui.breadcrumbs("setup", self._t("lang.header", "idioma"))
         self.ui.println()
         cur = self._t("lang.pt" if self.lang == "pt" else "lang.en", "portugues" if self.lang == "pt" else "ingles")
         self.ui.muted(f"{self._t('lang.current', 'idioma atual')}: {cur}")
@@ -3581,6 +3827,8 @@ cfd {
                 chosen = self.lang
         self.lang = BedWizard._normalize_lang_code(chosen)
         self._save_wizard_ui_lang()
+        if hasattr(self.ui, "set_ui_lang"):
+            self.ui.set_ui_lang(self.lang)
         self.ui.ok(self._t("lang.ok", "idioma atualizado"))
 
     def visualization_3d_mode(self) -> None:
@@ -3595,18 +3843,18 @@ cfd {
             choice = self.ui.ask_line(self._t("prompt.main.choice", "opcao (1-5 ou 0): ")).strip()
             low = choice.lower()
             if low == "h":
-                self.ui.hint(GLOBAL_KEYS_HINT)
+                self.ui.hint(global_keys_hint(self.lang))
                 self.ui.pause("enter...")
                 continue
             if not choice:
-                self.ui.warn("indique 1 a 5 ou 0 para sair.")
+                self.ui.warn(self._t("main.warn_empty", ""))
                 self.ui.pause("enter...")
                 continue
             if choice == "0":
-                self.ui.muted("ate logo!")
+                self.ui.muted(self._t("main.bye", ""))
                 sys.exit(0)
             if low == "c" or low == "q":
-                self.ui.warn("use 0 para sair da aplicacao.")
+                self.ui.warn(self._t("main.warn_exit_key", ""))
                 self.ui.pause("enter...")
                 continue
 

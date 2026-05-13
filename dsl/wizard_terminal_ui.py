@@ -53,8 +53,40 @@ GLOBAL_KEYS_HINT = (
     "no menu principal da aplicacao, 0 encerra."
 )
 
-# linha curta sob listas numeradas / ecra de ajuda por seccoes (detalhe completo com h)
+GLOBAL_KEYS_HINT_EN = (
+    "numbered menus (tables with 0 1 2 …):\n"
+    "- 0 or c go back or cancel this step (same in this menu).\n"
+    "- 1–n pick a row; empty enter only confirms when the menu shows an explicit default.\n"
+    "- ? field help (if any), * review parameters (when active), h this text.\n\n"
+    "internal prompts (y/n, paths, numbers):\n"
+    "- c cancels the current flow (go back one level).\n"
+    "- h help; * review parameters when available.\n\n"
+    "command line (prompt_toolkit): arrows, ctrl+r history, tab completes shortcuts.\n\n"
+    "in the main application menu, 0 exits."
+)
+
+PICK_LIST_SHORT_HINT_EN = (
+    "0 or c back  ·  ? field help  ·  h global help"
+)
+
 PICK_LIST_SHORT_HINT = "0 ou c voltar  ·  ? ajuda do campo  ·  h ajuda global"
+
+
+def _normalize_terminal_lang(code: Optional[str]) -> str:
+    c = (code or "pt").strip().lower()
+    return "en" if c.startswith("en") else "pt"
+
+
+def global_keys_hint(lang: Optional[str] = None) -> str:
+    """ajuda global h: portugues ou ingles conforme lang (pt/en)."""
+    return GLOBAL_KEYS_HINT_EN if _normalize_terminal_lang(lang) == "en" else GLOBAL_KEYS_HINT
+
+
+def pick_list_short_hint(lang: Optional[str] = None) -> str:
+    """rodape curto sob listas numeradas."""
+    if _normalize_terminal_lang(lang) == "en":
+        return PICK_LIST_SHORT_HINT_EN
+    return PICK_LIST_SHORT_HINT
 
 
 def _numeric_menu_aux_lines(
@@ -201,12 +233,12 @@ def render_menu_table_rich(console: Any, rows: Sequence[MenuRow], title: str = "
         expand=True,
         pad_edge=True,
         title=title,
-        title_style="wizard.muted",
+        title_style="setup.muted",
     )
     table.add_column(
         "#",
         justify="center",
-        style="wizard.accent",
+        style="setup.accent",
         width=4,
         no_wrap=True,
     )
@@ -221,13 +253,13 @@ def render_menu_table_rich(console: Any, rows: Sequence[MenuRow], title: str = "
     table.add_column(
         "",
         justify="center",
-        style="wizard.muted",
+        style="setup.muted",
         width=1,
         no_wrap=True,
     )
     table.add_column(
         "resumo",
-        style="wizard.muted",
+        style="setup.muted",
         ratio=1,
         no_wrap=False,
         overflow="fold",
@@ -242,7 +274,7 @@ def render_menu_table_rich(console: Any, rows: Sequence[MenuRow], title: str = "
     console.print()
 
 
-def _wizard_prompt_session() -> Any:
+def _setup_prompt_session() -> Any:
     """sessao prompt_toolkit: historico, tab em atalhos comuns, sugestao do historico."""
     return PromptSession(
         history=InMemoryHistory(),
@@ -339,29 +371,33 @@ def _number_prompt_key_bindings(
     return kb
 
 
-_WIZARD_THEME = Theme(
+_SETUP_THEME = Theme(
     {
-        "wizard.chrome": "bold white on rgb(95,25,35)",
-        "wizard.path": "dim italic",
-        "wizard.path_seg": "bold rgb(240,212,168)",
-        "wizard.accent": "bold rgb(240,212,168)",
-        "wizard.section": "bold rgb(240,212,168)",
-        "wizard.muted": "dim",
-        "wizard.hint": "italic dim",
-        "wizard.warn": "yellow",
-        "wizard.err": "bold red",
-        "wizard.ok": "green",
-        "wizard.label": "bold",
+        "setup.chrome": "bold white on rgb(95,25,35)",
+        "setup.path": "dim italic",
+        "setup.path_seg": "bold rgb(240,212,168)",
+        "setup.accent": "bold rgb(240,212,168)",
+        "setup.section": "bold rgb(240,212,168)",
+        "setup.muted": "dim",
+        "setup.hint": "italic dim",
+        "setup.warn": "yellow",
+        "setup.err": "bold red",
+        "setup.ok": "green",
+        "setup.label": "bold",
     }
 )
 
 
 class PlainWizardUi:
-    """fallback sem rich — mantem o wizard utilizavel."""
+    """fallback sem rich — mantem o setup utilizavel."""
 
     def __init__(self) -> None:
         self._rich = False
         self._pt_session: Optional[Any] = None
+        self._ui_lang = "pt"
+
+    def set_ui_lang(self, code: Optional[str]) -> None:
+        self._ui_lang = _normalize_terminal_lang(code)
 
     def clear(self) -> None:
         os.system("cls" if os.name == "nt" else "clear")
@@ -393,10 +429,12 @@ class PlainWizardUi:
         print(f"  {msg}")
 
     def warn(self, msg: str) -> None:
-        print(f"  aviso: {msg}")
+        p = "aviso" if self._ui_lang == "pt" else "warning"
+        print(f"  {p}: {msg}")
 
     def err(self, msg: str) -> None:
-        print(f"  erro: {msg}")
+        p = "erro" if self._ui_lang == "pt" else "error"
+        print(f"  {p}: {msg}")
 
     def ok(self, msg: str) -> None:
         print(f"  {msg}")
@@ -446,7 +484,7 @@ class PlainWizardUi:
     def ask_line(self, prompt: str, default: str = "") -> str:
         if _HAS_PROMPT_TOOLKIT:
             if self._pt_session is None:
-                self._pt_session = _wizard_prompt_session()
+                self._pt_session = _setup_prompt_session()
             try:
                 return str(self._pt_session.prompt(prompt, default=default)).rstrip()
             except Exception:
@@ -465,7 +503,7 @@ class PlainWizardUi:
     ) -> str:
         if _HAS_PROMPT_TOOLKIT:
             if self._pt_session is None:
-                self._pt_session = _wizard_prompt_session()
+                self._pt_session = _setup_prompt_session()
             start = _parse_float_or(default, min_val if min_val is not None else 0.0)
             start = _clamp(start, min_val, max_val)
             if big_step is None:
@@ -526,7 +564,7 @@ class PlainWizardUi:
                 low = raw.lower()
                 if low == "h":
                     print()
-                    for ln in GLOBAL_KEYS_HINT.splitlines():
+                    for ln in global_keys_hint(self._ui_lang).splitlines():
                         print(f"  {ln}")
                     print()
                     continue
@@ -578,7 +616,7 @@ class PlainWizardUi:
             low = value.lower()
             if low == "h":
                 print()
-                for ln in GLOBAL_KEYS_HINT.splitlines():
+                for ln in global_keys_hint(self._ui_lang).splitlines():
                     print(f"  {ln}")
                 print()
                 continue
@@ -610,7 +648,7 @@ class PlainWizardUi:
     def render_help_section_menu(self, entries: Sequence[Tuple[str, str]], back_key: str = "0") -> None:
         rows = _help_entries_to_menu_rows(entries, back_key)
         render_menu_table_plain(rows, title="secoes de ajuda")
-        print(f"  {PICK_LIST_SHORT_HINT}")
+        print(f"  {pick_list_short_hint(self._ui_lang)}")
         print()
 
     def render_documentation_page(
@@ -636,18 +674,22 @@ class RichWizardUi:
     def __init__(self) -> None:
         self._rich = True
         self._pt_session: Optional[Any] = None
+        self._ui_lang = "pt"
         # soft_wrap evita quebrar layout em caminhos longos
-        self.console = Console(theme=_WIZARD_THEME, highlight=False, soft_wrap=True)
+        self.console = Console(theme=_SETUP_THEME, highlight=False, soft_wrap=True)
+
+    def set_ui_lang(self, code: Optional[str]) -> None:
+        self._ui_lang = _normalize_terminal_lang(code)
 
     def clear(self) -> None:
         self.console.clear()
 
     def header(self, title: str, subtitle: str = "") -> None:
         chrome = Text()
-        chrome.append(" bedflow atlas ", style="wizard.chrome")
+        chrome.append(" bedflow atlas ", style="setup.chrome")
         chrome.append(" ", style="")
-        chrome.append("setup://", style="wizard.path")
-        chrome.append("setup-de-parametrizacao", style="wizard.path_seg")
+        chrome.append("setup://", style="setup.path")
+        chrome.append("setup-de-parametrizacao", style="setup.path_seg")
         bar = Panel(
             Align.left(chrome),
             box=box.HEAVY,
@@ -656,23 +698,23 @@ class RichWizardUi:
         )
         self.console.print(bar)
         if subtitle:
-            self.console.print(Text(subtitle, style="wizard.muted"), end="\n\n")
+            self.console.print(Text(subtitle, style="setup.muted"), end="\n\n")
         else:
             self.console.print()
 
     def section(self, title: str) -> None:
         self.console.print()
-        self.console.print(Rule(Text(title.lower(), style="wizard.section"), style="rgb(95,25,35)"))
+        self.console.print(Rule(Text(title.lower(), style="setup.section"), style="rgb(95,25,35)"))
 
     def breadcrumbs(self, *parts: str) -> None:
         if not parts:
             return
         t = Text()
-        t.append("setup://", style="wizard.path")
+        t.append("setup://", style="setup.path")
         for i, p in enumerate(parts):
             if i:
-                t.append(" / ", style="wizard.muted")
-            t.append(p.lower(), style="wizard.path_seg")
+                t.append(" / ", style="setup.muted")
+            t.append(p.lower(), style="setup.path_seg")
         self.console.print(Align.left(t))
         self.console.print()
 
@@ -680,19 +722,21 @@ class RichWizardUi:
         self.console.print(*args, **kwargs)
 
     def muted(self, msg: str) -> None:
-        self.console.print(Text(msg, style="wizard.muted"))
+        self.console.print(Text(msg, style="setup.muted"))
 
     def hint(self, msg: str) -> None:
-        self.console.print(Text(msg, style="wizard.hint"))
+        self.console.print(Text(msg, style="setup.hint"))
 
     def warn(self, msg: str) -> None:
-        self.console.print(Text(f"aviso: {msg}", style="wizard.warn"))
+        p = "aviso" if self._ui_lang == "pt" else "warning"
+        self.console.print(Text(f"{p}: {msg}", style="setup.warn"))
 
     def err(self, msg: str) -> None:
-        self.console.print(Text(f"erro: {msg}", style="wizard.err"))
+        p = "erro" if self._ui_lang == "pt" else "error"
+        self.console.print(Text(f"{p}: {msg}", style="setup.err"))
 
     def ok(self, msg: str) -> None:
-        self.console.print(Text(msg, style="wizard.ok"))
+        self.console.print(Text(msg, style="setup.ok"))
 
     def param_help(self, lines: Sequence[str]) -> None:
         body = "\n".join(lines)
@@ -723,7 +767,7 @@ class RichWizardUi:
             review_callback=review_callback,
             menu_default_index=menu_default_index,
         ):
-            self.console.print(Text(ln, style="wizard.muted"))
+            self.console.print(Text(ln, style="setup.muted"))
 
     def print_aux_internal_prompt(
         self,
@@ -739,16 +783,16 @@ class RichWizardUi:
             require_explicit=require_explicit,
             extra_bits=extra_bits,
         ):
-            self.console.print(Text(ln, style="wizard.muted"))
+            self.console.print(Text(ln, style="setup.muted"))
 
     def pause(self, msg: str = "pressione enter para continuar...") -> None:
-        self.console.input(f"\n[wizard.muted]{msg}[/] ")
+        self.console.input(f"\n[setup.muted]{msg}[/] ")
 
     def ask_line(self, prompt: str, default: str = "") -> str:
         plain = escape(prompt) if escape else prompt
         if _HAS_PROMPT_TOOLKIT:
             if self._pt_session is None:
-                self._pt_session = _wizard_prompt_session()
+                self._pt_session = _setup_prompt_session()
             try:
                 return str(self._pt_session.prompt(plain, default=default)).rstrip()
             except Exception:
@@ -768,7 +812,7 @@ class RichWizardUi:
         plain = escape(prompt) if escape else prompt
         if _HAS_PROMPT_TOOLKIT:
             if self._pt_session is None:
-                self._pt_session = _wizard_prompt_session()
+                self._pt_session = _setup_prompt_session()
             start = _parse_float_or(default, min_val if min_val is not None else 0.0)
             start = _clamp(start, min_val, max_val)
             if big_step is None:
@@ -813,7 +857,7 @@ class RichWizardUi:
             menu_rows = option_rows
         while True:
             self.console.print()
-            self.console.print(Text(caption, style="wizard.label"))
+            self.console.print(Text(caption, style="setup.label"))
             render_menu_table_rich(self.console, menu_rows, title="opcoes")
             self.console.print()
             self.print_aux_numeric_menu(
@@ -827,8 +871,8 @@ class RichWizardUi:
             raw = self.ask_line("opcao: ", default="").strip()
             low = raw.lower()
             if low == "h":
-                for ln in GLOBAL_KEYS_HINT.splitlines():
-                    self.console.print(Text(ln, style="wizard.hint"))
+                for ln in global_keys_hint(self._ui_lang).splitlines():
+                    self.console.print(Text(ln, style="setup.hint"))
                 self.console.print()
                 continue
             if has_zero and (
@@ -867,7 +911,7 @@ class RichWizardUi:
     ) -> bool:
         default_str = "sim" if default else "nao"
         while True:
-            self.console.print(Text(message, style="wizard.label"))
+            self.console.print(Text(message, style="setup.label"))
             self.print_aux_internal_prompt(
                 cancel=cancel_callback is not None,
                 review=False,
@@ -877,8 +921,8 @@ class RichWizardUi:
             raw = self.ask_line(f"(s/n) [{default_str}]: ", default="").strip()
             low = raw.lower()
             if low == "h":
-                for ln in GLOBAL_KEYS_HINT.splitlines():
-                    self.console.print(Text(ln, style="wizard.hint"))
+                for ln in global_keys_hint(self._ui_lang).splitlines():
+                    self.console.print(Text(ln, style="setup.hint"))
                 self.console.print()
                 continue
             if cancel_callback and low in (
@@ -909,7 +953,7 @@ class RichWizardUi:
     def render_help_section_menu(self, entries: Sequence[Tuple[str, str]], back_key: str = "0") -> None:
         rows = _help_entries_to_menu_rows(entries, back_key)
         render_menu_table_rich(self.console, rows, title="secoes de ajuda")
-        self.console.print(Text(PICK_LIST_SHORT_HINT, style="wizard.hint"))
+        self.console.print(Text(pick_list_short_hint(self._ui_lang), style="setup.hint"))
         self.console.print()
 
     def render_documentation_page(
@@ -930,7 +974,7 @@ class RichWizardUi:
                 padding=(0, 1),
             )
         )
-        self.console.print(Text(control_hint, style="wizard.hint"))
+        self.console.print(Text(control_hint, style="setup.hint"))
 
 
 def make_terminal_ui():
