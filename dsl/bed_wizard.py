@@ -23,6 +23,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 # pasta onde este ficheiro bed wizard py vive normalmente dsl na raiz do repo
 _DSL_DIR = Path(__file__).resolve().parent
+if str(_DSL_DIR) not in sys.path:
+    sys.path.insert(0, str(_DSL_DIR))
 # raiz do repositorio um nivel acima de dsl usada para achar scripts blender
 _REPO_ROOT = _DSL_DIR.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -58,6 +60,7 @@ from wizard_json_loader import (
 )
 # listar nomes de templates json e carregar um template por nome
 from wizard_quick_tests import run as wizard_quick_tests_run
+from param_help_en import PARAM_HELP_EN
 from wizard_template_engine import list_template_names, load_template
 from wizard_terminal_ui import (
     MenuRow,
@@ -147,6 +150,7 @@ class BedWizard:
             "help.sec.cfd": "simulacao cfd",
             "help.sec.view3d": "visualizacao 3d (modos e formatos)",
             "docs.title": "documentacao",
+            "docs.page_panel_title": "{heading} — pagina {n}/{total}",
             "docs.subtitle": "texto extraido do html — teclas no rodape desta pagina",
             "docs.ctl_last_standalone": "ultima pagina — prima enter para fechar.",
             "docs.ctl_last_menu": "ultima pagina — prima enter para voltar ao menu principal.",
@@ -160,6 +164,11 @@ class BedWizard:
             "docs.err_expected": "caminho esperado",
             "help.detail_prefix": "ajuda:",
             "help.invalid": "opcao invalida",
+            "help.field.param": "parametro:",
+            "help.field.description": "descricao:",
+            "help.field.range": "range:",
+            "help.field.example": "exemplo:",
+            "help.pause_continue": "pressione enter para continuar...",
             "view3d.title": "visualizacao 3d",
             "view3d.subtitle": "malhas geradas pelo projeto (python, blender, pipeline)",
             "view3d.crumb": "visualizacao 3d",
@@ -253,6 +262,7 @@ class BedWizard:
             "help.sec.cfd": "cfd simulation",
             "help.sec.view3d": "3d visualization (modes and formats)",
             "docs.title": "documentation",
+            "docs.page_panel_title": "{heading} — page {n}/{total}",
             "docs.subtitle": "text extracted from html — keys in the footer of this page",
             "docs.ctl_last_standalone": "last page — press enter to close.",
             "docs.ctl_last_menu": "last page — press enter to return to the main menu.",
@@ -266,6 +276,11 @@ class BedWizard:
             "docs.err_expected": "expected path",
             "help.detail_prefix": "help:",
             "help.invalid": "invalid option",
+            "help.field.param": "parameter:",
+            "help.field.description": "description:",
+            "help.field.range": "range:",
+            "help.field.example": "example:",
+            "help.pause_continue": "press enter to continue...",
             "view3d.title": "3d visualization",
             "view3d.subtitle": "meshes from python, blender or full pipeline",
             "view3d.crumb": "3d view",
@@ -302,6 +317,8 @@ class BedWizard:
         },
     }
 
+    _PARAM_HELP_EN: Dict[str, Dict[str, str]] = PARAM_HELP_EN
+
     @staticmethod
     def _normalize_lang_code(code: Optional[str]) -> str:
         c = (code or "pt").strip().lower()
@@ -314,6 +331,21 @@ class BedWizard:
             return d[key]
         # fallback pt se existir, senao default_pt
         return self._I18N.get("pt", {}).get(key, default_pt)
+
+    def _localized_param_help_texts(
+        self, param_key: str, info: Dict[str, Any]
+    ) -> Tuple[str, Optional[str]]:
+        """descricao e exemplo do param_help conforme idioma (en usa param_help_en)."""
+        loc = BedWizard._normalize_lang_code(getattr(self, "lang", None))
+        if loc != "en":
+            ex = info.get("exemplo")
+            return str(info.get("desc", "")), str(ex) if ex is not None else None
+        en = BedWizard._PARAM_HELP_EN.get(param_key, {})
+        desc = str(en.get("desc") or info.get("desc", ""))
+        if "exemplo" not in info:
+            return desc, None
+        merged = en.get("exemplo") or info.get("exemplo")
+        return desc, str(merged) if merged is not None else None
 
     def _main_menu_rows(self) -> List[Tuple[str, str, str]]:
         return [
@@ -948,12 +980,16 @@ class BedWizard:
         """mostrar ajuda detalhada sobre um parametro"""
         if param_key in self.param_help:
             info = self.param_help[param_key]
-            lines = [f"descricao: {info['desc']}"]
-            if 'min' in info and 'max' in info:
-                unit = info.get('unit', '')
-                lines.append(f"range: minimo {info['min']}{unit} — maximo {info['max']}{unit}")
-            if 'exemplo' in info:
-                lines.append(f"exemplo: {info['exemplo']}")
+            desc, exemplo = self._localized_param_help_texts(param_key, info)
+            lbl_d = self._t("help.field.description", "descricao:")
+            lines = [f"{lbl_d} {desc}"]
+            if "min" in info and "max" in info:
+                unit = info.get("unit", "")
+                lbl_r = self._t("help.field.range", "range:")
+                lines.append(f"{lbl_r} {info['min']}{unit} .. {info['max']}{unit}")
+            if exemplo:
+                lbl_e = self._t("help.field.example", "exemplo:")
+                lines.append(f"{lbl_e} {exemplo}")
             self.ui.param_help(lines)
     
     def get_input(
@@ -3207,7 +3243,7 @@ cfd {
             )
             self.ui.breadcrumbs("setup", self._t("help.title", "ajuda"), "view3d")
             print_visualization_modes_help(self)
-            self.ui.pause()
+            self.ui.pause(self._t("help.pause_continue", ""))
             self.show_help_menu()
             return
         elif choice in sections:
@@ -3222,23 +3258,32 @@ cfd {
             
             for param_key, param_info in sorted(self.param_help.items()):
                 if param_key.startswith(f"{section_key}."):
-                    param_name = param_key.split('.')[1]
+                    param_name = param_key.split(".")[1]
+                    desc, exemplo = self._localized_param_help_texts(
+                        param_key, param_info
+                    )
+                    lbl_p = self._t("help.field.param", "parametro:")
+                    lbl_d = self._t("help.field.description", "descricao:")
                     lines = [
-                        f"parametro: {param_name}",
-                        f"descricao: {param_info['desc']}",
+                        f"{lbl_p} {param_name}",
+                        f"{lbl_d} {desc}",
                     ]
-                    if 'min' in param_info and 'max' in param_info:
-                        unit = param_info.get('unit', '')
-                        lines.append(f"range: {param_info['min']}{unit} .. {param_info['max']}{unit}")
-                    if 'exemplo' in param_info:
-                        lines.append(f"exemplo: {param_info['exemplo']}")
+                    if "min" in param_info and "max" in param_info:
+                        unit = param_info.get("unit", "")
+                        lbl_r = self._t("help.field.range", "range:")
+                        lines.append(
+                            f"{lbl_r} {param_info['min']}{unit} .. {param_info['max']}{unit}"
+                        )
+                    if exemplo:
+                        lbl_e = self._t("help.field.example", "exemplo:")
+                        lines.append(f"{lbl_e} {exemplo}")
                     self.ui.param_help(lines)
             
-            self.ui.pause()
+            self.ui.pause(self._t("help.pause_continue", ""))
             self.show_help_menu()
         else:
             self.ui.warn(self._t("help.invalid", "opcao invalida"))
-            self.ui.pause()
+            self.ui.pause(self._t("help.pause_continue", ""))
             self.show_help_menu()
     
     def pipeline_completo_mode(self):
@@ -3618,7 +3663,17 @@ cfd {
                 )
             else:
                 ctl = self._t("docs.ctl_nav", "")
-            self.ui.render_documentation_page(bloco, idx, total, ctl)
+            panel_title = self._t(
+                "docs.page_panel_title",
+                "{heading} — pagina {n}/{total}",
+            ).format(
+                heading=self._t("docs.title", "documentacao"),
+                n=idx + 1,
+                total=total,
+            )
+            self.ui.render_documentation_page(
+                bloco, idx, total, ctl, panel_title=panel_title
+            )
             if is_last:
                 fim = (
                     self._t("docs.pause_exit_standalone", "")

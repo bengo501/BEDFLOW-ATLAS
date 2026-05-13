@@ -657,9 +657,14 @@ class PlainWizardUi:
         page_index: int,
         total_pages: int,
         control_hint: str,
+        *,
+        panel_title: Optional[str] = None,
     ) -> None:
         print()
-        print(f"  --- documentacao  pagina {page_index + 1}/{total_pages} ---")
+        head = panel_title or (
+            f"documentacao — pagina {page_index + 1}/{total_pages}"
+        )
+        print(f"  --- {head} ---")
         print()
         for ln in body.splitlines():
             print(f"  {ln}")
@@ -740,10 +745,11 @@ class RichWizardUi:
 
     def param_help(self, lines: Sequence[str]) -> None:
         body = "\n".join(lines)
+        title = "ajuda" if getattr(self, "_ui_lang", "pt") == "pt" else "help"
         self.console.print(
             Panel(
                 body,
-                title="ajuda",
+                title=title,
                 title_align="left",
                 border_style="dim",
                 box=box.ROUNDED,
@@ -962,8 +968,12 @@ class RichWizardUi:
         page_index: int,
         total_pages: int,
         control_hint: str,
+        *,
+        panel_title: Optional[str] = None,
     ) -> None:
-        title = f"documentacao — pagina {page_index + 1}/{total_pages}"
+        title = panel_title or (
+            f"documentacao — pagina {page_index + 1}/{total_pages}"
+        )
         self.console.print(
             Panel(
                 body,
