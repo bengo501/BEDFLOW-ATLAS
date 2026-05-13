@@ -19,9 +19,10 @@ import {
 } from '../services/api';
 import '../styles/BedWizard.css';
 
-const BedWizard = () => {
+const BedWizard = ({ onNavigateTab } = {}) => {
   const { language, t } = useLanguage();
   const [step, setStep] = useState(0);
+  const [hubView, setHubView] = useState('comecar');
   const [mode, setMode] = useState(null);
   const [params, setParams] = useState({
     bed: {
@@ -242,6 +243,7 @@ const BedWizard = () => {
 
       setStep(0);
       setMode(null);
+      setHubView('comecar');
     } catch (error) {
       console.error('erro:', error);
       alert(parseApiError(error) || 'erro ao criar arquivo .bed');
@@ -249,171 +251,185 @@ const BedWizard = () => {
     }
   };
 
-  // renderizar modo de seleção
-  const renderModeSelection = () => (
-    <div className="mode-selection">
-      <div className="mode-header">
-        <div className="mode-header-titles">
-          <h2>
-            <ThemeIcon light="bedLight.png" dark="bedDark.png" alt={t('createBed')} className="title-icon" />
-            {t('selectMode')}
-          </h2>
-          <p className="mode-header-subtitle">{t('selectModeSubtitle')}</p>
-        </div>
-      </div>
-      
-      <div className="mode-cards">
-        <div className="mode-card" onClick={() => handleModeSelectWithTemplate('blender')}>
-          <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="blender" className="mode-icon-small" />
-          <h3>modo blender</h3>
-          <p>geração de modelo 3D (sem parâmetros CFD)</p>
-        </div>
-        
-        <div className="mode-card" onClick={() => handleModeSelectWithTemplate('pipeline_blender_cfd')}>
-          <div className="mode-icon-combo">
-            <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="blender" className="mode-icon-small" />
-            <span className="plus-symbol">+</span>
-            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="cfd" className="mode-icon-small" />
-          </div>
-          <h3>pipeline blender + cfd</h3>
-          <p>gera modelo 3D + cria caso CFD (sem executar simulação)</p>
-          <div className="mode-options">
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="carregar" className="btn-icon" />
-              carregar .bed
-            </button>
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                loadDefaultBedTemplate();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="editar" className="btn-icon" />
-              editar padrão
-            </button>
-          </div>
-        </div>
-        
-        <div className="mode-card" onClick={() => handleModeSelectWithTemplate('cfd_only')}>
-          <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="cfd" className="mode-icon-small" />
-          <h3>apenas caso CFD</h3>
-          <p>cria caso CFD sem gerar novo leito</p>
-          <div className="mode-options">
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="carregar" className="btn-icon" />
-              carregar .bed
-            </button>
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                loadDefaultBedTemplate();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="editar" className="btn-icon" />
-              editar padrão
-            </button>
-          </div>
-        </div>
-        
-        <div className="mode-card" onClick={() => handleModeSelectWithTemplate('blender_interactive')}>
-          <div className="mode-icon-combo">
-            <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="blender" className="mode-icon-small" />
-            <span className="plus-symbol">+</span>
-            <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="modelo 3d" className="mode-icon-small" />
-          </div>
-          <h3>blender interativo</h3>
-          <p>gera modelo e abre automaticamente no blender</p>
-          <div className="mode-options">
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="carregar" className="btn-icon" />
-              carregar .bed
-            </button>
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                loadDefaultBedTemplate();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="editar" className="btn-icon" />
-              editar padrão
-            </button>
-          </div>
-        </div>
-        
-        <div
-          className="mode-card mode-card-wizard-cli"
-          role="button"
-          tabIndex={0}
-          onClick={() => {
-            void openWizardCliModal();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              void openWizardCliModal();
-            }
+  const goHubTab = (tab) => {
+    if (typeof onNavigateTab === 'function') onNavigateTab(tab);
+  };
+
+  const bedProcessActionLabel = () => {
+    if (mode === 'interactive') return t('bedProcessBtnInteractive');
+    if (mode === 'blender' || mode === 'blender_interactive') return t('bedProcessBtnGen3d');
+    if (mode === 'pipeline_blender_cfd') return t('bedProcessBtnPipeBlenderCfd');
+    if (mode === 'cfd_only') return t('bedProcessBtnCfdOnly');
+    if (mode === 'pipeline_completo') return t('bedProcessBtnPipelineCompleto');
+    return t('bedProcessBtnPipelineCompleto');
+  };
+
+  const renderModeSelection = () => {
+    const bedFileButtons = (modeKey) => (
+      <div className="mode-options">
+        <button
+          type="button"
+          className="btn-mode-option"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMode(modeKey);
+            setShowBedFileOptions(true);
           }}
         >
-          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="mode-icon-small" />
-          <h3>{t('wizardCliModeTitle')}</h3>
-          <p>{t('wizardCliModeDesc')}</p>
+          <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="" className="btn-icon" />
+          {t('loadBedFile')}
+        </button>
+        <button
+          type="button"
+          className="btn-mode-option"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMode(modeKey);
+            void loadDefaultBedTemplate();
+            setShowBedFileOptions(true);
+          }}
+        >
+          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="btn-icon" />
+          {t('editBedFile')}
+        </button>
+      </div>
+    );
+
+    const cardKey =
+      (fn) => (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fn();
+        }
+      };
+
+    if (hubView === 'criar') {
+      return (
+        <div className="mode-selection">
+          <div className="mode-header">
+            <div className="mode-header-titles">
+              <button type="button" className="hub-back-btn" onClick={() => setHubView('comecar')}>
+                {t('hubCriarBack')}
+              </button>
+              <h2>
+                <ThemeIcon light="bedLight.png" dark="bedDark.png" alt="" className="title-icon" />
+                {t('hubCriarHeading')}
+              </h2>
+              <p className="mode-header-subtitle">{t('hubCriarSubtitle')}</p>
+            </div>
+          </div>
+          <div className="mode-cards mode-cards-terminal mode-cards-criar-all">
+            <div
+              className="mode-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => handleModeSelect('interactive')}
+              onKeyDown={cardKey(() => handleModeSelect('interactive'))}
+            >
+              <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="mode-icon-small" />
+              <h3>{t('hubBasicTitle')}</h3>
+              <p className="mode-card-desc">{t('hubBasicDesc')}</p>
+              {bedFileButtons('interactive')}
+            </div>
+            <div
+              className="mode-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => handleModeSelect('blender_interactive')}
+              onKeyDown={cardKey(() => handleModeSelect('blender_interactive'))}
+            >
+              <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="" className="mode-icon-small" />
+              <h3>{t('hubGen3dTitle')}</h3>
+              <p className="mode-card-desc">{t('hubGen3dDesc')}</p>
+              {bedFileButtons('blender_interactive')}
+            </div>
+            <div
+              className="mode-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => handleModeSelect('pipeline_completo')}
+              onKeyDown={cardKey(() => handleModeSelect('pipeline_completo'))}
+            >
+              <ThemeIcon light="pipelineLight.png" dark="pipeline.png" alt="" className="mode-icon-small" />
+              <h3>{t('hubPipeTitle')}</h3>
+              <p className="mode-card-desc">{t('hubPipeDesc')}</p>
+              {bedFileButtons('pipeline_completo')}
+            </div>
+            <div
+              className="mode-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => handleModeSelect('pipeline_blender_cfd')}
+              onKeyDown={cardKey(() => handleModeSelect('pipeline_blender_cfd'))}
+            >
+              <div className="mode-icon-combo">
+                <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="" className="mode-icon-small" />
+                <span className="plus-symbol">+</span>
+                <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
+              </div>
+              <h3>{t('hubPipeBlenderCfdTitle')}</h3>
+              <p className="mode-card-desc">{t('hubPipeBlenderCfdDesc')}</p>
+              {bedFileButtons('pipeline_blender_cfd')}
+            </div>
+            <div
+              className="mode-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => handleModeSelect('cfd_only')}
+              onKeyDown={cardKey(() => handleModeSelect('cfd_only'))}
+            >
+              <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
+              <h3>{t('hubCfdOnlyTitle')}</h3>
+              <p className="mode-card-desc">{t('hubCfdOnlyDesc')}</p>
+              {bedFileButtons('cfd_only')}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mode-selection">
+        <div className="mode-header">
+          <div className="mode-header-titles">
+            <h2>
+              <ThemeIcon light="bedLight.png" dark="bedDark.png" alt={t('createBed')} className="title-icon" />
+              {t('selectMode')}
+            </h2>
+            <p className="mode-header-subtitle">{t('createHubSubtitle')}</p>
+          </div>
         </div>
 
-        <div className="mode-card" onClick={() => handleModeSelectWithTemplate('pipeline_completo')}>
-          <ThemeIcon light="pipelineLight.png" dark="pipeline.png" alt="pipeline" className="mode-icon-small" />
-          <h3>pipeline completo</h3>
-          <p>execução end-to-end: modelo 3d + simulação cfd automática</p>
-          <div className="mode-options">
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="carregar" className="btn-icon" />
-              carregar .bed
-            </button>
-            <button 
-              className="btn-mode-option" 
-              onClick={(e) => {
-                e.stopPropagation();
-                loadDefaultBedTemplate();
-                setShowBedFileOptions(true);
-              }}
-            >
-              <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="editar" className="btn-icon" />
-              editar padrão
-            </button>
+        <div className="mode-cards mode-cards-terminal">
+          <div className="mode-card" role="button" tabIndex={0} onClick={() => setHubView('criar')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHubView('criar'); } }}>
+            <ThemeIcon light="bedLight.png" dark="bedDark.png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCardCriarTitle')}</h3>
+            <p>{t('hubCardCriarDesc')}</p>
+          </div>
+          <div className="mode-card" role="button" tabIndex={0} onClick={() => goHubTab('templates')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHubTab('templates'); } }}>
+            <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCardTemplatesTitle')}</h3>
+            <p>{t('hubCardTemplatesDesc')}</p>
+          </div>
+          <div className="mode-card" role="button" tabIndex={0} onClick={() => { void openWizardCliModal(); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void openWizardCliModal(); } }}>
+            <ThemeIcon light="runLight.png" dark="runLight.png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCardQuickTitle')}</h3>
+            <p>{t('hubCardQuickDesc')}</p>
+          </div>
+          <div className="mode-card" role="button" tabIndex={0} onClick={() => goHubTab('mesh-viewer')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHubTab('mesh-viewer'); } }}>
+            <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCardView3dTitle')}</h3>
+            <p>{t('hubCardView3dDesc')}</p>
+          </div>
+          <div className="mode-card" role="button" tabIndex={0} onClick={() => goHubTab('cfd')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHubTab('cfd'); } }}>
+            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCardCfdTitle')}</h3>
+            <p>{t('hubCardCfdDesc')}</p>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // renderizar seção bed
   const renderBedSection = () => (
@@ -864,6 +880,12 @@ const BedWizard = () => {
         filename: bedFileName || 'leito_custom.bed'
       });
 
+      if (mode === 'interactive') {
+        alert(
+          `${t('bedProcessAlertInteractive')}\njson: ${result.json_file}`,
+        );
+      }
+
       if (mode === 'blender_interactive') {
         await generateModel(result.json_file, true);
         alert('geração do modelo 3D iniciada (blender pode abrir no servidor)');
@@ -905,6 +927,7 @@ const BedWizard = () => {
 
       setStep(0);
       setMode(null);
+      setHubView('comecar');
       setShowBedFileOptions(false);
       setBedFileContent('');
       setBedFileName('');
@@ -914,11 +937,6 @@ const BedWizard = () => {
       alert(parseApiError(error) || 'erro ao processar arquivo .bed');
       setWizardConnectionError(t('backendConnectionError'));
     }
-  };
-
-  // handler quando seleciona modo
-  const handleModeSelectWithTemplate = (selectedMode) => {
-    handleModeSelect(selectedMode);
   };
 
   return (
@@ -1043,7 +1061,7 @@ const BedWizard = () => {
         <div className="modal-overlay">
           <div className="modal-content bed-file-options">
             <div className="modal-header">
-              <h2>opções de arquivo .bed</h2>
+              <h2>{t('bedFileModalTitle')}</h2>
               <button 
                 className="btn-close" 
                 onClick={() => {
@@ -1072,13 +1090,10 @@ const BedWizard = () => {
               </div>
               
               <div className="file-editor-section">
-                <h3>editor de arquivo .bed</h3>
+                <h3>{t('bedEditorSectionTitle')}</h3>
                 <div className="editor-controls">
-                  <button 
-                    className="btn-load-template"
-                    onClick={loadDefaultBedTemplate}
-                  >
-                    📄 carregar template padrão
+                  <button type="button" className="btn-load-template" onClick={() => void loadDefaultBedTemplate()}>
+                    {t('bedEditorLoadTemplateBtn')}
                   </button>
                 </div>
                 <textarea
@@ -1091,15 +1106,13 @@ const BedWizard = () => {
               </div>
               
               <div className="file-actions">
-                <button 
+                <button
+                  type="button"
                   className="btn-process"
-                  onClick={processBedFile}
+                  onClick={() => void processBedFile()}
                   disabled={!bedFileContent.trim()}
                 >
-                  {mode === 'blender_interactive' ? '🚀 gerar modelo 3d' : 
-                   mode === 'pipeline_blender_cfd' ? '🔄 pipeline blender + cfd' :
-                   mode === 'cfd_only' ? '⚙️ criar caso cfd' :
-                   '🔄 executar pipeline completo'}
+                  {bedProcessActionLabel()}
                 </button>
                 <button 
                   className="btn-cancel"

@@ -6,6 +6,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { listViewerMeshes, buildMeshStreamUrl, parseApiError } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 import '../styles/MeshViewer3DPage.css';
 
 const LS_LAST_MESH = 'bedflow_last_mesh_id';
@@ -94,6 +95,7 @@ function fitCameraToObject(camera, controls, root, margin = 1.35) {
 }
 
 export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBootId }) {
+  const { t } = useLanguage();
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -101,6 +103,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const controlsRef = useRef(null);
   const rootRef = useRef(null);
   const frameRef = useRef(null);
+  const axesRef = useRef(null);
 
   const [meshes, setMeshes] = useState([]);
   const [search, setSearch] = useState('');
@@ -115,7 +118,10 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const [loadingMesh, setLoadingMesh] = useState(false);
   const [err, setErr] = useState(null);
   const [wireframe, setWireframe] = useState(false);
+  const [showAxes, setShowAxes] = useState(true);
   const [meta, setMeta] = useState(null);
+  const [streamNotice, setStreamNotice] = useState(null);
+  const copyNoticeTimerRef = useRef(null);
 
   const pt = language === 'pt';
 
@@ -274,6 +280,11 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     const grid = new THREE.GridHelper(2, 20, 0x444a55, 0x2f343d);
     scene.add(grid);
 
+    const axes = new THREE.AxesHelper(0.15);
+    axes.visible = true;
+    scene.add(axes);
+    axesRef.current = axes;
+
     const animate = () => {
       frameRef.current = requestAnimationFrame(animate);
       controls.update();
@@ -304,8 +315,14 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       cameraRef.current = null;
       rendererRef.current = null;
       controlsRef.current = null;
+      axesRef.current = null;
     };
   }, [clearRoot]);
+
+  useEffect(() => {
+    const ax = axesRef.current;
+    if (ax) ax.visible = showAxes;
+  }, [showAxes]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -318,6 +335,30 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     const ctr = controlsRef.current;
     if (root && cam && ctr) fitCameraToObject(cam, ctr, root);
   };
+
+  const openMeshStream = () => {
+    const u = buildMeshStreamUrl(selectedId.trim());
+    if (u) window.open(u, '_blank', 'noopener,noreferrer');
+  };
+
+  const copyMeshStream = async () => {
+    const u = buildMeshStreamUrl(selectedId.trim());
+    if (!u) return;
+    try {
+      await navigator.clipboard.writeText(u);
+      setStreamNotice({ ok: true, text: t('meshStreamCopied') });
+      window.clearTimeout(copyNoticeTimerRef.current);
+      copyNoticeTimerRef.current = window.setTimeout(() => setStreamNotice(null), 2800);
+    } catch {
+      setStreamNotice({ ok: false, text: t('meshStreamCopyFail') });
+      window.clearTimeout(copyNoticeTimerRef.current);
+      copyNoticeTimerRef.current = window.setTimeout(() => setStreamNotice(null), 4500);
+    }
+  };
+
+  useEffect(() => {
+    return () => window.clearTimeout(copyNoticeTimerRef.current);
+  }, []);
 
   const lastId = (() => {
     try {
@@ -413,6 +454,53 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
             <button type="button" className="mesh-viewer-btn" onClick={resetCamera}>
               {pt ? 'repor câmara' : 'reset camera'}
             </button>
+          </div>
+
+          <div className="mesh-viewer-actions mesh-viewer-stream-row">
+            <button
+              type="button"
+              className="mesh-viewer-btn"
+              disabled={!selectedId.trim()}
+              onClick={openMeshStream}
+            >
+              {t('meshOpenStream')}
+            </button>
+            <button
+              type="button"
+              className="mesh-viewer-btn"
+              disabled={!selectedId.trim()}
+              onClick={() => void copyMeshStream()}
+            >
+              {t('meshCopyStream')}
+            </button>
+            <label className="mesh-viewer-check">
+              <input
+                type="checkbox"
+                checked={showAxes}
+                onChange={(e) => setShowAxes(e.target.checked)}
+              />
+              {t('meshAxes')}
+            </label>
+          </div>
+          {streamNotice ? (
+            <p
+              className={
+                streamNotice.ok
+                  ? 'mesh-viewer-stream-notice'
+                  : 'mesh-viewer-stream-notice mesh-viewer-stream-notice--err'
+              }
+            >
+              {streamNotice.text}
+            </p>
+          ) : null}
+
+          <div className="mesh-viewer-edu" aria-label={t('meshEduTitle')}>
+            <p className="mesh-viewer-edu-title">{t('meshEduTitle')}</p>
+            <ol className="mesh-viewer-edu-list">
+              <li>{t('meshEduLine1')}</li>
+              <li>{t('meshEduLine2')}</li>
+              <li>{t('meshEduLine3')}</li>
+            </ol>
           </div>
 
           {meta && (

@@ -452,6 +452,17 @@ function App() {
             <div className="nav-section">
               <button
                 type="button"
+                className={`nav-item nav-item-root nav-item-folder-face ${activeTab === 'wizard' ? 'active' : ''}`}
+                onClick={() => navigateToTab('wizard')}
+              >
+                <ThemeIcon light="create_bed_white.png" dark="create_bed_white.png" alt={t('create')} className="nav-icon" location="sidebar" />
+                <span className="nav-label">{t('create')}</span>
+              </button>
+            </div>
+
+            <div className="nav-section">
+              <button
+                type="button"
                 className={`nav-item nav-item-root nav-item-folder-face ${activeTab === 'mesh-viewer' ? 'active' : ''}`}
                 onClick={() => navigateToTab('mesh-viewer')}
               >
@@ -463,11 +474,11 @@ function App() {
             <div className="nav-section">
               <button
                 type="button"
-                className={`nav-item nav-item-root nav-item-folder-face ${activeTab === 'wizard' ? 'active' : ''}`}
-                onClick={() => navigateToTab('wizard')}
+                className={`nav-item nav-item-root nav-item-folder-face ${activeTab === 'cfd' ? 'active' : ''}`}
+                onClick={() => navigateToTab('cfd')}
               >
-                <ThemeIcon light="create_bed_white.png" dark="create_bed_white.png" alt={t('create')} className="nav-icon" location="sidebar" />
-                <span className="nav-label">{t('create')}</span>
+                <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="cfd" className="nav-icon" location="sidebar" />
+                <span className="nav-label">{t('cfdSimulation')}</span>
               </button>
             </div>
 
@@ -539,13 +550,6 @@ function App() {
               </div>
               {expandedSections.simulation && (
                 <div className="nav-subsection">
-                  <button
-                    className={`nav-item ${activeTab === 'cfd' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('cfd')}
-                  >
-                    <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="simulações CFD" className="nav-icon" />
-                    <span className="nav-label">{t('cfdSimulation')}</span>
-                  </button>
                   <button
                     className={`nav-item ${activeTab === 'casos' ? 'active' : ''}`}
                     onClick={() => setActiveTab('casos')}
@@ -694,7 +698,7 @@ function App() {
           {devMode && <DevModePanel activeTab={activeTab} />}
           {activeTab === 'wizard' && (
             <div className="tab-content">
-              <BedWizard key={wizardResetKey} />
+              <BedWizard key={wizardResetKey} onNavigateTab={navigateToTab} />
             </div>
           )}
 

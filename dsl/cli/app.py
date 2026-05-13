@@ -396,7 +396,7 @@ def cmd_pipeline(
         typer.secho("erro pipeline completo so suportado no modo interativo por agora", fg=typer.colors.YELLOW)
         raise typer.Exit(2)
     w = BedWizard()
-    w.pipeline_completo_mode()
+    w.run_pipeline_completo()
 
 
 @app.command("docs")

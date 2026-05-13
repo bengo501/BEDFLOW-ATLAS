@@ -121,7 +121,7 @@
 
 .mode-card h3 {
   color: var(--text);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
   font-size: 1.25rem;
   font-weight: 600;
 }
@@ -1068,5 +1068,41 @@
 
 .wizard-cli-commands .btn-secondary {
   margin-bottom: 0.5rem;
+}
+
+.hub-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e0e0e0);
+  background: var(--card-bg, #fff);
+  color: var(--text, #333);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.hub-back-btn:hover {
+  border-color: var(--primary, #5f1923);
+  background: var(--primary-light, rgba(95, 25, 35, 0.06));
+}
+
+.mode-cards-terminal {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.mode-cards-criar-all {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.25rem;
+}
+
+.mode-card-desc {
+  margin: 0.35rem 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: var(--text-muted, #666);
 }
 

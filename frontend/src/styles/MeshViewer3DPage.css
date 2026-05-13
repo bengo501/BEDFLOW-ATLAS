@@ -163,6 +163,35 @@
   margin-bottom: 0.75rem;
 }
 
+.mesh-viewer-stream-row {
+  margin-top: -0.35rem;
+}
+
+.mesh-viewer-stream-notice--err {
+  color: #f2a6a6;
+}
+
+.mesh-viewer-edu {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.mesh-viewer-edu-title {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.mesh-viewer-edu-list {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
 .mesh-viewer-check {
   display: flex;
   align-items: center;

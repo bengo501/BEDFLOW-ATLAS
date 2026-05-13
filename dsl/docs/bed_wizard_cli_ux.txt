@@ -16,34 +16,45 @@ corrigidos. texto em portugues, minusculas, nivel tecnico.
 - dsl/wizard_terminal_ui.py — primitivo de tabela de menu, global_keys_hint (texto longo
   so com h), pick_list_short_hint no menu de ajuda por seccao, pick_from_list, confirm
   com pergunta e opcoes em linhas separadas.
-- dsl/bed_wizard.py — submenu comecar, templates_editor_menu, i18n pt/en, ajuda e menu
-  principal (opcoes 1-5 e 0 sair, h, c sair no prompt).
+- dsl/bed_wizard.py — submenu comecar, create_flow, simulacao_cfd_mode, web_app_dev_menu,
+  templates_editor_menu,
+  i18n pt/en, ajuda e menu principal (opcoes 1-5 e 0 sair, h, c sair no prompt).
 - dsl/wizard_quick_tests.py — fluxo guiado completo, escolha de ficheiros, geometry_mode,
   cancelamento, chamadas ao resumo tecnico e ascii.
 - dsl/quick_test_rich.py — tabelas de escolha iguais ao menu principal, resumo tecnico
   por categorias, paineis ascii com titulos, aviso rigid_body.
 - dsl/wizard_3d_viewer.py — teclas h e q na visualizacao 3d, hint global.
-- dsl/cli/app.py — sem alteracao obrigatoria; flags --slice ja mapeiam pseudo 2d no cli.
+- dsl/cli/app.py — comando pipeline chama run_pipeline_completo() (alias do modo guiado).
 
 
-3. reorganizacao do menu comecar
+3. menu principal — aplicacao web (dev)
+----------------------------------------
+opcao 2 (comecar aplicacao web / web app): entra em web_app_dev_menu — parar e reiniciar
+sempre libertam os portos 8000 e 5173 (best effort: powershell no windows, lsof no unix);
+0 ou c regressa ao menu principal; ao iniciar abre separadores no browser; no windows cada
+servico arranca numa consola nova (CREATE_NEW_CONSOLE) com logs; em linux tenta-se
+gnome-terminal/kgx/konsole/xterm com bash -lc, senao subprocesso silencioso.
+
+
+4. reorganizacao do menu comecar
 ---------------------------------
-antes: uma unica entrada "templates, editor e testes rapidos" misturava carregar template
-json, editor .bed classico e o fluxo de testes rapidos num submenu, o que confundia
-quem queria apenas validar um json existente.
-
-depois:
-- opcao 3 — templates e editor: apenas json em dsl/wizard_templates ou editor .bed
-  temporario com notepad/nano/vim.
-- opcao 4 — testes rapidos: fluxo proprio com preview rich, independente de templates.
-- opcoes 5 e 6 — geracao 3d (motor blender ou python no json) e pipeline completo.
+submenu comecar (numeracao actual):
+- opcao 1 — criar: roteador para criar basico (questionario ate .bed), geracao 3d e
+  pipeline completo; implementacoes via run_questionnaire_interactive(),
+  run_generation_3d(), run_pipeline_completo().
+- opcao 2 — templates e editor: json em dsl/wizard_templates ou editor .bed classico.
+- opcao 3 — testes rapidos: fluxo proprio com preview rich.
+- opcao 4 — visualizacao 3d: lista malhas (wizard_3d_viewer.run_visualization_mode).
+- opcao 5 — simulacao cfd: lista casos em local_data/simulations (allrun ou controldict)
+  e executa com run_openfoam_simulation.
 - opcao 0 — voltar ao menu principal.
 
-funcao renomeada conceptualmente: templates_editor_menu (substitui templates_e_testes_menu).
-breadcrumbs: wizard / comecar / templates-editor ou wizard / comecar / testes-rapidos.
+breadcrumbs tipicos: setup / comecar / criar / criar-basico (ou geracao-3d, pipeline);
+setup / comecar / templates-editor; setup / comecar / testes-rapidos;
+setup / comecar / visualizacao 3d; setup / comecar / cfd.
 
 
-4. padronizacao visual dos menus
+5. padronizacao visual dos menus
 ---------------------------------
 foi extraida a construcao da tabela principal para funcoes reutilizaveis:
 - render_menu_table_plain(rows, title) — fallback sem rich.
@@ -65,7 +76,7 @@ pick_from_list nao imprime rodape extra: ? ajuda deste passo vai para o proprio 
 quando ha help_callback; h mostra global_keys_hint.
 
 
-5. contrato global de teclas (global_keys_hint)
+6. contrato global de teclas (global_keys_hint)
 -----------------------------------------------
 texto completo em wizard_terminal_ui.global_keys_hint (paragrafos coerentes, sem opcao
 * de revisao global no texto): aparece ao premir h em confirm, pick_from_list e noutros
@@ -98,7 +109,7 @@ carregar .bed no inicio do questionario: passa directo ao prompt de caminho com
 l mostra ficheiros .bed na tabela # modo resumo.
 
 
-6. fluxo de testes rapidos — correcoes
+7. fluxo de testes rapidos — correcoes
 ---------------------------------------
 problemas antigos:
 - _prompt_choice ignorava c e h; apenas validava lista fechada.
@@ -126,7 +137,7 @@ persistencia:
   pedidos ao utilizador.
 
 
-7. packing.method vs geometry_mode (pseudo 2d)
+8. packing.method vs geometry_mode (pseudo 2d)
 -----------------------------------------------
 packing.method continua a ser apenas um dos tres valores canonicos definidos em
 packed_bed_science.packing_modes: spherical_packing, hexagonal_3d, rigid_body.
@@ -141,7 +152,7 @@ funcao _choose_geometry_mode orquestra escolha full vs thin e delega detalhes a
 _ask_thin_slice_geometry.
 
 
-8. resumo tecnico e preview ascii
+9. resumo tecnico e preview ascii
 ----------------------------------
 render_technical_before passou a receber geometry_mode e slice_detail opcional e a
 emitir blocos separados: fluxo e ficheiros, geometria do leito, packing, geometria
@@ -156,7 +167,7 @@ render_ascii_section aceita title= para separar:
 distribuicao vertical (histograma por z) mantem titulo explicito.
 
 
-9. mensagens de sucesso, erro e aviso
+10. mensagens de sucesso, erro e aviso
 --------------------------------------
 render_error_panel mantem borda vermelha. render_result_panel usa borda principal
 para a tabela interna e borda verde ou vermelha conforme ok no titulo do painel.
@@ -168,7 +179,7 @@ quick_test_rich para uso futuro ou extensao; o fluxo actual reutiliza sobretudo
 render_result_panel e paineis existentes para nao duplicar ruido visual.
 
 
-10. referencia a "prints" do pedido original
+11. referencia a "prints" do pedido original
 ---------------------------------------------
 na sessao de implementacao nao havia imagens anexadas; as correcoes seguiram o texto do
 pedido (menus desalinhados, c sem efeito em _prompt_choice, descricao enganosa do
@@ -176,7 +187,7 @@ blender, pseudo 2d confundido com packing). onde o codigo mostrava esses sintoma
 foi alterado conforme as seccoes acima.
 
 
-11. como estender
+12. como estender
 -----------------
 - novos menus numerados devem usar render_menu_table_* ou render_choice_table para
   herdar larguras e cores.
@@ -187,7 +198,7 @@ foi alterado conforme as seccoes acima.
   na coluna modo.
 
 
-12. comandos typer bedwizard test
+13. comandos typer bedwizard test
 ----------------------------------
 flags --slice / --no-slice e parametros --slice-thickness, --slice-axis, etc. continuam
 a mapear directamente para o dicionario slice no json de trabalho (geometry_mode fino

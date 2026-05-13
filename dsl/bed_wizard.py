@@ -11,8 +11,12 @@ este wizard gera arquivos .bed que sao compilados pelo antlr
 import os  # para operacoes do sistema operacional (limpar tela, arquivos)
 import sys  # para acessar argumentos e sair do programa
 import shutil
+import signal
+import shlex
 import subprocess  # para executar comandos externos (editores, compilador)
 import tempfile  # para criar arquivos temporarios
+import time
+import webbrowser
 from pathlib import Path  # para trabalhar com caminhos de arquivos
 # dict mapeia chave string para valor qualquer
 # any aceita qualquer tipo quando o valor e misto
@@ -97,7 +101,9 @@ class BedWizard:
             "menu.title.main": "opcoes",
             "menu.title.start": "comecar",
             "menu.main.start.title": "comecar",
-            "menu.main.start.desc": "questionario, templates, testes rapidos, geracao 3d (motor no inicio) ou pipeline completo",
+            "menu.main.start.desc": "criar, templates, testes rapidos, visualizacao 3d, simulacao cfd guardada",
+            "menu.main.webapp.title": "comecar aplicacao web",
+            "menu.main.webapp.desc": "submenu para subir ou parar api (uvicorn) e interface (vite) em segundo plano",
             "menu.main.view3d.title": "visualizacao 3d",
             "menu.main.view3d.desc": "listar malhas geradas; ver no browser (three.js), open3d ou blender",
             "menu.main.help.title": "ajuda",
@@ -108,9 +114,11 @@ class BedWizard:
             "menu.main.lang.desc": "trocar portugues/ingles",
             "menu.main.exit.title": "sair",
             "menu.main.exit.desc": "encerrar o setup",
-            "menu.start.smart.title": "assistente inteligente",
-            "menu.start.smart.desc": "perguntas curtas para guiar ao .bed, modelo 3d ou pipeline openfoam",
-            "menu.start.q.title": "questionario interativo",
+            "menu.start.create.title": "criar",
+            "menu.start.create.desc": "criar basico, geracao 3d ou pipeline completo (um unico fluxo por opcao)",
+            "create.subtitle": "escolha criar basico, geracao 3d ou pipeline completo",
+            "create.prompt": "fluxo:",
+            "menu.start.q.title": "criar basico",
             "menu.start.q.desc": "passo a passo; gera .bed; cfd opcional; export configuravel",
             "menu.start.tpl.title": "templates e editor",
             "menu.start.tpl.desc": "carregar json em dsl/wizard_templates ou editor .bed classico com ficheiro temporario",
@@ -118,15 +126,65 @@ class BedWizard:
             "menu.start.quick.desc": "validar json ou .bed existente; preview rich; python puro ou blender; sem misturar com templates",
             "menu.start.blender.title": "geracao 3d",
             "menu.start.blender.desc": "sem cfd; primeiro escolhes blender ou python; mesmo questionario; compila e gera no fim",
-            "menu.start.pipe.title": "pipeline completo (avancado)",
+            "menu.start.pipe.title": "pipeline completo",
             "menu.start.pipe.desc": "bed + blender + caso openfoam + simulacao no wsl; longo; requisitos elevados",
+            "menu.start.cfd.title": "simulacao cfd",
+            "menu.start.cfd.desc": "casos openfoam em local_data/simulations; executar no wsl",
+            "cfd.list.title": "casos em local_data/simulations",
+            "cfd.pick_hint": "numero da lista, caminho absoluto/relativo, ou l para rever a tabela.",
+            "cfd.pick_prompt": "caso (numero ou caminho): ",
+            "cfd.confirm_run": "executar simulacao openfoam neste caso (wsl, pode demorar)?",
+            "cfd.warn_none": "nenhum caso encontrado (pastas com Allrun ou system/controlDict).",
+            "cfd.done": "simulacao terminada; veja log.* e caso.foam no diretorio do caso.",
+            "cfd.err_failed": "falha na simulacao.",
             "menu.start.back.title": "voltar",
             "menu.start.back.desc": "regressa ao menu principal",
             "prompt.main.choice": "opcao (1-5 ou 0 sair, h ajuda): ",
             "main.warn_empty": "indique 1 a 5 ou 0 para sair.",
+            "webapp.title": "aplicacao web (dev)",
+            "webapp.subtitle": "uvicorn backend.app.main:app em :8000 e npm run dev (vite) em :5173; no windows cada servico abre numa consola nova com os logs; saida nao e misturada com este menu",
+            "webapp.actions": "accoes",
+            "webapp.prompt": "opcao (0-9, c voltar, h ajuda): ",
+            "webapp.back_row": "0 ou c regressa ao menu principal",
+            "webapp.warn_invalid": "indique 0 a 9 ou c para voltar.",
+            "webapp.status.back.on": "backend (uvicorn :8000): em execucao, pid {pid}",
+            "webapp.status.back.off": "backend: parado",
+            "webapp.status.front.on": "frontend (vite :5173): em execucao, pid {pid}",
+            "webapp.status.front.off": "frontend: parado",
+            "webapp.opt.both_start.t": "iniciar backend e frontend",
+            "webapp.opt.both_start.d": "sobe uvicorn e npm run dev em segundo plano",
+            "webapp.opt.back_start.t": "iniciar so backend",
+            "webapp.opt.back_start.d": "so uvicorn na raiz do repo",
+            "webapp.opt.front_start.t": "iniciar so frontend",
+            "webapp.opt.front_start.d": "so vite em frontend/ (precisa de npm no path)",
+            "webapp.opt.back_stop.t": "parar backend",
+            "webapp.opt.back_stop.d": "termina o processo uvicorn (arvore no windows)",
+            "webapp.opt.front_stop.t": "parar frontend",
+            "webapp.opt.front_stop.d": "termina o processo npm/vite",
+            "webapp.opt.both_stop.t": "parar backend e frontend",
+            "webapp.opt.both_stop.d": "para os dois servicos",
+            "webapp.opt.back_restart.t": "reiniciar backend",
+            "webapp.opt.back_restart.d": "parar e voltar a iniciar so o uvicorn",
+            "webapp.opt.front_restart.t": "reiniciar frontend",
+            "webapp.opt.front_restart.d": "parar e voltar a iniciar so o vite",
+            "webapp.opt.both_restart.t": "reiniciar backend e frontend",
+            "webapp.opt.both_restart.d": "reinicia os dois em sequencia",
+            "webapp.ok_start_back": "backend iniciado.",
+            "webapp.ok_start_front": "frontend iniciado.",
+            "webapp.ok_start_both": "backend e frontend iniciados.",
+            "webapp.ok_stop_back": "backend terminado.",
+            "webapp.ok_stop_front": "frontend terminado.",
+            "webapp.ok_stop_both": "backend e frontend terminados.",
+            "webapp.muted_idle_back": "backend ja estava parado.",
+            "webapp.muted_idle_front": "frontend ja estava parado.",
+            "webapp.warn_back_running": "backend ja esta em execucao.",
+            "webapp.warn_front_running": "frontend ja esta em execucao.",
+            "webapp.err_no_npm": "comando npm nao encontrado no path.",
+            "webapp.err_start_back": "falha ao iniciar backend: {err}",
+            "webapp.err_start_front": "falha ao iniciar frontend: {err}",
             "main.warn_exit_key": "use 0 para sair da aplicacao.",
             "main.bye": "ate logo!",
-            "prompt.start.choice": "opcao (0-6, h ajuda): ",
+            "prompt.start.choice": "opcao (0-5, h ajuda): ",
             "lang.header": "idioma",
             "lang.subtitle": "trocar idioma do setup",
             "lang.current": "idioma atual",
@@ -174,7 +232,7 @@ class BedWizard:
             "view3d.crumb": "visualizacao 3d",
             "view3d.search": "pesquisar:",
             "view3d.scan_hint": "origem da lista: scan em local_data/models_3d (prioridade), depois aux, simulations, generated/* e ficheiros *.stl/*.obj/*.blend na raiz do repo (ver bedflow_local_paths.scan_project_mesh_files).",
-            "view3d.footer_hint": "0 ou c menu principal  ·  l lista  ·  ? ajuda do campo  ·  h ajuda global",
+            "view3d.footer_hint": "0 ou c voltar ao submenu comecar  ·  l lista  ·  ? ajuda do campo  ·  h ajuda global",
             "view3d.table_title": "modelos",
             "view3d.pick": "numero do modelo:",
             "view3d.preview": "resumo",
@@ -209,7 +267,9 @@ class BedWizard:
             "menu.title.main": "options",
             "menu.title.start": "start",
             "menu.main.start.title": "start",
-            "menu.main.start.desc": "questionnaire, templates, quick tests, 3d generation (engine first) or full pipeline",
+            "menu.main.start.desc": "create, templates, quick tests, 3d mesh viewer, run saved cfd case",
+            "menu.main.webapp.title": "web app",
+            "menu.main.webapp.desc": "submenu to start or stop the api (uvicorn) and ui (vite) in the background",
             "menu.main.view3d.title": "3d visualization",
             "menu.main.view3d.desc": "list generated meshes; open in browser (three.js), open3d or blender",
             "menu.main.help.title": "help",
@@ -220,9 +280,11 @@ class BedWizard:
             "menu.main.lang.desc": "toggle portuguese/english",
             "menu.main.exit.title": "exit",
             "menu.main.exit.desc": "close setup",
-            "menu.start.smart.title": "smart assistant",
-            "menu.start.smart.desc": "short questions to guide to .bed, 3d model, or openfoam pipeline",
-            "menu.start.q.title": "interactive questionnaire",
+            "menu.start.create.title": "create",
+            "menu.start.create.desc": "basic create, 3d generation, or full pipeline (one flow per choice)",
+            "create.subtitle": "choose basic create, 3d generation, or full pipeline",
+            "create.prompt": "flow:",
+            "menu.start.q.title": "basic create",
             "menu.start.q.desc": "step-by-step; generates .bed; optional cfd; configurable export",
             "menu.start.tpl.title": "templates and editor",
             "menu.start.tpl.desc": "load json from dsl/wizard_templates or classic .bed temp-file editor",
@@ -230,15 +292,65 @@ class BedWizard:
             "menu.start.quick.desc": "validate existing json or .bed; rich preview; pure python or blender; separate from templates",
             "menu.start.blender.title": "3d generation",
             "menu.start.blender.desc": "no cfd; pick blender or python first; same questionnaire; compile and generate at end",
-            "menu.start.pipe.title": "full pipeline (advanced)",
+            "menu.start.pipe.title": "full pipeline",
             "menu.start.pipe.desc": "bed + blender + openfoam case + wsl simulation; long; heavy requirements",
+            "menu.start.cfd.title": "cfd simulation",
+            "menu.start.cfd.desc": "openfoam cases under local_data/simulations; run in wsl",
+            "cfd.list.title": "cases under local_data/simulations",
+            "cfd.pick_hint": "list index, absolute/relative path, or l to show the table again.",
+            "cfd.pick_prompt": "case (number or path): ",
+            "cfd.confirm_run": "run openfoam simulation for this case in wsl (may take a long time)?",
+            "cfd.warn_none": "no case found (folders with Allrun or system/controlDict).",
+            "cfd.done": "simulation finished; see log.* and caso.foam in the case directory.",
+            "cfd.err_failed": "simulation failed.",
             "menu.start.back.title": "back",
             "menu.start.back.desc": "return to main menu",
             "prompt.main.choice": "choice (1-5 or 0 exit, h help): ",
             "main.warn_empty": "enter 1 to 5 or 0 to exit.",
+            "webapp.title": "web app (dev)",
+            "webapp.subtitle": "uvicorn backend.app.main:app on :8000 and npm run dev (vite) on :5173; on windows each service opens in a new console with logs; output is not mixed into this menu",
+            "webapp.actions": "actions",
+            "webapp.prompt": "option (0-9, c back, h help): ",
+            "webapp.back_row": "0 or c return to main menu",
+            "webapp.warn_invalid": "enter 0 to 9 or c to go back.",
+            "webapp.status.back.on": "backend (uvicorn :8000): running, pid {pid}",
+            "webapp.status.back.off": "backend: stopped",
+            "webapp.status.front.on": "frontend (vite :5173): running, pid {pid}",
+            "webapp.status.front.off": "frontend: stopped",
+            "webapp.opt.both_start.t": "start backend and frontend",
+            "webapp.opt.both_start.d": "starts uvicorn and npm run dev in the background",
+            "webapp.opt.back_start.t": "start backend only",
+            "webapp.opt.back_start.d": "uvicorn only from repo root",
+            "webapp.opt.front_start.t": "start frontend only",
+            "webapp.opt.front_start.d": "vite in frontend/ (npm must be on path)",
+            "webapp.opt.back_stop.t": "stop backend",
+            "webapp.opt.back_stop.d": "terminates uvicorn (process tree on windows)",
+            "webapp.opt.front_stop.t": "stop frontend",
+            "webapp.opt.front_stop.d": "terminates npm/vite",
+            "webapp.opt.both_stop.t": "stop backend and frontend",
+            "webapp.opt.both_stop.d": "stops both services",
+            "webapp.opt.back_restart.t": "restart backend",
+            "webapp.opt.back_restart.d": "stop and start uvicorn only",
+            "webapp.opt.front_restart.t": "restart frontend",
+            "webapp.opt.front_restart.d": "stop and start vite only",
+            "webapp.opt.both_restart.t": "restart backend and frontend",
+            "webapp.opt.both_restart.d": "restarts both in sequence",
+            "webapp.ok_start_back": "backend started.",
+            "webapp.ok_start_front": "frontend started.",
+            "webapp.ok_start_both": "backend and frontend started.",
+            "webapp.ok_stop_back": "backend stopped.",
+            "webapp.ok_stop_front": "frontend stopped.",
+            "webapp.ok_stop_both": "backend and frontend stopped.",
+            "webapp.muted_idle_back": "backend was already stopped.",
+            "webapp.muted_idle_front": "frontend was already stopped.",
+            "webapp.warn_back_running": "backend is already running.",
+            "webapp.warn_front_running": "frontend is already running.",
+            "webapp.err_no_npm": "npm not found on path.",
+            "webapp.err_start_back": "failed to start backend: {err}",
+            "webapp.err_start_front": "failed to start frontend: {err}",
             "main.warn_exit_key": "use 0 to exit the application.",
             "main.bye": "goodbye!",
-            "prompt.start.choice": "choice (0-6, h help): ",
+            "prompt.start.choice": "choice (0-5, h help): ",
             "lang.header": "language",
             "lang.subtitle": "change setup language",
             "lang.current": "current language",
@@ -286,7 +398,7 @@ class BedWizard:
             "view3d.crumb": "3d view",
             "view3d.search": "search:",
             "view3d.scan_hint": "list source: scan local_data/models_3d first, then aux, simulations, generated/* and mesh files at repo root (see bedflow_local_paths.scan_project_mesh_files).",
-            "view3d.footer_hint": "0 or c main menu  ·  l list  ·  ? field help  ·  h global help",
+            "view3d.footer_hint": "0 or c back to start submenu  ·  l list  ·  ? field help  ·  h global help",
             "view3d.table_title": "models",
             "view3d.pick": "model number:",
             "view3d.preview": "summary",
@@ -350,7 +462,7 @@ class BedWizard:
     def _main_menu_rows(self) -> List[Tuple[str, str, str]]:
         return [
             ("1", self._t("menu.main.start.title", "comecar"), self._t("menu.main.start.desc", "")),
-            ("2", self._t("menu.main.view3d.title", "visualizacao 3d"), self._t("menu.main.view3d.desc", "")),
+            ("2", self._t("menu.main.webapp.title", ""), self._t("menu.main.webapp.desc", "")),
             ("3", self._t("menu.main.help.title", "ajuda"), self._t("menu.main.help.desc", "")),
             ("4", self._t("menu.main.docs.title", "documentacao"), self._t("menu.main.docs.desc", "")),
             ("5", self._t("menu.main.lang.title", "idioma"), self._t("menu.main.lang.desc", "")),
@@ -359,12 +471,11 @@ class BedWizard:
 
     def _start_menu_rows(self) -> List[Tuple[str, str, str]]:
         return [
-            ("1", self._t("menu.start.smart.title", ""), self._t("menu.start.smart.desc", "")),
-            ("2", self._t("menu.start.q.title", ""), self._t("menu.start.q.desc", "")),
-            ("3", self._t("menu.start.tpl.title", ""), self._t("menu.start.tpl.desc", "")),
-            ("4", self._t("menu.start.quick.title", ""), self._t("menu.start.quick.desc", "")),
-            ("5", self._t("menu.start.blender.title", ""), self._t("menu.start.blender.desc", "")),
-            ("6", self._t("menu.start.pipe.title", ""), self._t("menu.start.pipe.desc", "")),
+            ("1", self._t("menu.start.create.title", ""), self._t("menu.start.create.desc", "")),
+            ("2", self._t("menu.start.tpl.title", ""), self._t("menu.start.tpl.desc", "")),
+            ("3", self._t("menu.start.quick.title", ""), self._t("menu.start.quick.desc", "")),
+            ("4", self._t("menu.main.view3d.title", ""), self._t("menu.main.view3d.desc", "")),
+            ("5", self._t("menu.start.cfd.title", ""), self._t("menu.start.cfd.desc", "")),
             ("0", self._t("menu.start.back.title", "voltar"), self._t("menu.start.back.desc", "")),
         ]
 
@@ -427,6 +538,8 @@ class BedWizard:
         self.output_file = None  # nome do arquivo de saida
         self.ui = make_terminal_ui()
         self._cancel_enabled = True
+        self._web_backend_proc: Optional[subprocess.Popen] = None
+        self._web_frontend_proc: Optional[subprocess.Popen] = None
         # true apos carregar .bed e o utilizador pedir saltar o questionario
         self.skip_questionnaire_after_load = False
         self.lang = BedWizard._normalize_lang_code("pt")
@@ -2220,12 +2333,13 @@ class BedWizard:
         try:
             self.clear_screen()
             self.print_header(
-                "questionario interativo", "parametrizacao do leito passo a passo"
+                self._t("menu.start.q.title", "criar basico"),
+                self._t("menu.start.q.desc", ""),
             )
-            self.ui.breadcrumbs("setup", "questionario")
+            self.ui.breadcrumbs("setup", "criar", "criar-basico")
             self._hint_fluxo_questionario()
             self.ui.println()
-            self._maybe_load_existing_bed(caption="questionario")
+            self._maybe_load_existing_bed(caption=self._t("menu.start.q.title", "criar basico"))
             if not self.skip_questionnaire_after_load:
                 self._fill_params_from_questionnaire()
             _out_default = "meu_leito.bed"
@@ -2747,8 +2861,8 @@ cfd {
         try:
             self.clear_screen()
             self.print_header(
-                "geracao 3d",
-                "sem cfd; primeiro escolhes o motor; depois o mesmo questionario de geometria e empacotamento",
+                self._t("menu.start.blender.title", "geracao 3d"),
+                self._t("menu.start.blender.desc", ""),
             )
             self.ui.breadcrumbs("setup", "geracao-3d")
             self.ui.muted("parametros cfd nao sao pedidos neste modo.")
@@ -3289,7 +3403,10 @@ cfd {
     def pipeline_completo_mode(self):
         """modo pipeline completo - gera modelo 3d, cria caso cfd e executa simulacao"""
         self.clear_screen()
-        self.print_header("pipeline completo", "modelagem 3d + caso openfoam + simulacao")
+        self.print_header(
+            self._t("menu.start.pipe.title", "pipeline completo"),
+            self._t("menu.start.pipe.desc", ""),
+        )
         self.ui.breadcrumbs("setup", "pipeline")
         self.ui.println("etapas resumidas:")
         self.ui.muted(
@@ -3720,11 +3837,23 @@ cfd {
             self.ui.println()
         self.ui.render_main_menu(self._start_menu_rows(), title=self._t("menu.title.start", "comecar"))
 
+    def run_questionnaire_interactive(self) -> None:
+        """mesmo fluxo que comecar > criar > criar basico: questionario ate gravar .bed."""
+        self.interactive_mode()
+
+    def run_generation_3d(self) -> None:
+        """mesmo fluxo que comecar > criar > geracao 3d."""
+        self.generation_3d_mode()
+
+    def run_pipeline_completo(self) -> None:
+        """mesmo fluxo que comecar > criar > pipeline completo."""
+        self.pipeline_completo_mode()
+
     def run_start_menu(self) -> None:
         """loop do submenu comecar ate o utilizador escolher 0 voltar."""
         while True:
             self._draw_start_menu()
-            choice = self.ui.ask_line(self._t("prompt.start.choice", "opcao (0-6): ")).strip()
+            choice = self.ui.ask_line(self._t("prompt.start.choice", "opcao (0-5): ")).strip()
             low = choice.lower()
             if low == "h":
                 self.ui.hint(global_keys_hint(self.lang))
@@ -3733,24 +3862,22 @@ cfd {
             if choice == "0":
                 return
             if not choice:
-                self.ui.warn("indique 1 a 6 ou 0 para voltar.")
+                self.ui.warn("indique 1 a 5 ou 0 para voltar.")
                 self.ui.pause("enter...")
                 continue
             try:
                 if choice == "1":
-                    self.smart_start_flow()
+                    self.create_flow()
                 elif choice == "2":
-                    self.interactive_mode()
-                elif choice == "3":
                     self.templates_editor_menu()
-                elif choice == "4":
+                elif choice == "3":
                     self.tests_quick_menu()
+                elif choice == "4":
+                    self.visualization_3d_mode()
                 elif choice == "5":
-                    self.generation_3d_mode()
-                elif choice == "6":
-                    self.pipeline_completo_mode()
+                    self.simulacao_cfd_mode()
                 else:
-                    self.ui.warn("escolha um numero de 0 a 6")
+                    self.ui.warn("escolha um numero de 0 a 5")
                     self.ui.pause("enter...")
                     continue
             except _WizardCancelled:
@@ -3793,48 +3920,148 @@ cfd {
             self.ui.warn("opcao nao reconhecida")
             self.ui.pause("enter...")
 
-    def smart_start_flow(self) -> None:
-        """assistente curto: encaminha para questionario, 3d no blender ou pipeline."""
+    def create_flow(self) -> None:
+        """submenu criar: criar basico, geracao 3d ou pipeline completo."""
         self.clear_screen()
         self.print_header(
-            "assistente inteligente",
-            "encaminhamento rapido (os modos explicitos continuam no submenu)",
+            self._t("menu.start.create.title", "criar"),
+            self._t("create.subtitle", ""),
         )
-        self.ui.breadcrumbs("setup", "comecar", "assistente")
+        self.ui.breadcrumbs("setup", "comecar", "criar")
         self.ui.println()
+        _em = "\u2014"
+        t_q = self._t("menu.start.q.title", "criar basico")
+        t_3d = self._t("menu.start.blender.title", "geracao 3d")
+        t_pipe = self._t("menu.start.pipe.title", "pipeline completo")
+        d_q = self._t("menu.start.q.desc", "")
+        d_3d = self._t("menu.start.blender.desc", "")
+        d_pipe = self._t("menu.start.pipe.desc", "")
+        opt_q = f"{t_q} {_em} {d_q}"
+        opt_3d = f"{t_3d} {_em} {d_3d}"
+        opt_pipe = f"{t_pipe} {_em} {d_pipe}"
         try:
-            objetivo = self.get_choice(
-                "o que pretende fazer agora",
-                [
-                    "gerar .bed com questionario completo (cfd opcional)",
-                    "gerar modelo 3d sem cfd (igual a comecar opcao 5 — motor no inicio)",
-                    "pipeline completo (questionario + blender + openfoam no wsl)",
-                ],
+            pick = self.get_choice(
+                self._t("create.prompt", ""),
+                [opt_q, opt_3d, opt_pipe],
                 None,
+                "",
+                with_param_review=False,
             )
-            if objetivo.startswith("gerar .bed"):
-                self.interactive_mode()
+            if pick == opt_q:
+                self.run_questionnaire_interactive()
                 return
-            if objetivo.startswith("gerar modelo 3d"):
-                self.generation_3d_mode()
+            if pick == opt_3d:
+                self.run_generation_3d()
                 return
-            if objetivo.startswith("pipeline"):
-                self.ui.warn(
-                    "requer blender, wsl2 e openfoam; tempo longo e uso elevado de disco."
-                )
-                if self.get_boolean(
-                    "confirmo requisitos e quero continuar",
+            if pick == opt_pipe:
+                self.run_pipeline_completo()
+                return
+            self.ui.warn(self._t("help.invalid", "opcao invalida"))
+        except _WizardCancelled:
+            self.ui.muted("cancelado.")
+
+    def _discover_simulation_cases(self) -> List[Path]:
+        """pastas sob local_data/simulations com Allrun ou system/controlDict."""
+        root = simulations_dir()
+        out: List[Path] = []
+        if not root.is_dir():
+            return out
+        for p in sorted(root.iterdir(), key=lambda x: x.name.lower()):
+            if not p.is_dir():
+                continue
+            if (p / "Allrun").is_file() or (p / "system" / "controlDict").is_file():
+                try:
+                    out.append(p.resolve())
+                except OSError:
+                    out.append(p)
+        return out
+
+    def _print_simulation_cases_list(self, cases: List[Path]) -> None:
+        rows: List[MenuRow] = []
+        for i, p in enumerate(cases, start=1):
+            try:
+                full = str(p.resolve())
+            except OSError:
+                full = str(p)
+            rows.append((str(i), p.name, full))
+        title = self._t("cfd.list.title", "casos em local_data/simulations")
+        if rich_available() and getattr(self.ui, "_rich", False):
+            render_menu_table_rich(self.ui.console, rows, title=title)
+        else:
+            render_menu_table_plain(rows, title=title)
+
+    def simulacao_cfd_mode(self) -> None:
+        """lista casos openfoam guardados e executa run_openfoam_simulation."""
+        old = self._cancel_enabled
+        self._cancel_enabled = True
+        try:
+            self.clear_screen()
+            self.print_header(
+                self._t("menu.start.cfd.title", "simulacao cfd"),
+                self._t("menu.start.cfd.desc", ""),
+            )
+            self.ui.breadcrumbs("setup", "comecar", "simulacao-cfd")
+            self.ui.println()
+            cases = self._discover_simulation_cases()
+            if not cases:
+                self.ui.warn(self._t("cfd.warn_none", ""))
+                self.ui.pause("enter...")
+                return
+            self._print_simulation_cases_list(cases)
+            self.ui.println()
+            self.ui.hint(self._t("cfd.pick_hint", ""))
+            while True:
+                raw = self.ui.ask_line(self._t("cfd.pick_prompt", "")).strip()
+                self._maybe_cancel(raw)
+                low = raw.lower()
+                if low in ("l", "lista"):
+                    self._print_simulation_cases_list(cases)
+                    self.ui.println()
+                    continue
+                if not raw:
+                    self.ui.muted("cancelado.")
+                    return
+                chosen: Optional[Path] = None
+                if raw.isdigit():
+                    idx = int(raw) - 1
+                    if 0 <= idx < len(cases):
+                        chosen = cases[idx]
+                if chosen is None:
+                    try:
+                        cand = Path(raw)
+                        if not cand.is_absolute():
+                            cand = (Path.cwd() / cand).resolve()
+                        else:
+                            cand = cand.resolve()
+                        if cand.is_dir() and (
+                            (cand / "Allrun").is_file()
+                            or (cand / "system" / "controlDict").is_file()
+                        ):
+                            chosen = cand
+                    except OSError:
+                        chosen = None
+                if chosen is None:
+                    self.ui.warn(self._t("help.invalid", "opcao invalida"))
+                    continue
+                if not self.get_boolean(
+                    self._t("cfd.confirm_run", ""),
                     default=False,
                     allow_empty_default=False,
                 ):
-                    self.pipeline_completo_mode()
+                    self.ui.muted("cancelado.")
+                    return
+                ok = self.run_openfoam_simulation(chosen)
+                if ok:
+                    self.ui.ok(self._t("cfd.done", ""))
                 else:
-                    self.ui.muted("cancelado no assistente.")
+                    self.ui.err(self._t("cfd.err_failed", "falha na simulacao."))
+                self.ui.pause("enter...")
                 return
-            self.ui.warn("opcao nao reconhecida no assistente.")
         except _WizardCancelled:
             self.ui.muted("cancelado.")
-    
+        finally:
+            self._cancel_enabled = old
+
     def _draw_main_menu(self) -> None:
         """tela inicial estilo navegador (barra + tabela de modos)."""
         self.ui.clear()
@@ -3890,6 +4117,385 @@ cfd {
         from wizard_3d_viewer import run_visualization_mode
 
         run_visualization_mode(self)
+
+    def _web_popen_kwargs_silent(self) -> Dict[str, Any]:
+        kw: Dict[str, Any] = {
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+            "stdin": subprocess.DEVNULL,
+        }
+        if sys.platform == "win32":
+            kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            kw["start_new_session"] = True
+        return kw
+
+    def _web_popen_kwargs_new_console_win(self) -> Dict[str, Any]:
+        return {
+            "stdin": subprocess.DEVNULL,
+            "creationflags": subprocess.CREATE_NEW_CONSOLE,
+        }
+
+    def _web_kill_processes_on_port(self, port: int) -> None:
+        """best effort: liberta porto (uvicorn/vite orfaos ou sessao antiga)."""
+        if sys.platform == "win32":
+            ps = (
+                f"$c = Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue; "
+                "if ($null -ne $c) { "
+                "$c | ForEach-Object { "
+                "Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue "
+                "} }"
+            )
+            try:
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps],
+                    capture_output=True,
+                    timeout=20,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            return
+        try:
+            subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    f'for pid in $(lsof -tiTCP:{port} -sTCP:LISTEN 2>/dev/null); do kill -TERM "$pid" 2>/dev/null; done',
+                ],
+                capture_output=True,
+                timeout=12,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        try:
+            subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    f'for pid in $(lsof -tiTCP:{port} -sTCP:LISTEN 2>/dev/null); do kill -KILL "$pid" 2>/dev/null; done',
+                ],
+                capture_output=True,
+                timeout=12,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    def _web_kill_process_tree(self, proc: subprocess.Popen) -> None:
+        if proc.poll() is not None:
+            return
+        pid = proc.pid
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        else:
+            try:
+                os.killpg(pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, OSError):
+                    proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+    def _web_force_stop_backend(self) -> None:
+        proc = self._web_backend_proc
+        self._web_backend_proc = None
+        if proc is not None and proc.poll() is None:
+            self._web_kill_process_tree(proc)
+        self._web_kill_processes_on_port(8000)
+
+    def _web_force_stop_frontend(self) -> None:
+        proc = self._web_frontend_proc
+        self._web_frontend_proc = None
+        if proc is not None and proc.poll() is None:
+            self._web_kill_process_tree(proc)
+        self._web_kill_processes_on_port(5173)
+
+    def _web_backend_running(self) -> bool:
+        return (
+            self._web_backend_proc is not None
+            and self._web_backend_proc.poll() is None
+        )
+
+    def _web_frontend_running(self) -> bool:
+        return (
+            self._web_frontend_proc is not None
+            and self._web_frontend_proc.poll() is None
+        )
+
+    def _web_print_status(self) -> None:
+        if self._web_backend_running():
+            pid = self._web_backend_proc.pid if self._web_backend_proc else 0
+            self.ui.muted(self._t("webapp.status.back.on", "").format(pid=pid))
+        else:
+            self.ui.muted(self._t("webapp.status.back.off", ""))
+        if self._web_frontend_running():
+            pid = self._web_frontend_proc.pid if self._web_frontend_proc else 0
+            self.ui.muted(self._t("webapp.status.front.on", "").format(pid=pid))
+        else:
+            self.ui.muted(self._t("webapp.status.front.off", ""))
+
+    def _web_app_menu_rows(self) -> List[Tuple[str, str, str]]:
+        specs = [
+            ("webapp.opt.both_start.t", "webapp.opt.both_start.d"),
+            ("webapp.opt.back_start.t", "webapp.opt.back_start.d"),
+            ("webapp.opt.front_start.t", "webapp.opt.front_start.d"),
+            ("webapp.opt.back_stop.t", "webapp.opt.back_stop.d"),
+            ("webapp.opt.front_stop.t", "webapp.opt.front_stop.d"),
+            ("webapp.opt.both_stop.t", "webapp.opt.both_stop.d"),
+            ("webapp.opt.back_restart.t", "webapp.opt.back_restart.d"),
+            ("webapp.opt.front_restart.t", "webapp.opt.front_restart.d"),
+            ("webapp.opt.both_restart.t", "webapp.opt.both_restart.d"),
+        ]
+        rows: List[Tuple[str, str, str]] = []
+        for i, (kt, kd) in enumerate(specs, start=1):
+            rows.append((str(i), self._t(kt, ""), self._t(kd, "")))
+        rows.append(
+            (
+                "0",
+                self._t("menu.start.back.title", "voltar"),
+                self._t("webapp.back_row", ""),
+            )
+        )
+        return rows
+
+    def _draw_web_app_menu(self) -> None:
+        self.ui.clear()
+        self.ui.header(
+            self._t("app.title", ""),
+            self._t("app.subtitle", ""),
+        )
+        self.ui.breadcrumbs("setup", self._t("menu.main.webapp.title", "web"))
+        self.ui.println()
+        self.ui.muted(self._t("webapp.title", ""))
+        self.ui.muted(self._t("webapp.subtitle", ""))
+        self.ui.println()
+        self._web_print_status()
+        self.ui.println()
+        self.ui.render_main_menu(
+            self._web_app_menu_rows(),
+            title=self._t("webapp.actions", "accoes"),
+        )
+
+    def _web_unix_terminal_popen(self, cmd: List[str], cwd: str) -> Optional[subprocess.Popen]:
+        inner = f"cd {shlex.quote(cwd)} && exec {shlex.join(cmd)}; echo; echo [fim] enter...; read _"
+        for exe, argv in (
+            ("gnome-terminal", ["gnome-terminal", "--", "bash", "-lc", inner]),
+            ("kgx", ["kgx", "--", "bash", "-lc", inner]),
+            ("konsole", ["konsole", "-e", "bash", "-lc", inner]),
+            ("xfce4-terminal", ["xfce4-terminal", "-e", f"bash -lc {shlex.quote(inner)}"]),
+            ("xterm", ["xterm", "-e", "bash", "-lc", inner]),
+        ):
+            path = shutil.which(argv[0])
+            if path:
+                argv = [path] + argv[1:]
+                try:
+                    return subprocess.Popen(
+                        argv,
+                        cwd=cwd,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
+                except OSError:
+                    continue
+        return None
+
+    def _web_spawn_backend(self) -> Optional[subprocess.Popen]:
+        cmd = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "backend.app.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8000",
+        ]
+        cwd = str(_REPO_ROOT)
+        if sys.platform == "win32":
+            try:
+                return subprocess.Popen(cmd, cwd=cwd, **self._web_popen_kwargs_new_console_win())
+            except OSError:
+                return None
+        proc = self._web_unix_terminal_popen(cmd, cwd)
+        if proc is not None:
+            return proc
+        try:
+            return subprocess.Popen(cmd, cwd=cwd, **self._web_popen_kwargs_silent())
+        except OSError:
+            return None
+
+    def _web_spawn_frontend(self) -> Optional[subprocess.Popen]:
+        npm = shutil.which("npm")
+        if not npm:
+            return None
+        cmd = [npm, "run", "dev"]
+        cwd = str(_REPO_ROOT / "frontend")
+        if sys.platform == "win32":
+            try:
+                return subprocess.Popen([npm, "run", "dev"], cwd=cwd, **self._web_popen_kwargs_new_console_win())
+            except OSError:
+                return None
+        proc = self._web_unix_terminal_popen(cmd, cwd)
+        if proc is not None:
+            return proc
+        try:
+            return subprocess.Popen(cmd, cwd=cwd, **self._web_popen_kwargs_silent())
+        except OSError:
+            return None
+
+    def _web_open_browser_tabs(self, *, backend: bool, frontend: bool) -> None:
+        time.sleep(1.0)
+        if backend:
+            try:
+                webbrowser.open("http://127.0.0.1:8000/docs")
+            except Exception:
+                pass
+        if frontend:
+            try:
+                webbrowser.open("http://127.0.0.1:5173/")
+            except Exception:
+                pass
+
+    def _web_start_backend(self, *, announce: bool = True, open_browser: bool = False) -> bool:
+        self._web_force_stop_backend()
+        try:
+            self._web_backend_proc = self._web_spawn_backend()
+        except OSError as e:
+            self._web_backend_proc = None
+            self.ui.err(self._t("webapp.err_start_back", "").format(err=e))
+            return False
+        if self._web_backend_proc is None:
+            self.ui.err(self._t("webapp.err_start_back", "").format(err="spawn"))
+            return False
+        if announce:
+            self.ui.ok(self._t("webapp.ok_start_back", ""))
+        if open_browser:
+            self._web_open_browser_tabs(backend=True, frontend=False)
+        return True
+
+    def _web_start_frontend(self, *, announce: bool = True, open_browser: bool = False) -> bool:
+        self._web_force_stop_frontend()
+        if shutil.which("npm") is None:
+            self.ui.err(self._t("webapp.err_no_npm", ""))
+            self._web_frontend_proc = None
+            return False
+        try:
+            self._web_frontend_proc = self._web_spawn_frontend()
+        except OSError as e:
+            self._web_frontend_proc = None
+            self.ui.err(self._t("webapp.err_start_front", "").format(err=e))
+            return False
+        if self._web_frontend_proc is None:
+            self.ui.err(self._t("webapp.err_no_npm", ""))
+            return False
+        if announce:
+            self.ui.ok(self._t("webapp.ok_start_front", ""))
+        if open_browser:
+            self._web_open_browser_tabs(backend=False, frontend=True)
+        return True
+
+    def _web_stop_backend(self) -> None:
+        self._web_force_stop_backend()
+        self.ui.ok(self._t("webapp.ok_stop_back", ""))
+
+    def _web_stop_frontend(self) -> None:
+        self._web_force_stop_frontend()
+        self.ui.ok(self._t("webapp.ok_stop_front", ""))
+
+    def _web_stop_both(self) -> None:
+        self._web_force_stop_backend()
+        self._web_force_stop_frontend()
+        self.ui.ok(self._t("webapp.ok_stop_both", ""))
+
+    def _web_restart_backend(self) -> bool:
+        self._web_force_stop_backend()
+        return self._web_start_backend(announce=True, open_browser=False)
+
+    def _web_restart_frontend(self) -> bool:
+        self._web_force_stop_frontend()
+        return self._web_start_frontend(announce=True, open_browser=False)
+
+    def _web_restart_both(self) -> None:
+        self._web_force_stop_backend()
+        self._web_force_stop_frontend()
+        b = self._web_start_backend(announce=False, open_browser=False)
+        f = self._web_start_frontend(announce=False, open_browser=False)
+        if b and f:
+            self.ui.ok(self._t("webapp.ok_start_both", ""))
+            self._web_open_browser_tabs(backend=True, frontend=True)
+        elif b:
+            self.ui.ok(self._t("webapp.ok_start_back", ""))
+            self._web_open_browser_tabs(backend=True, frontend=False)
+        elif f:
+            self.ui.ok(self._t("webapp.ok_start_front", ""))
+            self._web_open_browser_tabs(backend=False, frontend=True)
+
+    def web_app_dev_menu(self) -> None:
+        """iniciar ou parar uvicorn + vite em subprocessos desta sessao do wizard."""
+        while True:
+            self._draw_web_app_menu()
+            choice = self.ui.ask_line(self._t("webapp.prompt", "opcao (0-9): ")).strip()
+            low = choice.lower()
+            if low == "h":
+                self.ui.hint(global_keys_hint(self.lang))
+                self.ui.pause("enter...")
+                continue
+            if choice == "0" or low in ("c", "q", "cancel", "cancelar", "voltar", "back"):
+                return
+            if not choice:
+                self.ui.warn(self._t("webapp.warn_invalid", ""))
+                self.ui.pause("enter...")
+                continue
+            if choice == "1":
+                b = self._web_start_backend(announce=False, open_browser=False)
+                f = self._web_start_frontend(announce=False, open_browser=False)
+                if b and f:
+                    self.ui.ok(self._t("webapp.ok_start_both", ""))
+                    self._web_open_browser_tabs(backend=True, frontend=True)
+                elif b:
+                    self.ui.ok(self._t("webapp.ok_start_back", ""))
+                    self._web_open_browser_tabs(backend=True, frontend=False)
+                elif f:
+                    self.ui.ok(self._t("webapp.ok_start_front", ""))
+                    self._web_open_browser_tabs(backend=False, frontend=True)
+            elif choice == "2":
+                self._web_start_backend(open_browser=True)
+            elif choice == "3":
+                self._web_start_frontend(open_browser=True)
+            elif choice == "4":
+                self._web_stop_backend()
+            elif choice == "5":
+                self._web_stop_frontend()
+            elif choice == "6":
+                self._web_stop_both()
+            elif choice == "7":
+                self._web_restart_backend()
+                self._web_open_browser_tabs(backend=True, frontend=False)
+            elif choice == "8":
+                self._web_restart_frontend()
+                self._web_open_browser_tabs(backend=False, frontend=True)
+            elif choice == "9":
+                self._web_restart_both()
+            else:
+                self.ui.warn(self._t("webapp.warn_invalid", ""))
+            self.ui.pause("enter...")
     
     def run(self):
         """executar wizard"""
@@ -3917,7 +4523,7 @@ cfd {
                 self.run_start_menu()
                 self.ui.pause("enter para voltar ao menu principal...")
             elif choice == "2":
-                self.visualization_3d_mode()
+                self.web_app_dev_menu()
                 self.ui.pause("enter para voltar ao menu principal...")
             elif choice == "3":
                 self.show_help_menu()

@@ -150,7 +150,11 @@ def run_visualization_mode(wizard: BedWizard) -> None:
             wizard._t("view3d.title", "visualizacao 3d"),
             wizard._t("view3d.subtitle", "malhas geradas pelo projeto"),
         )
-        ui.breadcrumbs("setup", wizard._t("view3d.crumb", "visualizacao 3d"))
+        ui.breadcrumbs(
+            "setup",
+            wizard._t("menu.title.start", "comecar"),
+            wizard._t("view3d.crumb", "visualizacao 3d"),
+        )
         ui.println()
         ui.muted(wizard._t("view3d.scan_hint", ""))
         ui.println()
@@ -159,7 +163,7 @@ def run_visualization_mode(wizard: BedWizard) -> None:
         ui.muted(
             wizard._t(
                 "view3d.footer_hint",
-                "0 ou c menu principal  ·  l lista  ·  ? ajuda do campo  ·  h ajuda global",
+                "0 ou c voltar ao submenu comecar  ·  l lista  ·  ? ajuda do campo  ·  h ajuda global",
             )
         )
         ui.println()
