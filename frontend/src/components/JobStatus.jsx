@@ -5,7 +5,7 @@ import BackendConnectionError from './BackendConnectionError'
 import { useLanguage } from '../context/LanguageContext'
 
 function JobStatus({ currentJob }) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [jobs, setJobs] = useState([])
   const [selectedJob, setSelectedJob] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -65,36 +65,46 @@ function JobStatus({ currentJob }) {
   }
 
   const getJobTypeLabel = (jobType) => {
+    const pt = language === 'pt'
     switch (jobType) {
-      case 'compile': return (
-        <>
-          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="compilação" className="status-icon" />
-          compilação
-        </>
-      )
-      case 'generate_model': return '🎨 modelo 3d'
-      case 'simulation': return '🌊 simulação'
-      case 'full_pipeline': return '🚀 pipeline completo'
-      default: return jobType
+      case 'compile':
+        return (
+          <>
+            <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="compilação" className="status-icon" />
+            {pt ? 'Compilação' : 'Compile'}
+          </>
+        )
+      case 'generate_model':
+        return pt ? 'Modelo 3d' : '3d model'
+      case 'simulation':
+        return pt ? 'Simulação' : 'Simulation'
+      case 'full_pipeline':
+        return pt ? 'Pipeline completo' : 'Full pipeline'
+      default:
+        return jobType
     }
   }
 
+  const dateLocale = language === 'pt' ? 'pt-BR' : 'en-US'
+
   return (
     <div className="job-status-container">
-      <h2>
-        <ThemeIcon light="job_monitor_clock_white.png" dark="job_monitor_clock_white.png" alt="monitoramento" className="section-icon" />
-        monitoramento de jobs
-      </h2>
+      <header className="jobs-page-header">
+        <div className="jobs-page-title">
+          <ThemeIcon light="job_monitor_clock_white.png" dark="job_monitor_clock_white.png" alt="" className="jobs-page-title-icon" />
+          <h1 className="jobs-page-heading">{language === 'pt' ? 'Monitoramento de jobs' : 'Job monitoring'}</h1>
+        </div>
+      </header>
 
       {connectionError && <BackendConnectionError message={connectionError} />}
 
       <div className="jobs-layout">
         {/* lista de jobs */}
         <div className="jobs-list">
-          <h3>todos os jobs ({jobs.length})</h3>
-          
+          <h3>{language === 'pt' ? `Todos os jobs (${jobs.length})` : `All jobs (${jobs.length})`}</h3>
+
           {jobs.length === 0 ? (
-            <p className="empty-state">nenhum job encontrado</p>
+            <p className="empty-state">{language === 'pt' ? 'Nenhum job encontrado' : 'No jobs found'}</p>
           ) : (
             <div className="jobs-items">
               {jobs.map(job => (
@@ -107,11 +117,11 @@ function JobStatus({ currentJob }) {
                     <span className="job-icon">{getStatusIcon(job.status)}</span>
                     <span className="job-type">{getJobTypeLabel(job.job_type)}</span>
                   </div>
-                  
+
                   <div className={`job-status ${getStatusColor(job.status)}`}>
                     {job.status}
                   </div>
-                  
+
                   <div className="job-progress">
                     <div
                       className="progress-bar"
@@ -119,9 +129,9 @@ function JobStatus({ currentJob }) {
                     />
                     <span className="progress-text">{job.progress}%</span>
                   </div>
-                  
+
                   <div className="job-time">
-                    {new Date(job.created_at).toLocaleString('pt-BR')}
+                    {new Date(job.created_at).toLocaleString(dateLocale)}
                   </div>
                 </div>
               ))}
@@ -133,27 +143,27 @@ function JobStatus({ currentJob }) {
         <div className="job-details">
           {selectedJob ? (
             <>
-              <h3>detalhes do job</h3>
-              
+              <h3>{language === 'pt' ? 'Detalhes do job' : 'Job details'}</h3>
+
               <div className="detail-group">
-                <label>id:</label>
+                <label>{language === 'pt' ? 'Id:' : 'Id:'}</label>
                 <code>{selectedJob.job_id}</code>
               </div>
 
               <div className="detail-group">
-                <label>tipo:</label>
+                <label>{language === 'pt' ? 'Tipo:' : 'Type:'}</label>
                 <span>{getJobTypeLabel(selectedJob.job_type)}</span>
               </div>
 
               <div className="detail-group">
-                <label>status:</label>
+                <label>{language === 'pt' ? 'Status:' : 'Status:'}</label>
                 <span className={`badge ${getStatusColor(selectedJob.status)}`}>
                   {getStatusIcon(selectedJob.status)} {selectedJob.status}
                 </span>
               </div>
 
               <div className="detail-group">
-                <label>progresso:</label>
+                <label>{language === 'pt' ? 'Progresso:' : 'Progress:'}</label>
                 <div className="progress-bar-large">
                   <div
                     className="progress-fill"
@@ -164,18 +174,18 @@ function JobStatus({ currentJob }) {
               </div>
 
               <div className="detail-group">
-                <label>criado em:</label>
-                <span>{new Date(selectedJob.created_at).toLocaleString('pt-BR')}</span>
+                <label>{language === 'pt' ? 'Criado em:' : 'Created:'}</label>
+                <span>{new Date(selectedJob.created_at).toLocaleString(dateLocale)}</span>
               </div>
 
               <div className="detail-group">
-                <label>atualizado em:</label>
-                <span>{new Date(selectedJob.updated_at).toLocaleString('pt-BR')}</span>
+                <label>{language === 'pt' ? 'Atualizado em:' : 'Updated:'}</label>
+                <span>{new Date(selectedJob.updated_at).toLocaleString(dateLocale)}</span>
               </div>
 
               {selectedJob.output_files && selectedJob.output_files.length > 0 && (
                 <div className="detail-group">
-                  <label>arquivos gerados:</label>
+                  <label>{language === 'pt' ? 'Arquivos gerados:' : 'Output files:'}</label>
                   <ul className="output-files">
                     {selectedJob.output_files.map((file, idx) => (
                       <li key={idx}>
@@ -188,7 +198,7 @@ function JobStatus({ currentJob }) {
 
               {selectedJob.error_message && (
                 <div className="detail-group">
-                  <label>erro:</label>
+                  <label>{language === 'pt' ? 'Erro:' : 'Error:'}</label>
                   <div className="error-message">
                     {selectedJob.error_message}
                   </div>
@@ -205,7 +215,7 @@ function JobStatus({ currentJob }) {
               )}
             </>
           ) : (
-            <p className="empty-state">selecione um job para ver detalhes</p>
+            <p className="empty-state">{language === 'pt' ? 'Selecione um job para ver detalhes' : 'Select a job to see details'}</p>
           )}
         </div>
       </div>

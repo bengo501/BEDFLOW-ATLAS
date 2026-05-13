@@ -22,7 +22,6 @@ import '../styles/BedWizard.css';
 const BedWizard = ({ onNavigateTab } = {}) => {
   const { language, t } = useLanguage();
   const [step, setStep] = useState(0);
-  const [hubView, setHubView] = useState('comecar');
   const [mode, setMode] = useState(null);
   const [params, setParams] = useState({
     bed: {
@@ -243,7 +242,6 @@ const BedWizard = ({ onNavigateTab } = {}) => {
 
       setStep(0);
       setMode(null);
-      setHubView('comecar');
     } catch (error) {
       console.error('erro:', error);
       alert(parseApiError(error) || 'erro ao criar arquivo .bed');
@@ -303,93 +301,8 @@ const BedWizard = ({ onNavigateTab } = {}) => {
         }
       };
 
-    if (hubView === 'criar') {
-      return (
-        <div className="mode-selection">
-          <div className="mode-header">
-            <div className="mode-header-titles">
-              <button type="button" className="hub-back-btn" onClick={() => setHubView('comecar')}>
-                {t('hubCriarBack')}
-              </button>
-              <h2>
-                <ThemeIcon light="bedLight.png" dark="bedDark.png" alt="" className="title-icon" />
-                {t('hubCriarHeading')}
-              </h2>
-              <p className="mode-header-subtitle">{t('hubCriarSubtitle')}</p>
-            </div>
-          </div>
-          <div className="mode-cards mode-cards-terminal mode-cards-criar-all">
-            <div
-              className="mode-card"
-              role="button"
-              tabIndex={0}
-              onClick={() => handleModeSelect('interactive')}
-              onKeyDown={cardKey(() => handleModeSelect('interactive'))}
-            >
-              <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="mode-icon-small" />
-              <h3>{t('hubBasicTitle')}</h3>
-              <p className="mode-card-desc">{t('hubBasicDesc')}</p>
-              {bedFileButtons('interactive')}
-            </div>
-            <div
-              className="mode-card"
-              role="button"
-              tabIndex={0}
-              onClick={() => handleModeSelect('blender_interactive')}
-              onKeyDown={cardKey(() => handleModeSelect('blender_interactive'))}
-            >
-              <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="" className="mode-icon-small" />
-              <h3>{t('hubGen3dTitle')}</h3>
-              <p className="mode-card-desc">{t('hubGen3dDesc')}</p>
-              {bedFileButtons('blender_interactive')}
-            </div>
-            <div
-              className="mode-card"
-              role="button"
-              tabIndex={0}
-              onClick={() => handleModeSelect('pipeline_completo')}
-              onKeyDown={cardKey(() => handleModeSelect('pipeline_completo'))}
-            >
-              <ThemeIcon light="pipelineLight.png" dark="pipeline.png" alt="" className="mode-icon-small" />
-              <h3>{t('hubPipeTitle')}</h3>
-              <p className="mode-card-desc">{t('hubPipeDesc')}</p>
-              {bedFileButtons('pipeline_completo')}
-            </div>
-            <div
-              className="mode-card"
-              role="button"
-              tabIndex={0}
-              onClick={() => handleModeSelect('pipeline_blender_cfd')}
-              onKeyDown={cardKey(() => handleModeSelect('pipeline_blender_cfd'))}
-            >
-              <div className="mode-icon-combo">
-                <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="" className="mode-icon-small" />
-                <span className="plus-symbol">+</span>
-                <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
-              </div>
-              <h3>{t('hubPipeBlenderCfdTitle')}</h3>
-              <p className="mode-card-desc">{t('hubPipeBlenderCfdDesc')}</p>
-              {bedFileButtons('pipeline_blender_cfd')}
-            </div>
-            <div
-              className="mode-card"
-              role="button"
-              tabIndex={0}
-              onClick={() => handleModeSelect('cfd_only')}
-              onKeyDown={cardKey(() => handleModeSelect('cfd_only'))}
-            >
-              <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
-              <h3>{t('hubCfdOnlyTitle')}</h3>
-              <p className="mode-card-desc">{t('hubCfdOnlyDesc')}</p>
-              {bedFileButtons('cfd_only')}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     return (
-      <div className="mode-selection">
+      <div className="mode-selection mode-selection--criar-hub">
         <div className="mode-header">
           <div className="mode-header-titles">
             <h2>
@@ -400,31 +313,99 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           </div>
         </div>
 
-        <div className="mode-cards mode-cards-terminal">
-          <div className="mode-card" role="button" tabIndex={0} onClick={() => setHubView('criar')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHubView('criar'); } }}>
-            <ThemeIcon light="bedLight.png" dark="bedDark.png" alt="" className="mode-icon-small" />
-            <h3>{t('hubCardCriarTitle')}</h3>
-            <p>{t('hubCardCriarDesc')}</p>
+        <div className="mode-cards mode-cards-terminal mode-cards-criar-all">
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => handleModeSelect('interactive')}
+            onKeyDown={cardKey(() => handleModeSelect('interactive'))}
+          >
+            <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="mode-icon-small" />
+            <h3>{t('hubBasicTitle')}</h3>
+            <p className="mode-card-desc">{t('hubBasicDesc')}</p>
+            {bedFileButtons('interactive')}
           </div>
-          <div className="mode-card" role="button" tabIndex={0} onClick={() => goHubTab('templates')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHubTab('templates'); } }}>
-            <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="" className="mode-icon-small" />
-            <h3>{t('hubCardTemplatesTitle')}</h3>
-            <p>{t('hubCardTemplatesDesc')}</p>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => handleModeSelect('blender_interactive')}
+            onKeyDown={cardKey(() => handleModeSelect('blender_interactive'))}
+          >
+            <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="" className="mode-icon-small" />
+            <h3>{t('hubGen3dTitle')}</h3>
+            <p className="mode-card-desc">{t('hubGen3dDesc')}</p>
+            {bedFileButtons('blender_interactive')}
           </div>
-          <div className="mode-card" role="button" tabIndex={0} onClick={() => { void openWizardCliModal(); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void openWizardCliModal(); } }}>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => handleModeSelect('pipeline_completo')}
+            onKeyDown={cardKey(() => handleModeSelect('pipeline_completo'))}
+          >
+            <ThemeIcon light="pipelineLight.png" dark="pipeline.png" alt="" className="mode-icon-small" />
+            <h3>{t('hubPipeTitle')}</h3>
+            <p className="mode-card-desc">{t('hubPipeDesc')}</p>
+            {bedFileButtons('pipeline_completo')}
+          </div>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => handleModeSelect('pipeline_blender_cfd')}
+            onKeyDown={cardKey(() => handleModeSelect('pipeline_blender_cfd'))}
+          >
+            <div className="mode-icon-combo">
+              <ThemeIcon light="blenderLight.png" dark="blender-svgrepo-com.svg" alt="" className="mode-icon-small" />
+              <span className="plus-symbol">+</span>
+              <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
+            </div>
+            <h3>{t('hubPipeBlenderCfdTitle')}</h3>
+            <p className="mode-card-desc">{t('hubPipeBlenderCfdDesc')}</p>
+            {bedFileButtons('pipeline_blender_cfd')}
+          </div>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => handleModeSelect('cfd_only')}
+            onKeyDown={cardKey(() => handleModeSelect('cfd_only'))}
+          >
+            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCfdOnlyTitle')}</h3>
+            <p className="mode-card-desc">{t('hubCfdOnlyDesc')}</p>
+            {bedFileButtons('cfd_only')}
+          </div>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => goHubTab('casos')}
+            onKeyDown={cardKey(() => goHubTab('casos'))}
+          >
+            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
+            <h3>{t('hubSolverOnlyTitle')}</h3>
+            <p className="mode-card-desc">{t('hubSolverOnlyDesc')}</p>
+          </div>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              void openWizardCliModal();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                void openWizardCliModal();
+              }
+            }}
+          >
             <ThemeIcon light="runLight.png" dark="runLight.png" alt="" className="mode-icon-small" />
             <h3>{t('hubCardQuickTitle')}</h3>
-            <p>{t('hubCardQuickDesc')}</p>
-          </div>
-          <div className="mode-card" role="button" tabIndex={0} onClick={() => goHubTab('mesh-viewer')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHubTab('mesh-viewer'); } }}>
-            <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="" className="mode-icon-small" />
-            <h3>{t('hubCardView3dTitle')}</h3>
-            <p>{t('hubCardView3dDesc')}</p>
-          </div>
-          <div className="mode-card" role="button" tabIndex={0} onClick={() => goHubTab('cfd')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHubTab('cfd'); } }}>
-            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
-            <h3>{t('hubCardCfdTitle')}</h3>
-            <p>{t('hubCardCfdDesc')}</p>
+            <p className="mode-card-desc">{t('hubCardQuickDesc')}</p>
           </div>
         </div>
       </div>
@@ -927,7 +908,6 @@ const BedWizard = ({ onNavigateTab } = {}) => {
 
       setStep(0);
       setMode(null);
-      setHubView('comecar');
       setShowBedFileOptions(false);
       setBedFileContent('');
       setBedFileName('');

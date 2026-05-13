@@ -1,46 +1,45 @@
 .comparison-page {
-  padding: 2rem;
-  max-width: 1200px;
+  padding: 1rem 0.85rem;
+  max-width: 960px;
   margin: 0 auto;
 }
 
 .comparison-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .comparison-title {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
 }
 
 .comparison-title h1 {
-  font-size: 2rem;
+  font-size: 1.45rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
-  text-transform: lowercase;
 }
 
 .title-icon {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
 }
 
 .comparison-description {
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: 0.82rem;
   margin: 0;
-  text-transform: lowercase;
+  line-height: 1.4;
 }
 
 .comparison-page-toolbar {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.5rem;
   align-items: center;
 }
 
@@ -48,16 +47,15 @@
 .comparison-compare-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   background: var(--primary);
   color: white;
   border: none;
-  padding: 0.6rem 1.1rem;
-  border-radius: 8px;
+  padding: 0.38rem 0.75rem;
+  border-radius: 5px;
   font-weight: 600;
   cursor: pointer;
-  font-size: 0.9rem;
-  text-transform: lowercase;
+  font-size: 0.78rem;
   transition: all 0.3s ease;
 }
 
@@ -98,24 +96,22 @@
   padding: 1.5rem;
   color: var(--text-secondary);
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  text-transform: lowercase;
 }
 
 .comparison-empty {
   text-align: center;
-  padding: 2rem 1.25rem;
-  margin-top: 0.5rem;
+  padding: 1.1rem 0.85rem;
+  margin-top: 0.35rem;
   background: var(--card-bg, #fffbf5);
-  border-radius: 12px;
-  border: 2px dashed var(--border, #e8d5c4);
+  border-radius: 6px;
+  border: 1px dashed var(--border, #e8d5c4);
 }
 
 .comparison-empty p {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.95rem;
+  margin: 0 0 0.35rem 0;
+  font-size: 0.8rem;
   color: var(--text-secondary, #555);
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  text-transform: lowercase;
 }
 
 .comparison-empty-hint {
@@ -127,25 +123,23 @@
 
 .selection-section {
   background: var(--bg-secondary);
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border: 2px solid var(--border-color);
+  padding: 0.9rem 1rem;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
 }
 
 .selection-section h2 {
-  font-size: 1.5rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
-  text-transform: lowercase;
+  margin-bottom: 0.35rem;
 }
 
 .selection-instruction {
   color: var(--text-secondary);
-  font-size: 0.95rem;
-  margin-bottom: 1.5rem;
-  text-transform: lowercase;
+  font-size: 0.78rem;
+  margin-bottom: 0.85rem;
 }
 
 .comparison-controls {
@@ -153,8 +147,8 @@
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.5rem;
-  gap: 1rem;
+  margin-bottom: 0.85rem;
+  gap: 0.65rem;
 }
 
 .filter-chips {
@@ -168,16 +162,15 @@
 }
 
 .filter-chip {
-  padding: 0.45rem 0.75rem;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  text-transform: lowercase;
 }
 
 .filter-chip:hover {
@@ -195,9 +188,9 @@
   display: flex;
   align-items: center;
   background: var(--bg-primary);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  border: 2px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border-color);
   transition: all 0.3s ease;
 }
 
@@ -219,7 +212,7 @@
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: 0.82rem;
   outline: none;
 }
 
@@ -266,17 +259,17 @@
 
 .simulation-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
 }
 
 .simulation-card {
   background: var(--bg-primary);
-  border-radius: 10px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 2px solid var(--border-color);
-  transition: all 0.3s ease;
+  border-radius: 6px;
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
+  transition: all 0.25s ease;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -284,8 +277,8 @@
 }
 
 .simulation-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
 }
 
 .simulation-card.selected {
@@ -300,10 +293,10 @@
 
 .simulation-card input[type="checkbox"] {
   position: absolute;
-  top: 1rem;
-  left: 1rem;
-  width: 20px;
-  height: 20px;
+  top: 0.55rem;
+  left: 0.55rem;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
   z-index: 1;
 }
@@ -313,7 +306,7 @@
 }
 
 .simulation-card .card-content {
-  margin-top: 1.5rem;
+  margin-top: 1.1rem;
   display: flex;
   flex-direction: column;
   flex-grow: 1;
@@ -321,12 +314,11 @@
 
 .simulation-status {
   display: inline-block;
-  padding: 0.3rem 0.7rem;
-  border-radius: 5px;
-  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
   font-weight: 600;
-  text-transform: lowercase;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.45rem;
 }
 
 .status-completed {
@@ -350,26 +342,26 @@
 }
 
 .simulation-card h3 {
-  font-size: 1.25rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .simulation-description {
-  font-size: 0.9rem;
+  font-size: 0.74rem;
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.55rem;
   flex-grow: 1;
 }
 
 .simulation-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: 0.35rem;
+  font-size: 0.72rem;
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.45rem;
 }
 
 .simulation-meta .meta-icon {
@@ -380,22 +372,22 @@
 }
 
 .main-results {
-  margin-top: 1rem;
-  padding-top: 1rem;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
   border-top: 1px solid var(--border-color);
 }
 
 .main-results h4 {
-  font-size: 1rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .main-results p {
-  font-size: 0.9rem;
+  font-size: 0.72rem;
   color: var(--text-secondary);
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.2rem;
 }
 
 .main-results p strong {
@@ -476,8 +468,8 @@
 .compare-modal {
   background: var(--bg-primary, #fff);
   color: var(--text-primary);
-  border-radius: 12px;
-  max-width: 1000px;
+  border-radius: 6px;
+  max-width: 920px;
   width: 100%;
   max-height: 90vh;
   display: flex;
@@ -491,16 +483,15 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-color);
-  gap: 1rem;
+  gap: 0.65rem;
 }
 
 .compare-modal-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  text-transform: lowercase;
   color: var(--text-primary);
 }
 
@@ -508,7 +499,6 @@
   margin: 0.2rem 0 0 0;
   font-size: 0.85rem;
   color: var(--text-secondary);
-  text-transform: lowercase;
 }
 
 .compare-modal-close {
@@ -526,14 +516,14 @@
 }
 
 .compare-modal-body {
-  padding: 1rem 1.5rem;
+  padding: 0.65rem 1rem;
   overflow: auto;
 }
 
 .compare-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
 }
 
 .compare-table thead th {
@@ -546,7 +536,6 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  text-transform: lowercase;
 }
 
 .compare-sim-header {
@@ -558,7 +547,6 @@
 .compare-sim-label {
   font-size: 0.72rem;
   color: var(--text-secondary);
-  text-transform: lowercase;
   font-weight: 500;
 }
 
@@ -573,7 +561,6 @@
   font-weight: 600;
   color: var(--text-secondary);
   width: 30%;
-  text-transform: lowercase;
 }
 
 .compare-table tbody td {
@@ -606,11 +593,10 @@
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
-  text-transform: lowercase;
 }
 
 .compare-modal-footer {
-  padding: 1rem 1.5rem;
+  padding: 0.65rem 1rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
@@ -620,11 +606,11 @@
   background: var(--primary);
   color: white;
   border: none;
-  padding: 0.55rem 1.25rem;
-  border-radius: 8px;
+  padding: 0.38rem 0.85rem;
+  border-radius: 5px;
   font-weight: 600;
+  font-size: 0.78rem;
   cursor: pointer;
-  text-transform: lowercase;
   transition: all 0.2s ease;
 }
 

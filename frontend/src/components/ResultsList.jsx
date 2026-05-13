@@ -150,10 +150,12 @@ function ResultsList() {
 
   return (
     <div className="results-container">
-      <h2>
-        <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="resultados" className="section-icon" />
-        {language === 'pt' ? 'resultados' : 'results'}
-      </h2>
+      <header className="results-page-header">
+        <div className="results-page-title">
+          <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="" className="results-page-title-icon" />
+          <h1 className="results-page-heading">{language === 'pt' ? 'Resultados' : 'Results'}</h1>
+        </div>
+      </header>
 
       {connectionError && <BackendConnectionError message={connectionError} />}
 
@@ -161,14 +163,14 @@ function ResultsList() {
         <section className="results-section">
           <h3>
             <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="modelos" className="section-icon" />
-            {language === 'pt' ? 'modelos 3d' : '3d models'} ({modelTotal})
+            {language === 'pt' ? 'Modelos 3d' : '3d models'} ({modelTotal})
           </h3>
 
           <div className="results-filters">
             <input
               type="search"
               className="search-input"
-              placeholder={language === 'pt' ? 'buscar modelo…' : 'search model…'}
+              placeholder={language === 'pt' ? 'Buscar modelo…' : 'Search model…'}
               value={modelFilters.search}
               onChange={(e) => {
                 setModelPage(1)
@@ -183,7 +185,7 @@ function ResultsList() {
                 setModelFilters((prev) => ({ ...prev, packing_method: e.target.value }))
               }}
             >
-              <option value="">{language === 'pt' ? 'todos os métodos' : 'all methods'}</option>
+              <option value="">{language === 'pt' ? 'Todos os métodos' : 'All methods'}</option>
               <option value="spherical_packing">spherical_packing</option>
               <option value="hexagonal_3d">hexagonal_3d</option>
               <option value="rigid_body">rigid_body</option>
@@ -196,9 +198,9 @@ function ResultsList() {
                 setModelFilters((prev) => ({ ...prev, has_blend: e.target.value }))
               }}
             >
-              <option value="">{language === 'pt' ? 'blend: qualquer' : 'blend: any'}</option>
-              <option value="true">{language === 'pt' ? 'com .blend' : 'with .blend'}</option>
-              <option value="false">{language === 'pt' ? 'sem .blend' : 'without .blend'}</option>
+              <option value="">{language === 'pt' ? 'Blend: qualquer' : 'Blend: any'}</option>
+              <option value="true">{language === 'pt' ? 'Com .blend' : 'With .blend'}</option>
+              <option value="false">{language === 'pt' ? 'Sem .blend' : 'Without .blend'}</option>
             </select>
             <button
               className="btn-small"
@@ -207,14 +209,14 @@ function ResultsList() {
                 setModelFilters({ search: '', packing_method: '', has_blend: '', has_stl: '' })
               }}
             >
-              {language === 'pt' ? 'limpar filtros' : 'clear filters'}
+              {language === 'pt' ? 'Limpar filtros' : 'Clear filters'}
             </button>
           </div>
 
           {loading ? (
-            <p>{language === 'pt' ? 'carregando...' : 'loading...'}</p>
+            <p>{language === 'pt' ? 'Carregando…' : 'Loading…'}</p>
           ) : models.length === 0 ? (
-            <p className="empty-state">{language === 'pt' ? 'nenhum modelo encontrado' : 'no models found'}</p>
+            <p className="empty-state">{language === 'pt' ? 'Nenhum modelo encontrado' : 'No models found'}</p>
           ) : (
             <div className="files-grid">
               {models.map((model) => (
@@ -244,7 +246,7 @@ function ResultsList() {
                       disabled={!getModelPreviewPath(model)}
                     >
                       <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="visualizar" className="btn-icon" />
-                      {language === 'pt' ? 'visualizar' : 'view'}
+                      {language === 'pt' ? 'Visualizar' : 'View'}
                     </button>
                     <button
                       className="btn-small"
@@ -252,7 +254,7 @@ function ResultsList() {
                       disabled={!getModelDownloadPath(model)}
                     >
                       <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="baixar" className="btn-icon" />
-                      {language === 'pt' ? 'baixar' : 'download'}
+                      {language === 'pt' ? 'Baixar' : 'Download'}
                     </button>
                   </div>
                 </div>
@@ -270,7 +272,7 @@ function ResultsList() {
               setModelPage(1)
               setModelLimit(value)
             }}
-            label={language === 'pt' ? 'modelos 3d' : '3d models'}
+            label={language === 'pt' ? 'Modelos 3d' : '3d models'}
             pt={language === 'pt'}
           />
         </section>
@@ -278,14 +280,14 @@ function ResultsList() {
         <section className="results-section">
           <h3>
             <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="simulações" className="section-icon" />
-            {language === 'pt' ? 'simulações' : 'simulations'} ({simTotal})
+            {language === 'pt' ? 'Simulações' : 'Simulations'} ({simTotal})
           </h3>
 
           <div className="results-filters">
             <input
               type="search"
               className="search-input"
-              placeholder={language === 'pt' ? 'buscar simulação…' : 'search simulation…'}
+              placeholder={language === 'pt' ? 'Buscar simulação…' : 'Search simulation…'}
               value={simFilters.search}
               onChange={(e) => {
                 setSimPage(1)
@@ -300,11 +302,11 @@ function ResultsList() {
                 setSimFilters((prev) => ({ ...prev, status: e.target.value }))
               }}
             >
-              <option value="">{language === 'pt' ? 'todos os estados' : 'all statuses'}</option>
-              <option value="completed">{language === 'pt' ? 'concluída' : 'completed'}</option>
-              <option value="running">{language === 'pt' ? 'executando' : 'running'}</option>
-              <option value="pending">{language === 'pt' ? 'pendente' : 'pending'}</option>
-              <option value="failed">{language === 'pt' ? 'falhou' : 'failed'}</option>
+              <option value="">{language === 'pt' ? 'Todos os estados' : 'All statuses'}</option>
+              <option value="completed">{language === 'pt' ? 'Concluída' : 'Completed'}</option>
+              <option value="running">{language === 'pt' ? 'Em execução' : 'Running'}</option>
+              <option value="pending">{language === 'pt' ? 'Pendente' : 'Pending'}</option>
+              <option value="failed">{language === 'pt' ? 'Falhou' : 'Failed'}</option>
             </select>
             <select
               className="search-input"
@@ -314,7 +316,7 @@ function ResultsList() {
                 setSimFilters((prev) => ({ ...prev, regime: e.target.value }))
               }}
             >
-              <option value="">{language === 'pt' ? 'todos os regimes' : 'all regimes'}</option>
+              <option value="">{language === 'pt' ? 'Todos os regimes' : 'All regimes'}</option>
               <option value="laminar">laminar</option>
               <option value="turbulent">turbulent</option>
             </select>
@@ -325,14 +327,14 @@ function ResultsList() {
                 setSimFilters({ search: '', status: '', regime: '' })
               }}
             >
-              {language === 'pt' ? 'limpar filtros' : 'clear filters'}
+              {language === 'pt' ? 'Limpar filtros' : 'Clear filters'}
             </button>
           </div>
 
           {loading ? (
-            <p>{language === 'pt' ? 'carregando...' : 'loading...'}</p>
+            <p>{language === 'pt' ? 'Carregando…' : 'Loading…'}</p>
           ) : simulations.length === 0 ? (
-            <p className="empty-state">{language === 'pt' ? 'nenhuma simulação encontrada' : 'no simulations found'}</p>
+            <p className="empty-state">{language === 'pt' ? 'Nenhuma simulação encontrada' : 'No simulations found'}</p>
           ) : (
             <div className="files-grid">
               {simulations.map((sim) => (
@@ -362,7 +364,7 @@ function ResultsList() {
                       }}
                     >
                       <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="resultados" className="btn-icon" />
-                      {language === 'pt' ? 'resultados' : 'results'}
+                      {language === 'pt' ? 'Resultados' : 'Results'}
                     </button>
                     <button
                       className="btn-small"
@@ -387,7 +389,7 @@ function ResultsList() {
               setSimPage(1)
               setSimLimit(value)
             }}
-            label={language === 'pt' ? 'simulações' : 'simulations'}
+            label={language === 'pt' ? 'Simulações' : 'Simulations'}
             pt={language === 'pt'}
           />
         </section>
@@ -403,7 +405,7 @@ function ResultsList() {
               x
             </button>
 
-            <h3>{language === 'pt' ? 'visualização 3d' : '3d preview'}: {selectedModel.name}</h3>
+            <h3>{language === 'pt' ? 'Visualização 3d' : '3d preview'}: {selectedModel.name}</h3>
 
             <ModelViewer modelPath={selectedModel.path} />
           </div>
@@ -420,19 +422,19 @@ function ResultsList() {
               x
             </button>
 
-            <h3>{language === 'pt' ? 'resultados da simulação' : 'simulation results'}: {selectedSimulation.name}</h3>
+            <h3>{language === 'pt' ? 'Resultados da simulação' : 'Simulation results'}: {selectedSimulation.name}</h3>
 
             {simulationResultsLoading ? (
-              <p>{language === 'pt' ? 'carregando...' : 'loading...'}</p>
+              <p>{language === 'pt' ? 'Carregando…' : 'Loading…'}</p>
             ) : selectedSimulationResults.length === 0 ? (
-              <p>{language === 'pt' ? 'nenhum resultado persistido para esta simulação' : 'no persisted results for this simulation'}</p>
+              <p>{language === 'pt' ? 'Nenhum resultado persistido para esta simulação' : 'No persisted results for this simulation'}</p>
             ) : (
               <>
                 <div className="results-filters">
                   <input
                     type="search"
                     className="search-input"
-                    placeholder={language === 'pt' ? 'buscar resultado…' : 'search result…'}
+                    placeholder={language === 'pt' ? 'Buscar resultado…' : 'Search result…'}
                     value={simulationResultsFilter.search}
                     onChange={(e) => setSimulationResultsFilter((prev) => ({ ...prev, search: e.target.value }))}
                   />
@@ -441,7 +443,7 @@ function ResultsList() {
                     value={simulationResultsFilter.resultType}
                     onChange={(e) => setSimulationResultsFilter((prev) => ({ ...prev, resultType: e.target.value }))}
                   >
-                    <option value="">{language === 'pt' ? 'todos os tipos' : 'all types'}</option>
+                    <option value="">{language === 'pt' ? 'Todos os tipos' : 'All types'}</option>
                     <option value="field">field</option>
                     <option value="metric">metric</option>
                     <option value="validation">validation</option>
@@ -458,7 +460,7 @@ function ResultsList() {
                       })
                     }
                   >
-                    {language === 'pt' ? 'aplicar filtros' : 'apply filters'}
+                    {language === 'pt' ? 'Aplicar filtros' : 'Apply filters'}
                   </button>
                 </div>
                 <div className="files-grid">
@@ -468,7 +470,7 @@ function ResultsList() {
                         <h4 className="file-name">{result.name}</h4>
                         <p className="file-size">{result.result_type}</p>
                         <p className="file-date">
-                          {result.value != null ? `${result.value} ${result.unit || ''}`.trim() : (language === 'pt' ? 'sem valor escalar' : 'no scalar value')}
+                          {result.value != null ? `${result.value} ${result.unit || ''}`.trim() : (language === 'pt' ? 'Sem valor escalar' : 'No scalar value')}
                         </p>
                         <p className="file-size">{result.file_type || 'json'}</p>
                       </div>
@@ -497,7 +499,7 @@ function ResultsList() {
                       search: simulationResultsFilter.search || null,
                     })
                   }
-                  label={language === 'pt' ? 'resultados persistidos' : 'persisted results'}
+                  label={language === 'pt' ? 'Resultados persistidos' : 'Persisted results'}
                   pt={language === 'pt'}
                 />
               </>

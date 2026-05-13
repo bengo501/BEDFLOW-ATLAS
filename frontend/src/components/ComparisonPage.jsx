@@ -88,7 +88,7 @@ function areValuesDifferent(a, b) {
 function ComparisonPage() {
   const { language, t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState('completed');
+  const [activeFilter, setActiveFilter] = useState('all');
   const [selectedSimulations, setSelectedSimulations] = useState([]);
   const [simulations, setSimulations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -180,13 +180,13 @@ function ComparisonPage() {
   const getStatusText = (status) => {
     switch (status) {
       case 'completed':
-        return language === 'pt' ? 'concluída' : 'completed';
+        return language === 'pt' ? 'Concluída' : 'completed';
       case 'running':
-        return language === 'pt' ? 'em execução' : 'running';
+        return language === 'pt' ? 'Em execução' : 'running';
       case 'pending':
-        return language === 'pt' ? 'pendente' : 'pending';
+        return language === 'pt' ? 'Pendente' : 'pending';
       case 'failed':
-        return language === 'pt' ? 'falhou' : 'failed';
+        return language === 'pt' ? 'Falhou' : 'failed';
       default:
         return status;
     }
@@ -213,11 +213,11 @@ function ComparisonPage() {
   };
 
   const filterOptions = [
-    { key: 'all', labelPt: 'todas', labelEn: 'all' },
-    { key: 'completed', labelPt: 'concluídas', labelEn: 'completed' },
-    { key: 'running', labelPt: 'em execução', labelEn: 'running' },
-    { key: 'pending', labelPt: 'pendentes', labelEn: 'pending' },
-    { key: 'failed', labelPt: 'falharam', labelEn: 'failed' }
+    { key: 'all', labelPt: 'Todas', labelEn: 'All' },
+    { key: 'completed', labelPt: 'Concluídas', labelEn: 'Completed' },
+    { key: 'running', labelPt: 'Em execução', labelEn: 'Running' },
+    { key: 'pending', labelPt: 'Pendentes', labelEn: 'Pending' },
+    { key: 'failed', labelPt: 'Falharam', labelEn: 'Failed' },
   ];
 
   const emptyNoData = !loading && !loadError && simulations.length === 0;
@@ -229,19 +229,19 @@ function ComparisonPage() {
       <div className="comparison-header">
         <div className="comparison-title">
           <ThemeIcon light="compareLight.png" dark="compareDark.png" alt="comparisons" className="title-icon" />
-          <h1>{language === 'pt' ? 'comparações' : 'comparisons'}</h1>
+          <h1>{language === 'pt' ? 'Comparações' : 'Comparisons'}</h1>
         </div>
         <p className="comparison-description">
           {language === 'pt'
-            ? 'compare simulações lado a lado e analise diferenças'
-            : 'compare simulations side by side and analyze differences'}
+            ? 'Compare simulações lado a lado e analise diferenças'
+            : 'Compare simulations side by side and analyze differences'}
         </p>
       </div>
 
       <div className="comparison-page-toolbar">
         <button type="button" className="comparison-refresh-btn" onClick={loadSimulations} disabled={loading}>
           <ThemeIcon light="refreshLigh.png" dark="refreshDark.png" alt="" className="comparison-refresh-icon" />
-          {language === 'pt' ? 'atualizar' : 'refresh'}
+          {language === 'pt' ? 'Atualizar' : 'Refresh'}
         </button>
         <button
           type="button"
@@ -251,13 +251,13 @@ function ComparisonPage() {
           title={
             selectedSimulations.length !== 2
               ? language === 'pt'
-                ? 'selecione duas simulações para comparar'
-                : 'select two simulations to compare'
+                ? 'Selecione duas simulações para comparar'
+                : 'Select two simulations to compare'
               : ''
           }
         >
           <ThemeIcon light="compareLight.png" dark="compareDark.png" alt="" className="comparison-refresh-icon" />
-          {language === 'pt' ? 'comparar' : 'compare'}
+          {language === 'pt' ? 'Comparar' : 'Compare'}
           {selectedSimulations.length > 0 && (
             <span className="compare-count">({selectedSimulations.length}/2)</span>
           )}
@@ -267,13 +267,13 @@ function ComparisonPage() {
       {loadError && <BackendConnectionError message={loadError} />}
 
       <div className="selection-section">
-        <h2>{language === 'pt' ? 'selecionar simulações para comparar' : 'select simulations to compare'}</h2>
+        <h2>{language === 'pt' ? 'Selecionar simulações para comparar' : 'Select simulations to compare'}</h2>
         <p className="selection-instruction">
-          {language === 'pt' ? 'selecione exatamente duas simulações concluídas' : 'select exactly two completed simulations'}
+          {language === 'pt' ? 'Selecione exatamente duas simulações concluídas' : 'Select exactly two completed simulations'}
         </p>
 
         {loading && (
-          <p className="comparison-loading">{language === 'pt' ? 'carregando…' : 'loading…'}</p>
+          <p className="comparison-loading">{language === 'pt' ? 'A carregar…' : 'Loading…'}</p>
         )}
 
         {!loading && !loadError && (
@@ -288,7 +288,7 @@ function ComparisonPage() {
                 />
                 <input
                   type="text"
-                  placeholder={language === 'pt' ? 'buscar simulações…' : 'search simulations…'}
+                  placeholder={language === 'pt' ? 'Buscar simulações…' : 'Search simulations…'}
                   value={searchTerm}
                   onChange={handleSearchChange}
                 />
@@ -309,18 +309,18 @@ function ComparisonPage() {
 
             {emptyNoData && (
               <div className="comparison-empty">
-                <p>{language === 'pt' ? 'nenhuma simulação encontrada' : 'no simulations found'}</p>
+                <p>{language === 'pt' ? 'Nenhuma simulação encontrada' : 'No simulations found'}</p>
                 <p className="comparison-empty-hint">
                   {language === 'pt'
-                    ? 'com o backend ativo, as simulações registadas aparecem aqui'
-                    : 'with the backend running, registered simulations appear here'}
+                    ? 'Com o backend ativo, as simulações registadas aparecem aqui'
+                    : 'With the backend running, registered simulations appear here'}
                 </p>
               </div>
             )}
 
             {emptyFiltered && (
               <div className="comparison-empty">
-                <p>{language === 'pt' ? 'nenhum resultado para os filtros atuais' : 'no results for current filters'}</p>
+                <p>{language === 'pt' ? 'Nenhum resultado para os filtros atuais' : 'No results for current filters'}</p>
               </div>
             )}
 
@@ -366,12 +366,12 @@ function ComparisonPage() {
                       </div>
                       {sim.status === 'completed' && (
                         <div className="main-results">
-                          <h4>{language === 'pt' ? 'resultados principais' : 'main results'}</h4>
+                          <h4>{language === 'pt' ? 'Resultados principais' : 'Main results'}</h4>
                           <p>
-                            <strong>{language === 'pt' ? 'queda de pressão' : 'pressure drop'}:</strong> {sim.mainResults.pressure}
+                            <strong>{language === 'pt' ? 'Queda de pressão' : 'Pressure drop'}:</strong> {sim.mainResults.pressure}
                           </p>
                           <p>
-                            <strong>{language === 'pt' ? 'eficiência' : 'efficiency'}:</strong> {sim.mainResults.efficiency}
+                            <strong>{language === 'pt' ? 'Eficiência' : 'Efficiency'}:</strong> {sim.mainResults.efficiency}
                           </p>
                         </div>
                       )}
@@ -565,7 +565,7 @@ function CompareModal({ leftItem, rightItem, onClose, language, getStatusText, g
       <div className="compare-modal">
         <div className="compare-modal-header">
           <div>
-            <h2>{language === 'pt' ? 'comparar simulações' : 'compare simulations'}</h2>
+            <h2>{language === 'pt' ? 'Comparar simulações' : 'Compare simulations'}</h2>
             <p className="compare-modal-subtitle">
               {language === 'pt'
                 ? `${diffCount} ${diffCount === 1 ? 'diferença encontrada' : 'diferenças encontradas'}`
@@ -586,16 +586,16 @@ function CompareModal({ leftItem, rightItem, onClose, language, getStatusText, g
           <table className="compare-table">
             <thead>
               <tr>
-                <th className="compare-field-col">{language === 'pt' ? 'campo' : 'field'}</th>
+                <th className="compare-field-col">{language === 'pt' ? 'Campo' : 'Field'}</th>
                 <th>
                   <div className="compare-sim-header">
-                    <span className="compare-sim-label">{language === 'pt' ? 'simulação a' : 'simulation a'}</span>
+                    <span className="compare-sim-label">{language === 'pt' ? 'Simulação A' : 'Simulation A'}</span>
                     <span className="compare-sim-name">{left.name}</span>
                   </div>
                 </th>
                 <th>
                   <div className="compare-sim-header">
-                    <span className="compare-sim-label">{language === 'pt' ? 'simulação b' : 'simulation b'}</span>
+                    <span className="compare-sim-label">{language === 'pt' ? 'Simulação B' : 'Simulation B'}</span>
                     <span className="compare-sim-name">{right.name}</span>
                   </div>
                 </th>

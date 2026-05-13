@@ -28,7 +28,7 @@ export const TAB_DEV_INFO = {
       'ficheiros gerados em /files',
     ],
   },
-  cfd: {
+  casos: {
     api: [
       'POST /api/cfd/create',
       'POST /api/cfd/run-from-wizard',
@@ -36,17 +36,12 @@ export const TAB_DEV_INFO = {
       'GET /api/cfd/list',
       'GET /api/cfd/status/{simulation_id}',
       'DELETE /api/cfd/{simulation_id}',
-    ],
-    persistence: ['simulations', 'results', 'casos em disco (openfoam)'],
-  },
-  casos: {
-    api: [
       'GET /api/casos/list',
       'GET /api/casos/{nome_caso}/detalhes',
       'POST /api/casos/{nome_caso}/executar',
       'DELETE /api/casos/{nome_caso}',
     ],
-    persistence: ['sistema de ficheiros de casos', 'metadados via listagens'],
+    persistence: ['simulations', 'results', 'casos em disco (openfoam)', 'sistema de ficheiros de casos'],
   },
   jobs: {
     api: ['GET /api/jobs', 'GET /api/job/{job_id}'],

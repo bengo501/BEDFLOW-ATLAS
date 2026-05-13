@@ -179,6 +179,12 @@ export const getDashboardSummary = async (recent_limit = 8) => {
   return response.data;
 };
 
+/** uso em disco (local_data + generated + output) vs teto 60 gib */
+export const getArtifactsStorage = async () => {
+  const response = await api.get('/api/dashboard/artifacts-storage');
+  return response.data;
+};
+
 // agregados para graficos do dashboard contagens medias etc
 export const getSimulationsSummary = async () => {
   const response = await api.get('/api/simulations/summary');

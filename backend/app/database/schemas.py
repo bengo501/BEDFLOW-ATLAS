@@ -220,7 +220,19 @@ class DashboardSummaryResponse(BaseModel):
     recent_models_3d: List[Model3DResponse]
 
 
-# schemas para Result
+class ArtifactDirBreakdown(BaseModel):
+    label: str
+    path: str
+    size_bytes: int
+
+
+class ArtifactsStorageResponse(BaseModel):
+    """uso em disco dos artefactos vs teto (60 gib) para o dashboard"""
+    bytes_used: int
+    bytes_cap: int
+    cap_gb: float
+    percent_of_cap: float
+    breakdown: List[ArtifactDirBreakdown]
 
 class ResultBase(BaseModel):
     """schema base para resultado"""

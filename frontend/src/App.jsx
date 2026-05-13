@@ -3,7 +3,6 @@ import Dashboard from './components/Dashboard'
 import SimulationHistory from './components/SimulationHistory'
 import ComparisonPage from './components/ComparisonPage'
 import BedWizard from './components/BedWizard'
-import CFDSimulation from './components/CFDSimulation'
 import CasosCFD from './components/CasosCFD'
 import JobStatus from './components/JobStatus'
 import ResultsList from './components/ResultsList'
@@ -29,7 +28,6 @@ const SIMPLE_MODE_TABS = new Set([
   'dashboard',
   'wizard',
   'mesh-viewer',
-  'cfd',
   'casos',
   'jobs',
   'results',
@@ -45,12 +43,11 @@ function App() {
   const { theme, toggleTheme, setThemeMode } = useTheme();
   const { simpleMode, devMode, applySettingsFromApi, setSimpleMode, setDevMode } = useAppUi();
   const { activeUserId, setActiveUserId } = useActiveUser();
-  const [activeTab, setActiveTab] = useState('dashboard') // dashboard, create, wizard, pipeline, cfd, jobs, results
+  const [activeTab, setActiveTab] = useState('dashboard')
   const [wizardResetKey, setWizardResetKey] = useState(0)
   const [systemStatus, setSystemStatus] = useState(null)
   const [backendUnreachable, setBackendUnreachable] = useState(false)
   const [currentJob, setCurrentJob] = useState(null)
-  const [lastBedFile, setLastBedFile] = useState(null)
   const [isScrolled, setIsScrolled] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [showDocs, setShowDocs] = useState(false)
@@ -227,13 +224,13 @@ function App() {
   }, [setDevMode, setLanguage, setSimpleMode, setThemeMode]);
 
   const navigateToTab = (tab) => {
+    const tabNorm = tab === 'cfd' ? 'casos' : tab
     const sectionByTab = {
       dashboard: 'dashboard',
       wizard: 'create',
       'mesh-viewer': 'dashboard',
       templates: 'templates',
       'templates-saved': 'templates',
-      cfd: 'simulation',
       casos: 'simulation',
       database: 'database',
       comparisons: 'analysis',
@@ -244,7 +241,7 @@ function App() {
       profile: 'profile',
       settings: 'settings',
     }
-    const sec = sectionByTab[tab]
+    const sec = sectionByTab[tabNorm]
     setExpandedSections((prev) => {
       const next = {}
       Object.keys(prev).forEach((k) => {
@@ -255,7 +252,7 @@ function App() {
       }
       return next
     })
-    setActiveTab(tab)
+    setActiveTab(tabNorm)
   }
 
   const handleJobCreated = (job) => {
@@ -441,11 +438,11 @@ function App() {
             <div className="nav-section">
               <button
                 type="button"
-                className={`nav-item nav-item-root nav-item-folder-face ${activeTab === 'dashboard' ? 'active' : ''}`}
+                className={`nav-item nav-item-root nav-item-folder-face nav-item-dashboard ${activeTab === 'dashboard' ? 'active' : ''}`}
                 onClick={() => navigateToTab('dashboard')}
               >
                 <ThemeIcon light="analiseLight.png" dark="analiseLight.png" alt="dashboard" className="nav-icon" location="sidebar" />
-                <span className="nav-label">{language === 'pt' ? 'dashboard' : 'dashboard'}</span>
+                <span className="nav-label">{language === 'pt' ? 'Dashboard' : 'Dashboard'}</span>
               </button>
             </div>
 
@@ -468,17 +465,6 @@ function App() {
               >
                 <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="3d" className="nav-icon" location="sidebar" />
                 <span className="nav-label">{language === 'pt' ? 'visualização 3d' : '3d viewer'}</span>
-              </button>
-            </div>
-
-            <div className="nav-section">
-              <button
-                type="button"
-                className={`nav-item nav-item-root nav-item-folder-face ${activeTab === 'cfd' ? 'active' : ''}`}
-                onClick={() => navigateToTab('cfd')}
-              >
-                <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="cfd" className="nav-icon" location="sidebar" />
-                <span className="nav-label">{t('cfdSimulation')}</span>
               </button>
             </div>
 
@@ -552,7 +538,7 @@ function App() {
                 <div className="nav-subsection">
                   <button
                     className={`nav-item ${activeTab === 'casos' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('casos')}
+                    onClick={() => navigateToTab('casos')}
                   >
                     <ThemeIcon light="folderLight.png" dark="folderLight.png" alt="casos cfd" className="nav-icon" />
                     <span className="nav-label">{t('casosCfd')}</span>
@@ -709,12 +695,6 @@ function App() {
                 initialMeshId={bootMeshViewerId}
                 onConsumedBootId={() => setBootMeshViewerId(null)}
               />
-            </div>
-          )}
-
-          {activeTab === 'cfd' && (
-            <div className="tab-content">
-              <CFDSimulation bedFileName={lastBedFile} />
             </div>
           )}
 

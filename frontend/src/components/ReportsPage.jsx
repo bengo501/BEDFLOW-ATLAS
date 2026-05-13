@@ -14,6 +14,7 @@ import {
 } from '../services/api';
 import BackendConnectionError from './BackendConnectionError';
 import PaginationControls from './PaginationControls';
+import ThemeIcon from './ThemeIcon';
 import './ReportsPage.css';
 
 function isConnectionError(err) {
@@ -28,9 +29,9 @@ function isConnectionError(err) {
 
 function statusLabel(status, pt) {
   const m = {
-    draft: pt ? 'rascunho' : 'draft',
-    planned: pt ? 'planeado' : 'planned',
-    published: pt ? 'publicado' : 'published',
+    draft: pt ? 'Rascunho' : 'Draft',
+    planned: pt ? 'Planeado' : 'Planned',
+    published: pt ? 'Publicado' : 'Published',
   };
   return m[status] || status;
 }
@@ -622,19 +623,25 @@ export default function ReportsPage() {
         )}
 
         <div className="reports-layout">
-          <section className="reports-mockup-card" aria-label={pt ? 'relatórios' : 'reports'}>
-            <div className="reports-card-header">
-              <h2>{pt ? 'relatórios' : 'reports'}</h2>
-              <button type="button" className="reports-btn-primary" onClick={handleCreate}>
-                {pt ? 'criar relatório' : 'create report'}
-              </button>
+          <header className="reports-page-header">
+            <div className="reports-page-title">
+              <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="" className="reports-page-title-icon" />
+              <h1 className="reports-page-heading">{pt ? 'Relatórios' : 'Reports'}</h1>
             </div>
-            <p className="reports-mockup-lead">
+            <p className="reports-page-lead">
               {pt
-                ? 'documentos técnicos guardados na base de dados. clique num relatório para editar o texto e associar simulações, templates, resultados ou notas de dados.'
-                : 'technical documents stored in the database. click a report to edit text and link simulations, templates, results, or data notes.'}
+                ? 'Documentos técnicos guardados na base de dados. Clique num relatório para editar o texto e associar simulações, templates, resultados ou notas de dados.'
+                : 'Technical documents stored in the database. Click a report to edit text and link simulations, templates, results, or data notes.'}
             </p>
+          </header>
 
+          <div className="reports-page-toolbar">
+            <button type="button" className="reports-btn-primary" onClick={handleCreate}>
+              {pt ? 'Criar relatório' : 'Create report'}
+            </button>
+          </div>
+
+          <section className="reports-mockup-card" aria-label={pt ? 'Relatórios' : 'Reports'}>
             <div className="reports-toolbar">
               <div className="reports-toolbar-grid">
                 <input
@@ -645,7 +652,7 @@ export default function ReportsPage() {
                     setPage(1);
                     setFilters((prev) => ({ ...prev, search: e.target.value }));
                   }}
-                  placeholder={pt ? 'buscar por título ou conteúdo…' : 'search by title or body…'}
+                  placeholder={pt ? 'Buscar por título ou conteúdo…' : 'Search by title or body…'}
                 />
                 <select
                   className="reports-filter-input"
@@ -655,10 +662,10 @@ export default function ReportsPage() {
                     setFilters((prev) => ({ ...prev, status: e.target.value }));
                   }}
                 >
-                  <option value="">{pt ? 'todos os estados' : 'all statuses'}</option>
-                  <option value="draft">{pt ? 'rascunho' : 'draft'}</option>
-                  <option value="planned">{pt ? 'planeado' : 'planned'}</option>
-                  <option value="published">{pt ? 'publicado' : 'published'}</option>
+                  <option value="">{pt ? 'Todos os estados' : 'All statuses'}</option>
+                  <option value="draft">{statusLabel('draft', pt)}</option>
+                  <option value="planned">{statusLabel('planned', pt)}</option>
+                  <option value="published">{statusLabel('published', pt)}</option>
                 </select>
                 <input
                   type="date"
@@ -688,21 +695,21 @@ export default function ReportsPage() {
                   }}
                   disabled={loading}
                 >
-                  {pt ? 'limpar filtros' : 'clear filters'}
+                  {pt ? 'Limpar filtros' : 'Clear filters'}
                 </button>
                 <button type="button" onClick={() => loadReports()} disabled={loading}>
-                  {pt ? 'atualizar lista' : 'refresh list'}
+                  {pt ? 'Atualizar lista' : 'Refresh list'}
                 </button>
               </div>
             </div>
 
             {loading ? (
-              <p className="reports-status">{pt ? 'a carregar…' : 'loading…'}</p>
+              <p className="reports-status">{pt ? 'A carregar…' : 'Loading…'}</p>
             ) : reports.length === 0 ? (
               <p className="reports-status">
                 {pt
-                  ? 'nenhum relatório. use «criar relatório» para começar.'
-                  : 'no reports yet. use «create report» to start.'}
+                  ? 'Nenhum relatório. Use «Criar relatório» para começar.'
+                  : 'No reports yet. Use «Create report» to start.'}
               </p>
             ) : (
               <ul className="reports-mock-list reports-mock-list-clickable">
@@ -719,7 +726,7 @@ export default function ReportsPage() {
                       </span>
                       <span className="reports-row-meta">
                         {row.attachment_count ?? 0}{' '}
-                        {pt ? 'anexos' : 'attachments'} ·{' '}
+                        {pt ? 'Anexos' : 'attachments'} ·{' '}
                         {row.updated_at
                           ? new Date(row.updated_at).toLocaleString(pt ? 'pt-PT' : 'en-GB')
                           : '—'}
@@ -741,7 +748,7 @@ export default function ReportsPage() {
                 setPage(1);
                 setLimit(value);
               }}
-              label={pt ? 'relatórios' : 'reports'}
+              label={pt ? 'Relatórios' : 'Reports'}
               pt={pt}
             />
 
@@ -763,14 +770,14 @@ export default function ReportsPage() {
               aria-labelledby="reports-modal-title"
             >
               <div className="reports-modal-header">
-                <h2 id="reports-modal-title">{pt ? 'editar relatório' : 'edit report'}</h2>
+                <h2 id="reports-modal-title">{pt ? 'Editar relatório' : 'Edit report'}</h2>
                 <button type="button" className="reports-modal-close" onClick={closeModal}>
                   ×
                 </button>
               </div>
 
               {detailLoading ? (
-                <p className="reports-modal-loading">{pt ? 'a carregar…' : 'loading…'}</p>
+                <p className="reports-modal-loading">{pt ? 'A carregar…' : 'Loading…'}</p>
               ) : detail ? (
                 <div className="reports-modal-body">
                   <label className="reports-field">

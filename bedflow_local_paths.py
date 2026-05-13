@@ -6,6 +6,8 @@ import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import os
+
 _REPO_ROOT = Path(__file__).resolve().parent
 
 # extensoes de malha que o visualizador web e desktop tentam carregar
@@ -302,3 +304,61 @@ def resolve_validated_mesh_path(rel: str) -> Optional[Path]:
     if not p.is_file():
         return None
     return p
+
+
+# limite de referencia para o dashboard (uso em disco dos artefactos)
+ARTIFACTS_STORAGE_CAP_BYTES: int = 60 * 1024 * 1024 * 1024
+
+
+def directory_size_bytes(path: Path) -> int:
+    """soma tamanhos de ficheiros sob path (nao segue symlinks como dirs)."""
+    total = 0
+    if not path.exists():
+        return 0
+    try:
+        base = path.resolve()
+        for root, _dirs, files in os.walk(base, topdown=True, followlinks=False):
+            for name in files:
+                fp = Path(root) / name
+                try:
+                    if fp.is_symlink():
+                        continue
+                    if fp.is_file():
+                        total += fp.stat().st_size
+                except OSError:
+                    continue
+    except OSError:
+        return 0
+    return total
+
+
+def get_artifacts_storage_report() -> Dict[str, Any]:
+    """
+    uso em disco das pastas de artefactos do projeto vs teto de 60 gib (dashboard).
+    inclui local_data, generated e output na raiz.
+    """
+    parts: List[Tuple[str, Path]] = [
+        ("local_data", local_data_root()),
+        ("generated", legacy_generated_root()),
+        ("output", legacy_output_root()),
+    ]
+    breakdown: List[Dict[str, Any]] = []
+    used = 0
+    for label, p in parts:
+        try:
+            resolved = p.resolve()
+        except OSError:
+            resolved = p
+        b = directory_size_bytes(resolved)
+        used += b
+        breakdown.append({"label": label, "path": str(resolved), "size_bytes": b})
+    cap = ARTIFACTS_STORAGE_CAP_BYTES
+    pct = round((100.0 * used / cap), 2) if cap else 0.0
+    pct = min(max(pct, 0.0), 100.0)
+    return {
+        "bytes_used": used,
+        "bytes_cap": cap,
+        "cap_gb": round(cap / (1024**3), 2),
+        "percent_of_cap": pct,
+        "breakdown": breakdown,
+    }

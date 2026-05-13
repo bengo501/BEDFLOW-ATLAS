@@ -391,7 +391,27 @@ async def get_dashboard_summary(
     return unified_data_service.get_dashboard_summary(db, user_id, recent_limit=recent_limit)
 
 
-@router.get("/simulations/{simulation_id}", response_model=schemas.SimulationResponse, tags=["database", "simulations"])
+@router.get(
+    "/dashboard/artifacts-storage",
+    response_model=schemas.ArtifactsStorageResponse,
+    tags=["database", "dashboard"],
+)
+async def get_artifacts_storage(
+    _user_id: int = Depends(get_active_user_id),
+):
+    """
+    soma tamanhos em disco em local_data, generated e output; compara com 60 gib.
+    """
+    from bedflow_local_paths import get_artifacts_storage_report
+
+    raw = get_artifacts_storage_report()
+    return schemas.ArtifactsStorageResponse(
+        bytes_used=raw["bytes_used"],
+        bytes_cap=raw["bytes_cap"],
+        cap_gb=raw["cap_gb"],
+        percent_of_cap=raw["percent_of_cap"],
+        breakdown=[schemas.ArtifactDirBreakdown(**row) for row in raw["breakdown"]],
+    )
 async def get_simulation(
     simulation_id: int,
     db: Session = Depends(get_db),

@@ -179,13 +179,13 @@ function SimulationHistory() {
   const getStatusText = (status) => {
     switch (status) {
       case 'completed':
-        return language === 'pt' ? 'concluída' : 'completed';
+        return language === 'pt' ? 'Concluída' : 'Completed';
       case 'running':
-        return language === 'pt' ? 'em execução' : 'running';
+        return language === 'pt' ? 'Em execução' : 'Running';
       case 'pending':
-        return language === 'pt' ? 'pendente' : 'pending';
+        return language === 'pt' ? 'Pendente' : 'Pending';
       case 'failed':
-        return language === 'pt' ? 'falhou' : 'failed';
+        return language === 'pt' ? 'Falhou' : 'Failed';
       default:
         return status;
     }
@@ -319,19 +319,19 @@ function SimulationHistory() {
       <div className="history-header">
         <div className="history-title">
           <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="histórico" className="title-icon" />
-          <h1>{language === 'pt' ? 'histórico de simulações' : 'simulation history'}</h1>
+          <h1>{language === 'pt' ? 'Histórico de simulações' : 'Simulation history'}</h1>
         </div>
         <p className="history-description">
           {language === 'pt'
-            ? 'visualize e gerencie todas as suas simulações cfd'
-            : 'view and manage all your cfd simulations'}
+            ? 'Visualize e gerencie todas as suas simulações cfd'
+            : 'View and manage all your cfd simulations'}
         </p>
       </div>
 
       <div className="history-controls">
         <button type="button" className="refresh-btn" onClick={loadData} disabled={loading}>
           <ThemeIcon light="refreshLigh.png" dark="refreshDark.png" alt="atualizar" className="refresh-icon" />
-          {language === 'pt' ? 'atualizar' : 'refresh'}
+          {language === 'pt' ? 'Atualizar' : 'Refresh'}
         </button>
       </div>
 
@@ -351,24 +351,24 @@ function SimulationHistory() {
 
       {loading && (
         <div className="sim-history-loading">
-          {language === 'pt' ? 'carregando…' : 'loading…'}
+          {language === 'pt' ? 'Carregando…' : 'Loading…'}
         </div>
       )}
 
       {!loading && emptyNoData && (
         <div className="sim-history-empty">
-          <p>{language === 'pt' ? 'nenhuma simulação encontrada' : 'no simulations found'}</p>
+          <p>{language === 'pt' ? 'Nenhuma simulação encontrada' : 'No simulations found'}</p>
           <p className="sim-history-empty-hint">
             {language === 'pt'
-              ? 'use o wizard ou o pipeline para criar leitos e registar simulações'
-              : 'use the wizard or pipeline to create beds and register simulations'}
+              ? 'Use o wizard ou o pipeline para criar leitos e registar simulações'
+              : 'Use the wizard or pipeline to create beds and register simulations'}
           </p>
         </div>
       )}
 
       <section className="history-section">
         <div className="history-section-header">
-          <h2 className="history-subtitle">{pt ? 'simulações' : 'simulations'}</h2>
+          <h2 className="history-subtitle">{pt ? 'Simulações' : 'Simulations'}</h2>
         </div>
 
         <div className="history-filter-grid">
@@ -376,7 +376,7 @@ function SimulationHistory() {
             <ThemeIcon light="triangle_white_outline.png" dark="triangle_black_outline.png" alt="buscar" className="search-icon" />
             <input
               type="text"
-              placeholder={pt ? 'buscar por nome, descrição ou id…' : 'search by name, description or id…'}
+              placeholder={pt ? 'Buscar por nome, descrição ou id…' : 'Search by name, description or id…'}
               value={simFilters.search}
               onChange={(e) => {
                 setSimPage(1);
@@ -394,11 +394,11 @@ function SimulationHistory() {
               setSimFilters((prev) => ({ ...prev, status: e.target.value }));
             }}
           >
-            <option value="">{pt ? 'todos os estados' : 'all statuses'}</option>
-            <option value="completed">{pt ? 'concluída' : 'completed'}</option>
-            <option value="running">{pt ? 'em execução' : 'running'}</option>
-            <option value="pending">{pt ? 'pendente' : 'pending'}</option>
-            <option value="failed">{pt ? 'falhou' : 'failed'}</option>
+            <option value="">{pt ? 'Todos os estados' : 'All statuses'}</option>
+            <option value="completed">{pt ? 'Concluída' : 'Completed'}</option>
+            <option value="running">{pt ? 'Em execução' : 'Running'}</option>
+            <option value="pending">{pt ? 'Pendente' : 'Pending'}</option>
+            <option value="failed">{pt ? 'Falhou' : 'Failed'}</option>
           </select>
 
           <select
@@ -409,7 +409,7 @@ function SimulationHistory() {
               setSimFilters((prev) => ({ ...prev, regime: e.target.value }));
             }}
           >
-            <option value="">{pt ? 'todos os regimes' : 'all regimes'}</option>
+            <option value="">{pt ? 'Todos os regimes' : 'All regimes'}</option>
             <option value="laminar">laminar</option>
             <option value="turbulent">turbulent</option>
           </select>
@@ -447,13 +447,13 @@ function SimulationHistory() {
               });
             }}
           >
-            {pt ? 'limpar filtros' : 'clear filters'}
+            {pt ? 'Limpar filtros' : 'Clear filters'}
           </button>
         </div>
 
         {!loading && simTotal === 0 ? (
           <div className="sim-history-empty">
-            <p>{pt ? 'nenhuma simulação encontrada com os filtros atuais' : 'no simulations found for current filters'}</p>
+            <p>{pt ? 'Nenhuma simulação encontrada com os filtros atuais' : 'No simulations found for current filters'}</p>
           </div>
         ) : (
           <>
@@ -465,7 +465,7 @@ function SimulationHistory() {
                       {getStatusIcon(simulation.status)}
                       <span className="status-text">{getStatusText(simulation.status)}</span>
                     </div>
-                    <span className="simulation-id">id {simulation.id}</span>
+                    <span className="simulation-id">{pt ? 'Id' : 'id'} {simulation.id}</span>
                   </div>
 
                   <div className="simulation-info">
@@ -535,7 +535,7 @@ function SimulationHistory() {
                 setSimPage(1);
                 setSimLimit(value);
               }}
-              label={pt ? 'histórico de simulações' : 'simulation history'}
+              label={pt ? 'Histórico de simulações' : 'Simulation history'}
               pt={pt}
             />
           </>
@@ -544,7 +544,7 @@ function SimulationHistory() {
 
       <section className="history-section">
         <div className="history-section-header">
-          <h2 className="history-subtitle">{pt ? 'modelos 3d persistidos' : 'persisted 3d models'}</h2>
+          <h2 className="history-subtitle">{pt ? 'Modelos 3d persistidos' : 'Persisted 3d models'}</h2>
         </div>
 
         <div className="history-filter-grid">
@@ -552,7 +552,7 @@ function SimulationHistory() {
             <ThemeIcon light="triangle_white_outline.png" dark="triangle_black_outline.png" alt="buscar" className="search-icon" />
             <input
               type="text"
-              placeholder={pt ? 'buscar modelo por nome ou descrição…' : 'search model by name or description…'}
+              placeholder={pt ? 'Buscar modelo por nome ou descrição…' : 'Search model by name or description…'}
               value={modelFilters.search}
               onChange={(e) => {
                 setModelPage(1);
@@ -570,7 +570,7 @@ function SimulationHistory() {
               setModelFilters((prev) => ({ ...prev, packing_method: e.target.value }));
             }}
           >
-            <option value="">{pt ? 'todos os métodos' : 'all methods'}</option>
+            <option value="">{pt ? 'Todos os métodos' : 'All methods'}</option>
             <option value="spherical_packing">spherical_packing</option>
             <option value="hexagonal_3d">hexagonal_3d</option>
             <option value="rigid_body">rigid_body</option>
@@ -584,9 +584,9 @@ function SimulationHistory() {
               setModelFilters((prev) => ({ ...prev, has_blend: e.target.value }));
             }}
           >
-            <option value="">{pt ? 'blend: qualquer' : 'blend: any'}</option>
-            <option value="true">{pt ? 'com .blend' : 'with .blend'}</option>
-            <option value="false">{pt ? 'sem .blend' : 'without .blend'}</option>
+            <option value="">{pt ? 'Blend: qualquer' : 'Blend: any'}</option>
+            <option value="true">{pt ? 'Com .blend' : 'With .blend'}</option>
+            <option value="false">{pt ? 'Sem .blend' : 'Without .blend'}</option>
           </select>
 
           <select
@@ -597,9 +597,9 @@ function SimulationHistory() {
               setModelFilters((prev) => ({ ...prev, has_stl: e.target.value }));
             }}
           >
-            <option value="">{pt ? 'stl: qualquer' : 'stl: any'}</option>
-            <option value="true">{pt ? 'com .stl' : 'with .stl'}</option>
-            <option value="false">{pt ? 'sem .stl' : 'without .stl'}</option>
+            <option value="">{pt ? 'Stl: qualquer' : 'Stl: any'}</option>
+            <option value="true">{pt ? 'Com .stl' : 'With .stl'}</option>
+            <option value="false">{pt ? 'Sem .stl' : 'Without .stl'}</option>
           </select>
 
           <input
@@ -636,13 +636,13 @@ function SimulationHistory() {
               });
             }}
           >
-            {pt ? 'limpar filtros' : 'clear filters'}
+            {pt ? 'Limpar filtros' : 'Clear filters'}
           </button>
         </div>
 
         {!loading && modelTotal === 0 ? (
           <div className="sim-history-empty">
-            <p>{pt ? 'nenhum modelo 3d encontrado com os filtros atuais' : 'no 3d models found for current filters'}</p>
+            <p>{pt ? 'Nenhum modelo 3d encontrado com os filtros atuais' : 'No 3d models found for current filters'}</p>
           </div>
         ) : (
           <>
@@ -652,9 +652,9 @@ function SimulationHistory() {
                   <div className="sim-card-row sim-card-row-top">
                     <div className="simulation-status">
                       <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="model" className="status-icon" />
-                      <span className="status-text">{pt ? 'modelo 3d' : '3d model'}</span>
+                      <span className="status-text">{pt ? 'Modelo 3d' : '3d model'}</span>
                     </div>
-                    <span className="simulation-id">id {model.id}</span>
+                    <span className="simulation-id">{pt ? 'Id' : 'id'} {model.id}</span>
                   </div>
 
                   <div className="simulation-info">
@@ -682,7 +682,7 @@ function SimulationHistory() {
                         const url = buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path);
                         if (url) window.open(url, '_blank');
                       }}
-                      title={pt ? 'baixar modelo' : 'download model'}
+                      title={pt ? 'Baixar modelo' : 'Download model'}
                       disabled={!buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)}
                     >
                       <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="action-icon" />
@@ -703,7 +703,7 @@ function SimulationHistory() {
                 setModelPage(1);
                 setModelLimit(value);
               }}
-              label={pt ? 'modelos 3d' : '3d models'}
+              label={pt ? 'Modelos 3d' : '3d models'}
               pt={pt}
             />
           </>
@@ -715,20 +715,20 @@ function SimulationHistory() {
           className="history-modal-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label={pt ? 'detalhes da simulação' : 'simulation details'}
+          aria-label={pt ? 'Detalhes da simulação' : 'Simulation details'}
           onClick={closeViewModal}
         >
           <div className="history-modal" onClick={(e) => e.stopPropagation()}>
             <div className="history-modal-header">
               <h2>
-                {pt ? 'detalhes da simulação' : 'simulation details'}
+                {pt ? 'Detalhes da simulação' : 'Simulation details'}
                 {viewDetail ? ` · #${viewDetail.id}` : ''}
               </h2>
               <button
                 type="button"
                 className="history-modal-close"
                 onClick={closeViewModal}
-                aria-label={pt ? 'fechar' : 'close'}
+                aria-label={pt ? 'Fechar' : 'Close'}
               >
                 ×
               </button>
@@ -736,87 +736,87 @@ function SimulationHistory() {
             <div className="history-modal-body">
               {viewLoading && (
                 <div className="history-modal-loading">
-                  {pt ? 'carregando…' : 'loading…'}
+                  {pt ? 'Carregando…' : 'Loading…'}
                 </div>
               )}
               {!viewLoading && viewDetail && (
                 <div className="history-detail-grid">
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'nome' : 'name'}</span>
+                    <span className="history-detail-label">{pt ? 'Nome' : 'Name'}</span>
                     <span className="history-detail-value">{viewDetail.name || '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'estado' : 'status'}</span>
+                    <span className="history-detail-label">{pt ? 'Estado' : 'Status'}</span>
                     <span className="history-detail-value">{getStatusText(viewDetail.status)}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'leito' : 'bed'}</span>
+                    <span className="history-detail-label">{pt ? 'Leito' : 'Bed'}</span>
                     <span className="history-detail-value">#{viewDetail.bed_id}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'regime' : 'regime'}</span>
+                    <span className="history-detail-label">{pt ? 'Regime' : 'Regime'}</span>
                     <span className="history-detail-value">{viewDetail.regime || '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'solver' : 'solver'}</span>
+                    <span className="history-detail-label">{pt ? 'Solver' : 'Solver'}</span>
                     <span className="history-detail-value">{viewDetail.solver || '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'velocidade de entrada' : 'inlet velocity'}</span>
+                    <span className="history-detail-label">{pt ? 'Velocidade de entrada' : 'Inlet velocity'}</span>
                     <span className="history-detail-value">{viewDetail.inlet_velocity} m/s</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'densidade' : 'density'}</span>
+                    <span className="history-detail-label">{pt ? 'Densidade' : 'Density'}</span>
                     <span className="history-detail-value">{viewDetail.fluid_density} kg/m³</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'viscosidade' : 'viscosity'}</span>
+                    <span className="history-detail-label">{pt ? 'Viscosidade' : 'Viscosity'}</span>
                     <span className="history-detail-value">{viewDetail.fluid_viscosity} Pa·s</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'iterações máx.' : 'max iterations'}</span>
+                    <span className="history-detail-label">{pt ? 'Iterações máx.' : 'Max iterations'}</span>
                     <span className="history-detail-value">{viewDetail.max_iterations ?? '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'critério convergência' : 'convergence criteria'}</span>
+                    <span className="history-detail-label">{pt ? 'Critério convergência' : 'Convergence criteria'}</span>
                     <span className="history-detail-value">{viewDetail.convergence_criteria ?? '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'progresso' : 'progress'}</span>
+                    <span className="history-detail-label">{pt ? 'Progresso' : 'Progress'}</span>
                     <span className="history-detail-value">{viewDetail.progress ?? 0}%</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'queda de pressão' : 'pressure drop'}</span>
+                    <span className="history-detail-label">{pt ? 'Queda de pressão' : 'Pressure drop'}</span>
                     <span className="history-detail-value">
                       {viewDetail.pressure_drop != null ? `${viewDetail.pressure_drop} Pa` : '—'}
                     </span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'velocidade média' : 'average velocity'}</span>
+                    <span className="history-detail-label">{pt ? 'Velocidade média' : 'Average velocity'}</span>
                     <span className="history-detail-value">
                       {viewDetail.average_velocity != null ? `${viewDetail.average_velocity} m/s` : '—'}
                     </span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'número de reynolds' : 'reynolds number'}</span>
+                    <span className="history-detail-label">{pt ? 'Número de Reynolds' : 'Reynolds number'}</span>
                     <span className="history-detail-value">{viewDetail.reynolds_number ?? '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'células de malha' : 'mesh cells'}</span>
+                    <span className="history-detail-label">{pt ? 'Células de malha' : 'Mesh cells'}</span>
                     <span className="history-detail-value">{viewDetail.mesh_cells_count ?? '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'qualidade da malha' : 'mesh quality'}</span>
+                    <span className="history-detail-label">{pt ? 'Qualidade da malha' : 'Mesh quality'}</span>
                     <span className="history-detail-value">{viewDetail.mesh_quality ?? '—'}</span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'duração' : 'execution time'}</span>
+                    <span className="history-detail-label">{pt ? 'Duração' : 'Execution time'}</span>
                     <span className="history-detail-value">
                       {formatDurationSeconds(viewDetail.execution_time, language)}
                     </span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'criado em' : 'created at'}</span>
+                    <span className="history-detail-label">{pt ? 'Criado em' : 'Created at'}</span>
                     <span className="history-detail-value">
                       {viewDetail.created_at
                         ? new Date(viewDetail.created_at).toLocaleString(pt ? 'pt-BR' : 'en-US')
@@ -824,7 +824,7 @@ function SimulationHistory() {
                     </span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'iniciado em' : 'started at'}</span>
+                    <span className="history-detail-label">{pt ? 'Iniciado em' : 'Started at'}</span>
                     <span className="history-detail-value">
                       {viewDetail.started_at
                         ? new Date(viewDetail.started_at).toLocaleString(pt ? 'pt-BR' : 'en-US')
@@ -832,7 +832,7 @@ function SimulationHistory() {
                     </span>
                   </div>
                   <div className="history-detail-row">
-                    <span className="history-detail-label">{pt ? 'concluído em' : 'completed at'}</span>
+                    <span className="history-detail-label">{pt ? 'Concluído em' : 'Completed at'}</span>
                     <span className="history-detail-value">
                       {viewDetail.completed_at
                         ? new Date(viewDetail.completed_at).toLocaleString(pt ? 'pt-BR' : 'en-US')
@@ -841,25 +841,25 @@ function SimulationHistory() {
                   </div>
                   {viewDetail.description ? (
                     <div className="history-detail-row history-detail-row-wide">
-                      <span className="history-detail-label">{pt ? 'descrição' : 'description'}</span>
+                      <span className="history-detail-label">{pt ? 'Descrição' : 'Description'}</span>
                       <span className="history-detail-value">{viewDetail.description}</span>
                     </div>
                   ) : null}
                   {viewDetail.case_directory ? (
                     <div className="history-detail-row history-detail-row-wide">
-                      <span className="history-detail-label">{pt ? 'diretório do caso' : 'case directory'}</span>
+                      <span className="history-detail-label">{pt ? 'Diretório do caso' : 'Case directory'}</span>
                       <code className="history-detail-code">{viewDetail.case_directory}</code>
                     </div>
                   ) : null}
                   {viewDetail.log_file_path ? (
                     <div className="history-detail-row history-detail-row-wide">
-                      <span className="history-detail-label">{pt ? 'arquivo de log' : 'log file'}</span>
+                      <span className="history-detail-label">{pt ? 'Arquivo de log' : 'Log file'}</span>
                       <code className="history-detail-code">{viewDetail.log_file_path}</code>
                     </div>
                   ) : null}
                   {viewDetail.parameters_json ? (
                     <div className="history-detail-row history-detail-row-wide">
-                      <span className="history-detail-label">{pt ? 'parâmetros' : 'parameters'}</span>
+                      <span className="history-detail-label">{pt ? 'Parâmetros' : 'Parameters'}</span>
                       <pre className="history-detail-json">
                         {JSON.stringify(viewDetail.parameters_json, null, 2)}
                       </pre>
@@ -875,10 +875,10 @@ function SimulationHistory() {
                 onClick={() => viewDetail && handleDownloadResults(viewDetail.id)}
                 disabled={!viewDetail || actionBusyId === viewDetail?.id}
               >
-                {pt ? 'baixar json' : 'download json'}
+                {pt ? 'Baixar json' : 'Download json'}
               </button>
               <button type="button" className="history-modal-btn primary" onClick={closeViewModal}>
-                {pt ? 'fechar' : 'close'}
+                {pt ? 'Fechar' : 'Close'}
               </button>
             </div>
           </div>
