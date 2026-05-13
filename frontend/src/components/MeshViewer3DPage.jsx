@@ -7,9 +7,28 @@ import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { listViewerMeshes, buildMeshStreamUrl, parseApiError } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
+import ThemeIcon from './ThemeIcon';
 import '../styles/MeshViewer3DPage.css';
 
 const LS_LAST_MESH = 'bedflow_last_mesh_id';
+
+const DESKTOP_OPEN3D_FORMATS = new Set(['stl', 'obj', 'ply']);
+
+function joinRepoAbsolutePath(rootHint, relativePath) {
+  const r = String(rootHint || '').trim().replace(/[/\\]+$/, '');
+  const rel = String(relativePath || '').trim().replace(/^[/\\]+/, '');
+  if (!r || !rel) return '';
+  const winish = /\\/.test(r) || /^[a-z]:/i.test(r);
+  if (winish) {
+    return `${r}\\${rel.replace(/\//g, '\\')}`;
+  }
+  return `${r}/${rel.replace(/\\/g, '/')}`;
+}
+
+function isWindowsRepoPath(rootHint) {
+  const r = String(rootHint || '');
+  return /\\/.test(r) || /^[a-z]:/i.test(r);
+}
 
 function countVertices(obj) {
   let n = 0;
@@ -106,6 +125,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const axesRef = useRef(null);
 
   const [meshes, setMeshes] = useState([]);
+  const [projectRootHint, setProjectRootHint] = useState('');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(() => {
     try {
@@ -121,7 +141,9 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const [showAxes, setShowAxes] = useState(true);
   const [meta, setMeta] = useState(null);
   const [streamNotice, setStreamNotice] = useState(null);
+  const [toolNotice, setToolNotice] = useState(null);
   const copyNoticeTimerRef = useRef(null);
+  const toolNoticeTimerRef = useRef(null);
 
   const pt = language === 'pt';
 
@@ -130,7 +152,9 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     setErr(null);
     try {
       const data = await listViewerMeshes({ q: search.trim() || undefined, limit: 120 });
-      setMeshes(data.meshes || []);
+      const all = data.meshes || [];
+      setMeshes(all.filter((m) => (m.format || '').toLowerCase() !== 'blend'));
+      setProjectRootHint(data.project_root_hint || '');
     } catch (e) {
       setErr(parseApiError(e));
       setMeshes([]);
@@ -152,6 +176,13 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       if (onConsumedBootId) onConsumedBootId();
     }
   }, [initialMeshId, onConsumedBootId]);
+
+  useEffect(() => {
+    if (!meshes.length) return;
+    const id = selectedId.trim();
+    if (!id) return;
+    if (!meshes.some((m) => m.mesh_id === id)) setSelectedId('');
+  }, [meshes, selectedId]);
 
   const applyWireframe = useCallback((root, on) => {
     if (!root) return;
@@ -341,6 +372,67 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     if (u) window.open(u, '_blank', 'noopener,noreferrer');
   };
 
+  const showToolNotice = (payload) => {
+    setToolNotice(payload);
+    window.clearTimeout(toolNoticeTimerRef.current);
+    toolNoticeTimerRef.current = window.setTimeout(() => setToolNotice(null), 3200);
+  };
+
+  const copyDesktopViewerCommand = async () => {
+    const id = selectedId.trim();
+    if (!id) {
+      showToolNotice({ ok: false, text: pt ? 'escolha um modelo.' : 'pick a model.' });
+      return;
+    }
+    const info = meshes.find((m) => m.mesh_id === id);
+    const ext = (info?.format || '').toLowerCase();
+    if (!info || !DESKTOP_OPEN3D_FORMATS.has(ext)) {
+      showToolNotice({ ok: false, text: t('meshDesktopFmtWarn') });
+      return;
+    }
+    if (!projectRootHint) {
+      showToolNotice({ ok: false, text: t('meshRootMissing') });
+      return;
+    }
+    const meshAbs = joinRepoAbsolutePath(projectRootHint, info.relative_path);
+    const root = projectRootHint.trim();
+    const win = isWindowsRepoPath(root);
+    const script = win
+      ? 'scripts\\python_modeling\\mesh_viewer_desktop.py'
+      : 'scripts/python_modeling/mesh_viewer_desktop.py';
+    const cmd = win
+      ? `cd /d "${root}"\r\npython "${script}" "${meshAbs}"`
+      : `cd "${root}"\npython3 "${script}" "${meshAbs}"`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      showToolNotice({ ok: true, text: t('meshDesktopCmdCopied') });
+    } catch {
+      showToolNotice({ ok: false, text: t('meshToolCopyFail') });
+    }
+  };
+
+  const copyBlenderOpenCommand = async () => {
+    const id = selectedId.trim();
+    if (!id) {
+      showToolNotice({ ok: false, text: pt ? 'escolha um modelo.' : 'pick a model.' });
+      return;
+    }
+    const info = meshes.find((m) => m.mesh_id === id);
+    if (!info) return;
+    if (!projectRootHint) {
+      showToolNotice({ ok: false, text: t('meshRootMissing') });
+      return;
+    }
+    const meshAbs = joinRepoAbsolutePath(projectRootHint, info.relative_path);
+    const cmd = `blender "${meshAbs}"`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      showToolNotice({ ok: true, text: t('meshBlenderCmdCopied') });
+    } catch {
+      showToolNotice({ ok: false, text: t('meshToolCopyFail') });
+    }
+  };
+
   const copyMeshStream = async () => {
     const u = buildMeshStreamUrl(selectedId.trim());
     if (!u) return;
@@ -357,7 +449,10 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   };
 
   useEffect(() => {
-    return () => window.clearTimeout(copyNoticeTimerRef.current);
+    return () => {
+      window.clearTimeout(copyNoticeTimerRef.current);
+      window.clearTimeout(toolNoticeTimerRef.current);
+    };
   }, []);
 
   const lastId = (() => {
@@ -370,11 +465,20 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
 
   return (
     <div className="mesh-viewer-page">
+      <header className="mesh-viewer-page-heading">
+        <ThemeIcon
+          light="cfd_gear_white.png"
+          dark="cfd_gear_white.png"
+          alt=""
+          className="mesh-viewer-page-title-icon"
+          location="sidebar"
+        />
+        <h1 className="mesh-viewer-page-title">
+          {pt ? 'Visualização 3d' : '3d visualization'}
+        </h1>
+      </header>
       <div className="mesh-viewer-layout">
         <aside className="mesh-viewer-sidebar">
-          <h2 className="mesh-viewer-title">
-            {pt ? 'visualização 3d' : '3d visualization'}
-          </h2>
           <p className="mesh-viewer-lead">
             {pt
               ? 'malhas servidas pela api a partir de local_data e pastas geradas.'
@@ -494,14 +598,35 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
             </p>
           ) : null}
 
-          <div className="mesh-viewer-edu" aria-label={t('meshEduTitle')}>
-            <p className="mesh-viewer-edu-title">{t('meshEduTitle')}</p>
-            <ol className="mesh-viewer-edu-list">
-              <li>{t('meshEduLine1')}</li>
-              <li>{t('meshEduLine2')}</li>
-              <li>{t('meshEduLine3')}</li>
-            </ol>
+          <div className="mesh-viewer-actions mesh-viewer-cli-row">
+            <button
+              type="button"
+              className="mesh-viewer-btn mesh-viewer-btn-block"
+              disabled={!selectedId.trim() || !projectRootHint}
+              onClick={() => void copyDesktopViewerCommand()}
+            >
+              {t('meshDesktopViewerBtn')}
+            </button>
+            <button
+              type="button"
+              className="mesh-viewer-btn mesh-viewer-btn-block"
+              disabled={!selectedId.trim() || !projectRootHint}
+              onClick={() => void copyBlenderOpenCommand()}
+            >
+              {t('meshBlenderViewerBtn')}
+            </button>
           </div>
+          {toolNotice ? (
+            <p
+              className={
+                toolNotice.ok
+                  ? 'mesh-viewer-tool-notice'
+                  : 'mesh-viewer-tool-notice mesh-viewer-tool-notice--err'
+              }
+            >
+              {toolNotice.text}
+            </p>
+          ) : null}
 
           {meta && (
             <dl className="mesh-viewer-dl">

@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAppUi } from '../context/AppUiContext';
 import { getSettings, patchSettings, postAdminDevShutdown, getApiBase } from '../services/api';
 import BackendConnectionError from './BackendConnectionError';
+import ThemeIcon from './ThemeIcon';
 import './SettingsPage.css';
 
 function isConnectionError(err) {
@@ -229,23 +230,29 @@ export default function SettingsPage({ navigateTab, onLogout }) {
           </div>
         )}
 
+        <header className="settings-page-header">
+          <div className="settings-page-title">
+            <ThemeIcon light="settingsLight.png" dark="settingsLight.png" alt="" className="settings-page-title-icon" />
+            <h1 className="settings-page-heading">{t('systemSettings')}</h1>
+          </div>
+        </header>
+
         <div className="settings-page-layout">
           <div className="settings-main">
-            <h2 className="settings-title">{t('systemSettings')}</h2>
             <p className="settings-lead">
               {pt
-                ? 'preferências na tabela app_settings (singleton). idioma sincroniza com user_profiles. opções extra ficam em options_json.'
-                : 'preferences in app_settings (singleton). language syncs to user_profiles. extra options live in options_json.'}
+                ? 'Preferências na tabela app_settings (singleton). Idioma sincroniza com user_profiles. Opções extra ficam em options_json.'
+                : 'Preferences in app_settings (singleton). Language syncs to user_profiles. Extra options live in options_json.'}
             </p>
             {updatedAt && (
               <p className="settings-meta">
-                {pt ? 'última atualização na base:' : 'last saved:'}{' '}
+                {pt ? 'Última atualização na base:' : 'Last saved:'}{' '}
                 {new Date(updatedAt).toLocaleString(pt ? 'pt-BR' : 'en-GB')}
               </p>
             )}
 
             {loading ? (
-              <p className="settings-status">{pt ? 'a carregar…' : 'loading…'}</p>
+              <p className="settings-status">{pt ? 'A carregar…' : 'Loading…'}</p>
             ) : (
               <>
                 <div className="settings-grid">
@@ -253,15 +260,15 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                     <h3>{t('theme')}</h3>
                     <p className="setting-card-desc">{t('themeDesc')}</p>
                     <label className="settings-control">
-                      <span>{pt ? 'modo' : 'mode'}</span>
+                      <span>{pt ? 'Modo' : 'Mode'}</span>
                       <select
                         value={themeMode}
                         onChange={(e) => onThemeChange(e.target.value)}
                         aria-label={t('theme')}
                       >
-                        <option value="light">{pt ? 'claro' : 'light'}</option>
-                        <option value="dark">{pt ? 'escuro' : 'dark'}</option>
-                        <option value="system">{pt ? 'sistema' : 'system'}</option>
+                        <option value="light">{pt ? 'Claro' : 'Light'}</option>
+                        <option value="dark">{pt ? 'Escuro' : 'Dark'}</option>
+                        <option value="system">{pt ? 'Sistema' : 'System'}</option>
                       </select>
                     </label>
                   </section>
@@ -270,24 +277,24 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                     <h3>{t('language')}</h3>
                     <p className="setting-card-desc">{t('languageDesc')}</p>
                     <label className="settings-control">
-                      <span>{pt ? 'idioma da interface' : 'interface language'}</span>
+                      <span>{pt ? 'Idioma da interface' : 'Interface language'}</span>
                       <select
                         value={lang}
                         onChange={(e) => onLangChange(e.target.value)}
                         aria-label={t('language')}
                       >
-                        <option value="pt">português (brasil)</option>
-                        <option value="en">english</option>
+                        <option value="pt">Português (Brasil)</option>
+                        <option value="en">English</option>
                       </select>
                     </label>
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'modo simples e modo dev' : 'simple mode and dev mode'}</h3>
+                    <h3>{pt ? 'Modo simples e modo dev' : 'Simple mode and dev mode'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'modo simples reduz o menu lateral às áreas principais do fluxo cfd. modo dev mostra, em cada página, referências de api e persistência.'
-                        : 'simple mode trims the sidebar to core cfd areas. dev mode shows api and persistence hints on every page.'}
+                        ? 'Modo simples reduz o menu lateral às áreas principais do fluxo cfd. Modo dev mostra, em cada página, referências de api e persistência.'
+                        : 'Simple mode trims the sidebar to core cfd areas. Dev mode shows api and persistence hints on every page.'}
                     </p>
                     <label className="settings-check">
                       <input
@@ -299,7 +306,7 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                           setSimpleMode(v);
                         }}
                       />
-                      <span>{pt ? 'modo simples (menu reduzido)' : 'simple mode (reduced menu)'}</span>
+                      <span>{pt ? 'Modo simples (menu reduzido)' : 'Simple mode (reduced menu)'}</span>
                     </label>
                     <label className="settings-check">
                       <input
@@ -311,19 +318,19 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                           setDevMode(v);
                         }}
                       />
-                      <span>{pt ? 'modo dev (painel por página)' : 'dev mode (per-page panel)'}</span>
+                      <span>{pt ? 'Modo dev (painel por página)' : 'Dev mode (per-page panel)'}</span>
                     </label>
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'banco de dados (interface)' : 'database (ui)'}</h3>
+                    <h3>{pt ? 'Banco de dados (interface)' : 'Database (ui)'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'notas e tempo limite do cliente http (axios) para pedidos ao backend. não altera a url da base no servidor.'
-                        : 'notes and axios client timeout for backend requests. does not change the server database url.'}
+                        ? 'Notas e tempo limite do cliente http (axios) para pedidos ao backend. Não altera a url da base no servidor.'
+                        : 'Notes and axios client timeout for backend requests. Does not change the server database url.'}
                     </p>
                     <label className="settings-control settings-control-stack">
-                      <span>{pt ? 'notas / checklist' : 'notes / checklist'}</span>
+                      <span>{pt ? 'Notas / checklist' : 'Notes / checklist'}</span>
                       <textarea
                         className="settings-textarea"
                         rows={3}
@@ -333,7 +340,7 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                       />
                     </label>
                     <label className="settings-control">
-                      <span>{pt ? 'timeout cliente (s)' : 'client timeout (s)'}</span>
+                      <span>{pt ? 'Timeout cliente (s)' : 'Client timeout (s)'}</span>
                       <input
                         type="number"
                         min={5}
@@ -347,20 +354,20 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                       className="settings-link-btn"
                       onClick={() => navigateTab('database')}
                     >
-                      {pt ? 'abrir painel banco de dados' : 'open database panel'}
+                      {pt ? 'Abrir painel banco de dados' : 'Open database panel'}
                     </button>
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'parâmetros padrão openfoam' : 'default openfoam parameters'}</h3>
+                    <h3>{pt ? 'Parâmetros padrão openfoam' : 'Default openfoam parameters'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'referência para formulários e futuros templates de caso; o motor openfoam continua a ser configurado nos ficheiros do caso.'
-                        : 'reference for forms and future case templates; the openfoam engine is still driven by case files.'}
+                        ? 'Referência para formulários e futuros templates de caso; o motor openfoam continua a ser configurado nos ficheiros do caso.'
+                        : 'Reference for forms and future case templates; the openfoam engine is still driven by case files.'}
                     </p>
                     <div className="settings-inline-grid">
                       <label className="settings-control">
-                        <span>solver</span>
+                        <span>Solver</span>
                         <input
                           type="text"
                           value={ofSolver}
@@ -368,7 +375,7 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                         />
                       </label>
                       <label className="settings-control">
-                        <span>{pt ? 'iterações máx.' : 'max iterations'}</span>
+                        <span>{pt ? 'Iterações máx.' : 'Max iterations'}</span>
                         <input
                           type="number"
                           min={1}
@@ -378,7 +385,7 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                         />
                       </label>
                       <label className="settings-control">
-                        <span>{pt ? 'turbulência' : 'turbulence'}</span>
+                        <span>{pt ? 'Turbulência' : 'Turbulence'}</span>
                         <input
                           type="text"
                           value={ofTurb}
@@ -386,7 +393,7 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                         />
                       </label>
                       <label className="settings-control">
-                        <span>{pt ? 'convergência' : 'convergence'}</span>
+                        <span>{pt ? 'Convergência' : 'Convergence'}</span>
                         <input
                           type="number"
                           step="any"
@@ -399,14 +406,14 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'modelagem 3d' : '3d modeling'}</h3>
+                    <h3>{pt ? 'Modelagem 3d' : '3d modeling'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'o pipeline suporta geração via blender e caminhos python/stl; escolha o perfil preferido para a equipa.'
-                        : 'the pipeline supports blender generation and python/stl paths; pick the preferred profile for your team.'}
+                        ? 'O pipeline suporta geração via blender e caminhos python/stl; escolha o perfil preferido para a equipa.'
+                        : 'The pipeline supports blender generation and python/stl paths; pick the preferred profile for your team.'}
                     </p>
                     <label className="settings-control">
-                      <span>{pt ? 'perfil' : 'profile'}</span>
+                      <span>{pt ? 'Perfil' : 'Profile'}</span>
                       <select
                         value={modelingProfile}
                         onChange={(e) => setModelingProfile(e.target.value)}
@@ -416,23 +423,23 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                       </select>
                     </label>
                     <label className="settings-control settings-control-stack">
-                      <span>{pt ? 'notas' : 'notes'}</span>
+                      <span>{pt ? 'Notas' : 'Notes'}</span>
                       <textarea
                         className="settings-textarea"
                         rows={2}
                         value={modelingNotes}
                         onChange={(e) => setModelingNotes(e.target.value)}
-                        placeholder={pt ? 'caminhos, scripts, versão do blender…' : 'paths, scripts, blender version…'}
+                        placeholder={pt ? 'Caminhos, scripts, versão do blender…' : 'Paths, scripts, blender version…'}
                       />
                     </label>
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'outros softwares cfd' : 'other cfd software'}</h3>
+                    <h3>{pt ? 'Outros softwares cfd' : 'Other cfd software'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'campo livre para ansys, fluent, su2, etc. (apenas documentação na interface).'
-                        : 'free text for ansys, fluent, su2, etc. (documentation in the ui only).'}
+                        ? 'Campo livre para ansys, fluent, su2, etc. (apenas documentação na interface).'
+                        : 'Free text for ansys, fluent, su2, etc. (documentation in the ui only).'}
                     </p>
                     <textarea
                       className="settings-textarea"
@@ -448,8 +455,8 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                     <label className="settings-control">
                       <span>
                         {pt
-                          ? 'intervalo de atualização dos jobs (s)'
-                          : 'jobs list refresh interval (s)'}
+                          ? 'Intervalo de atualização dos jobs (s)'
+                          : 'Jobs list refresh interval (s)'}
                       </span>
                       <input
                         type="number"
@@ -461,24 +468,24 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                     </label>
                     <p className="setting-card-hint settings-hint-small">
                       {pt
-                        ? 'afeta a página «jobs» (recarregue a aba para aplicar o novo intervalo).'
-                        : 'affects the «jobs» page (reload that tab to apply the new interval).'}
+                        ? 'Afeta a página «jobs» (recarregue a aba para aplicar o novo intervalo).'
+                        : 'Affects the «jobs» page (reload that tab to apply the new interval).'}
                     </p>
                     <button
                       type="button"
                       className="settings-link-btn"
                       onClick={() => navigateTab('jobs')}
                     >
-                      {pt ? 'abrir jobs' : 'open jobs'}
+                      {pt ? 'Abrir jobs' : 'Open jobs'}
                     </button>
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'avançado' : 'advanced'}</h3>
+                    <h3>{pt ? 'Avançado' : 'Advanced'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'dicas técnicas adicionais nas áreas de simulação e pipeline (reservado para extensões futuras da ui).'
-                        : 'extra technical hints in simulation and pipeline areas (reserved for future ui extensions).'}
+                        ? 'Dicas técnicas adicionais nas áreas de simulação e pipeline (reservado para extensões futuras da ui).'
+                        : 'Extra technical hints in simulation and pipeline areas (reserved for future ui extensions).'}
                     </p>
                     <label className="settings-check">
                       <input
@@ -486,54 +493,54 @@ export default function SettingsPage({ navigateTab, onLogout }) {
                         checked={advancedHints}
                         onChange={(e) => setAdvancedHints(e.target.checked)}
                       />
-                      <span>{pt ? 'ativar dicas avançadas' : 'enable advanced hints'}</span>
+                      <span>{pt ? 'Ativar dicas avançadas' : 'Enable advanced hints'}</span>
                     </label>
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'sessão' : 'session'}</h3>
+                    <h3>{pt ? 'Sessão' : 'Session'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'sem login real: limpa preferências locais e repõe idioma/tema padrão.'
-                        : 'no real login: clears local preferences and resets default language/theme.'}
+                        ? 'Sem login real: limpa preferências locais e repõe idioma/tema padrão.'
+                        : 'No real login: clears local preferences and resets default language/theme.'}
                     </p>
                     <button type="button" className="settings-danger-btn" onClick={handleLogout}>
-                      {pt ? 'sair / deslogar' : 'log out'}
+                      {pt ? 'Sair / deslogar' : 'Log out'}
                     </button>
                   </section>
 
                   <section className="setting-card setting-card-wide">
-                    <h3>{pt ? 'desenvolvimento e serviço' : 'development and service'}</h3>
+                    <h3>{pt ? 'Desenvolvimento e serviço' : 'Development and service'}</h3>
                     <p className="setting-card-desc">
                       {pt
-                        ? 'swagger abre num novo separador. encerrar o backend requer ALLOW_DEV_SHUTDOWN=1. o navegador não fecha abas abertas pelo utilizador por segurança.'
-                        : 'swagger opens in a new tab. backend shutdown needs ALLOW_DEV_SHUTDOWN=1. browsers block closing user-opened tabs.'}
+                        ? 'Swagger abre num novo separador. Encerrar o backend requer ALLOW_DEV_SHUTDOWN=1. O navegador não fecha abas abertas pelo utilizador por segurança.'
+                        : 'Swagger opens in a new tab. Backend shutdown needs ALLOW_DEV_SHUTDOWN=1. Browsers block closing user-opened tabs.'}
                     </p>
                     <div className="settings-btn-row">
                       <button type="button" className="settings-link-btn" onClick={openSwagger}>
-                        swagger /docs
+                        Swagger /docs
                       </button>
                       <button type="button" className="settings-link-btn" onClick={shutdownBackend}>
-                        {pt ? 'encerrar backend' : 'shutdown backend'}
+                        {pt ? 'Encerrar backend' : 'Shutdown backend'}
                       </button>
                       <button type="button" className="settings-link-btn" onClick={tryQuitFrontend}>
-                        {pt ? 'tentar fechar este separador' : 'try to close this tab'}
+                        {pt ? 'Tentar fechar este separador' : 'Try to close this tab'}
                       </button>
                     </div>
                     <p className="setting-card-hint settings-hint-small">
                       {pt
-                        ? '«reiniciar» backend = encerrar processo e voltar a correr uvicorn ou docker compose up manualmente.'
-                        : '«restart» backend = stop the process and run uvicorn or docker compose up again manually.'}
+                        ? '«Reiniciar» backend = encerrar processo e voltar a correr uvicorn ou docker compose up manualmente.'
+                        : '«Restart» backend = stop the process and run uvicorn or docker compose up again manually.'}
                     </p>
                   </section>
                 </div>
 
                 <div className="settings-footer-actions">
                   <button type="button" className="settings-save-btn" onClick={handleSave} disabled={saving}>
-                    {saving ? (pt ? 'a guardar…' : 'saving…') : pt ? 'guardar configurações' : 'save settings'}
+                    {saving ? (pt ? 'Salvando…' : 'Saving…') : pt ? 'Salvar configurações' : 'Save settings'}
                   </button>
                   <button type="button" className="settings-reload-btn" onClick={() => load()} disabled={loading}>
-                    {pt ? 'recarregar da base' : 'reload from database'}
+                    {pt ? 'Recarregar da base' : 'Reload from database'}
                   </button>
                 </div>
               </>

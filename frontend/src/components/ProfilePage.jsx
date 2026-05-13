@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { getProfile, patchProfile } from '../services/api';
 import { useActiveUser } from '../context/UserContext';
 import BackendConnectionError from './BackendConnectionError';
+import ThemeIcon from './ThemeIcon';
 import './ProfilePage.css';
 
 function isConnectionError(err) {
@@ -25,10 +26,10 @@ function initialsFromName(name) {
 
 function roleLabel(role, pt) {
   const m = {
-    researcher: pt ? 'pesquisador' : 'researcher',
-    engineer: pt ? 'engenheiro' : 'engineer',
-    student: pt ? 'estudante' : 'student',
-    other: pt ? 'outro' : 'other',
+    researcher: pt ? 'Pesquisador' : 'Researcher',
+    engineer: pt ? 'Engenheiro' : 'Engineer',
+    student: pt ? 'Estudante' : 'Student',
+    other: pt ? 'Outro' : 'Other',
   };
   return m[role] || role;
 }
@@ -134,17 +135,23 @@ export default function ProfilePage() {
           </div>
         )}
 
+        <header className="profile-page-header">
+          <div className="profile-page-title">
+            <ThemeIcon light="profileLight.png" dark="profileLight.png" alt="" className="profile-page-title-icon" />
+            <h1 className="profile-page-heading">{pt ? 'Perfil' : 'Profile'}</h1>
+          </div>
+        </header>
+
         <div className="profile-page-layout">
-          <section className="profile-mockup-card" aria-label={pt ? 'perfil' : 'profile'}>
-            <h2>{pt ? 'perfil' : 'profile'}</h2>
+          <section className="profile-mockup-card" aria-label={pt ? 'Perfil' : 'Profile'}>
             <p className="profile-mockup-sub">
               {pt
-                ? 'dados salvos em sqlite (tabela user_profiles). para trocar o utilizador ativo use o botão redondo no canto superior direito do cabeçalho.'
-                : 'data stored in sqlite (user_profiles table). use the round button on the top-right of the header to switch the active user.'}
+                ? 'Dados salvos em sqlite (tabela user_profiles). Para trocar o utilizador ativo use o botão redondo no canto superior direito do cabeçalho.'
+                : 'Data stored in sqlite (user_profiles table). Use the round button on the top-right of the header to switch the active user.'}
             </p>
 
             {loading ? (
-              <p className="profile-status">{pt ? 'a carregar…' : 'loading…'}</p>
+              <p className="profile-status">{pt ? 'A carregar…' : 'Loading…'}</p>
             ) : (
               <>
                 <div className="profile-avatar-row">
@@ -152,13 +159,13 @@ export default function ProfilePage() {
                     {avatarLetter}
                   </div>
                   <div className="profile-avatar-meta">
-                    <strong>{displayName || (pt ? 'sem nome' : 'no name')}</strong>
+                    <strong>{displayName || (pt ? 'Sem nome' : 'No name')}</strong>
                     <span>
-                      {pt ? 'papel:' : 'role:'} {roleLabel(role, pt)}
+                      {pt ? 'Papel:' : 'Role:'} {roleLabel(role, pt)}
                     </span>
                     {updatedAt && (
                       <span className="profile-updated">
-                        {pt ? 'última atualização:' : 'last updated:'}{' '}
+                        {pt ? 'Última atualização:' : 'Last updated:'}{' '}
                         {new Date(updatedAt).toLocaleString(pt ? 'pt-PT' : 'en-GB')}
                       </span>
                     )}
@@ -167,7 +174,7 @@ export default function ProfilePage() {
 
                 <div className="profile-field-grid">
                   <div className="profile-field">
-                    <label htmlFor="profile-name">{pt ? 'nome' : 'name'}</label>
+                    <label htmlFor="profile-name">{pt ? 'Nome' : 'Name'}</label>
                     <input
                       id="profile-name"
                       type="text"
@@ -178,7 +185,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="profile-field">
-                    <label htmlFor="profile-email">{pt ? 'e-mail' : 'email'}</label>
+                    <label htmlFor="profile-email">{pt ? 'E-mail' : 'Email'}</label>
                     <input
                       id="profile-email"
                       type="email"
@@ -189,7 +196,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="profile-field">
-                    <label htmlFor="profile-org">{pt ? 'instituição' : 'organization'}</label>
+                    <label htmlFor="profile-org">{pt ? 'Instituição' : 'Organization'}</label>
                     <input
                       id="profile-org"
                       type="text"
@@ -199,7 +206,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="profile-field">
-                    <label htmlFor="profile-role">{pt ? 'papel' : 'role'}</label>
+                    <label htmlFor="profile-role">{pt ? 'Papel' : 'Role'}</label>
                     <select
                       id="profile-role"
                       value={role}
@@ -212,18 +219,18 @@ export default function ProfilePage() {
                     </select>
                   </div>
                   <div className="profile-field">
-                    <label htmlFor="profile-lang">{pt ? 'idioma preferido (ui)' : 'preferred language (ui)'}</label>
+                    <label htmlFor="profile-lang">{pt ? 'Idioma preferido (ui)' : 'Preferred language (ui)'}</label>
                     <select
                       id="profile-lang"
                       value={preferredLanguage}
                       onChange={(e) => setPreferredLanguage(e.target.value)}
                     >
-                      <option value="pt">português</option>
-                      <option value="en">english</option>
+                      <option value="pt">Português</option>
+                      <option value="en">English</option>
                     </select>
                   </div>
                   <div className="profile-field profile-field-bio">
-                    <label htmlFor="profile-bio">{pt ? 'biografia / notas' : 'bio / notes'}</label>
+                    <label htmlFor="profile-bio">{pt ? 'Biografia / notas' : 'Bio / notes'}</label>
                     <textarea
                       id="profile-bio"
                       rows={5}
@@ -231,8 +238,8 @@ export default function ProfilePage() {
                       onChange={(e) => setBio(e.target.value)}
                       placeholder={
                         pt
-                          ? 'área de pesquisa, contatos, observações…'
-                          : 'research area, contacts, notes…'
+                          ? 'Área de pesquisa, contatos, observações…'
+                          : 'Research area, contacts, notes…'
                       }
                     />
                   </div>
@@ -240,18 +247,18 @@ export default function ProfilePage() {
 
                 <div className="profile-actions-mock">
                   <button type="button" className="profile-btn-save" onClick={handleSave} disabled={saving}>
-                    {saving ? (pt ? 'salvando…' : 'saving…') : pt ? 'salvar alterações' : 'save changes'}
+                    {saving ? (pt ? 'Salvando…' : 'Saving…') : pt ? 'Salvar alterações' : 'Save changes'}
                   </button>
                   <button
                     type="button"
                     className="profile-btn-muted"
                     disabled
-                    title={pt ? 'não há autenticação nesta versão do aplicativo' : 'no authentication in this app version'}
+                    title={pt ? 'Não há autenticação nesta versão do aplicativo' : 'No authentication in this app version'}
                   >
-                    {pt ? 'alterar senha' : 'change password'}
+                    {pt ? 'Alterar senha' : 'Change password'}
                   </button>
                   <button type="button" className="profile-btn-secondary" onClick={() => loadProfile()} disabled={loading}>
-                    {pt ? 'atualizar' : 'update'}
+                    {pt ? 'Atualizar' : 'Update'}
                   </button>
                 </div>
               </>
