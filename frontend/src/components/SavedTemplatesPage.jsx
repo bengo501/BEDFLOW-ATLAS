@@ -8,7 +8,50 @@ import {
 } from '../services/api';
 import BackendConnectionError from './BackendConnectionError';
 import PaginationControls from './PaginationControls';
+import ThemeIcon from './ThemeIcon';
 import './SavedTemplatesPage.css';
+
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
+}
+
+function IconImportFile({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
 
 function isConnectionError(err) {
   if (!err) return false;
@@ -22,30 +65,38 @@ function isConnectionError(err) {
 
 function sourceLabel(source, pt) {
   const s = (source || 'editor').toLowerCase();
-  if (s === 'import') return pt ? 'importação' : 'import';
-  if (s === 'duplicate') return pt ? 'duplicado' : 'duplicate';
-  return pt ? 'editor' : 'editor';
+  if (s === 'import') return pt ? 'Importação' : 'Import';
+  if (s === 'duplicate') return pt ? 'Duplicado' : 'Duplicate';
+  return pt ? 'Editor' : 'Editor';
 }
 
 function formatUpdatedLine(iso, pt) {
   if (!iso) return '';
+  const capitalizeFirst = (s) => {
+    if (!s || typeof s !== 'string') return s;
+    const c = s.charAt(0);
+    if (!c || c === c.toLowerCase() && c === c.toUpperCase()) return s;
+    return c.toLocaleUpperCase(pt ? 'pt' : 'en') + s.slice(1);
+  };
   try {
     const d = new Date(iso);
     const now = Date.now();
     const sec = Math.round((now - d.getTime()) / 1000);
     const rtf = new Intl.RelativeTimeFormat(pt ? 'pt' : 'en', { numeric: 'auto' });
-    if (Math.abs(sec) < 60) return rtf.format(-sec, 'second');
+    if (Math.abs(sec) < 60) return capitalizeFirst(rtf.format(-sec, 'second'));
     const min = Math.round(sec / 60);
-    if (Math.abs(min) < 60) return rtf.format(-min, 'minute');
+    if (Math.abs(min) < 60) return capitalizeFirst(rtf.format(-min, 'minute'));
     const h = Math.round(min / 60);
-    if (Math.abs(h) < 48) return rtf.format(-h, 'hour');
+    if (Math.abs(h) < 48) return capitalizeFirst(rtf.format(-h, 'hour'));
     const days = Math.round(h / 24);
-    if (Math.abs(days) < 14) return rtf.format(-days, 'day');
-    return d.toLocaleDateString(pt ? 'pt-PT' : 'en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    if (Math.abs(days) < 14) return capitalizeFirst(rtf.format(-days, 'day'));
+    return capitalizeFirst(
+      d.toLocaleDateString(pt ? 'pt-PT' : 'en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    );
   } catch {
     return iso;
   }
@@ -98,7 +149,7 @@ export default function SavedTemplatesPage() {
         setOpError(
           err.response?.data?.detail ||
             err.message ||
-            (pt ? 'não foi possível carregar os templates' : 'could not load templates')
+            (pt ? 'Não foi possível carregar os templates.' : 'Could not load templates.')
         );
         setItems([]);
         setTotal(0);
@@ -131,7 +182,7 @@ export default function SavedTemplatesPage() {
       else
         setOpError(
           err.response?.data?.detail ||
-            (pt ? 'falha ao duplicar' : 'duplicate failed')
+            (pt ? 'Falha ao duplicar.' : 'Duplicate failed.')
         );
     }
   };
@@ -139,7 +190,7 @@ export default function SavedTemplatesPage() {
   const handleDelete = async () => {
     if (!selectedId) return;
     const ok = window.confirm(
-      pt ? 'eliminar este template da base de dados?' : 'delete this template from the database?'
+      pt ? 'Eliminar este template da base de dados?' : 'Delete this template from the database?'
     );
     if (!ok) return;
     setOpError(null);
@@ -153,7 +204,7 @@ export default function SavedTemplatesPage() {
       if (isConnectionError(err)) setConnectionError(t('backendConnectionError'));
       else
         setOpError(
-          err.response?.data?.detail || (pt ? 'falha ao eliminar' : 'delete failed')
+          err.response?.data?.detail || (pt ? 'Falha ao eliminar.' : 'Delete failed.')
         );
     }
   };
@@ -172,7 +223,7 @@ export default function SavedTemplatesPage() {
       const content = typeof reader.result === 'string' ? reader.result : '';
       const defaultName = file.name.replace(/\.bed$/i, '') || file.name || 'importado';
       const nameInput = window.prompt(
-        pt ? 'nome do template na biblioteca:' : 'template name in library:',
+        pt ? 'Nome do template na biblioteca:' : 'Template name in library:',
         defaultName
       );
       if (!nameInput || !nameInput.trim()) return;
@@ -192,7 +243,7 @@ export default function SavedTemplatesPage() {
         if (isConnectionError(err)) setConnectionError(t('backendConnectionError'));
         else
           setOpError(
-            err.response?.data?.detail || (pt ? 'falha ao importar' : 'import failed')
+            err.response?.data?.detail || (pt ? 'Falha ao importar.' : 'Import failed.')
           );
       }
     };
@@ -210,16 +261,26 @@ export default function SavedTemplatesPage() {
           </div>
         )}
 
+        <div className="saved-templates-page-heading" aria-label={pt ? 'templates salvos' : 'saved templates'}>
+          <ThemeIcon
+            light="folderLight.png"
+            dark="folderDark.png"
+            alt=""
+            className="saved-templates-page-heading-icon"
+            location="page"
+          />
+          <h2 className="saved-templates-page-title">{pt ? 'Templates salvos' : 'Saved templates'}</h2>
+        </div>
+
         <div className="saved-templates-layout">
           <section
             className="saved-templates-mockup-card"
-            aria-label={pt ? 'biblioteca de templates' : 'template library'}
+            aria-label={pt ? 'Biblioteca de templates' : 'Template library'}
           >
-            <h2>{pt ? 'templates salvos' : 'saved templates'}</h2>
             <p className="saved-templates-lead">
               {pt
-                ? 'presets .bed guardados na base de dados do backend. criar ou editar conteúdo continua disponível no separador editor de templates.'
-                : '.bed presets stored in the backend database. create or edit content in the template editor tab.'}
+                ? 'Presets .bed guardados na base de dados do backend. Criar ou editar conteúdo continua disponível no separador editor de templates.'
+                : '.bed presets stored in the backend database. Create or edit content in the template editor tab.'}
             </p>
 
             <div className="saved-templates-toolbar">
@@ -230,8 +291,8 @@ export default function SavedTemplatesPage() {
                   setPage(1);
                   setFilters((prev) => ({ ...prev, search: e.target.value }));
                 }}
-                placeholder={pt ? 'pesquisar por nome ou etiqueta…' : 'search by name or tag…'}
-                aria-label={pt ? 'pesquisar templates' : 'search templates'}
+                placeholder={pt ? 'Pesquisar por nome ou etiqueta…' : 'Search by name or tag…'}
+                aria-label={pt ? 'Pesquisar templates' : 'Search templates'}
               />
               <select
                 className="saved-templates-select"
@@ -241,7 +302,7 @@ export default function SavedTemplatesPage() {
                   setFilters((prev) => ({ ...prev, tag: e.target.value }));
                 }}
               >
-                <option value="">{pt ? 'todas as etiquetas' : 'all tags'}</option>
+                <option value="">{pt ? 'Todas as etiquetas' : 'All tags'}</option>
                 <option value="bed">bed</option>
                 <option value="preset">preset</option>
                 <option value="cfd">cfd</option>
@@ -254,18 +315,19 @@ export default function SavedTemplatesPage() {
                   setFilters((prev) => ({ ...prev, source: e.target.value }));
                 }}
               >
-                <option value="">{pt ? 'todas as origens' : 'all sources'}</option>
-                <option value="editor">{pt ? 'editor' : 'editor'}</option>
-                <option value="import">{pt ? 'importação' : 'import'}</option>
-                <option value="duplicate">{pt ? 'duplicado' : 'duplicate'}</option>
+                <option value="">{pt ? 'Todas as origens' : 'All sources'}</option>
+                <option value="editor">{pt ? 'Editor' : 'Editor'}</option>
+                <option value="import">{pt ? 'Importação' : 'Import'}</option>
+                <option value="duplicate">{pt ? 'Duplicado' : 'Duplicate'}</option>
               </select>
               <button
                 type="button"
-                className="saved-templates-refresh"
+                className="saved-templates-refresh saved-templates-btn-with-icon"
                 onClick={() => loadTemplates()}
                 disabled={loading}
               >
-                {pt ? 'atualizar' : 'refresh'}
+                <IconRefresh className="saved-templates-btn-svg" />
+                {pt ? 'Atualizar' : 'Refresh'}
               </button>
               <button
                 type="button"
@@ -276,28 +338,28 @@ export default function SavedTemplatesPage() {
                 }}
                 disabled={loading}
               >
-                {pt ? 'limpar filtros' : 'clear filters'}
+                {pt ? 'Limpar filtros' : 'Clear filters'}
               </button>
             </div>
 
             {loading ? (
-              <p className="saved-templates-status">{pt ? 'a carregar…' : 'loading…'}</p>
+              <p className="saved-templates-status">{pt ? 'A carregar…' : 'Loading…'}</p>
             ) : items.length === 0 ? (
               <p className="saved-templates-status">
                 {total === 0
                   ? pt
-                    ? 'nenhum template na biblioteca. importe um .bed ou guarde a partir do editor.'
-                    : 'no templates yet. import a .bed or save from the editor.'
+                    ? 'Nenhum template na biblioteca. Importe um .bed ou guarde a partir do editor.'
+                    : 'No templates yet. Import a .bed or save from the editor.'
                   : pt
-                    ? 'nenhum resultado para a pesquisa.'
-                    : 'no matches for your search.'}
+                    ? 'Nenhum resultado para a pesquisa.'
+                    : 'No matches for your search.'}
               </p>
             ) : (
               <div className="saved-templates-grid">
                 {items.map((row) => {
                   const meta = pt
-                    ? `atualizado ${formatUpdatedLine(row.updated_at, true)} · origem: ${sourceLabel(row.source, true)}`
-                    : `updated ${formatUpdatedLine(row.updated_at, false)} · source: ${sourceLabel(row.source, false)}`;
+                    ? `Atualizado ${formatUpdatedLine(row.updated_at, true)} · Origem: ${sourceLabel(row.source, true)}`
+                    : `Updated ${formatUpdatedLine(row.updated_at, false)} · Source: ${sourceLabel(row.source, false)}`;
                   return (
                     <article
                       key={row.id}
@@ -330,7 +392,7 @@ export default function SavedTemplatesPage() {
                 setPage(1);
                 setLimit(value);
               }}
-              label={pt ? 'templates .bed' : '.bed templates'}
+              label={pt ? 'Templates .bed' : '.bed templates'}
               pt={pt}
             />
 
@@ -345,14 +407,15 @@ export default function SavedTemplatesPage() {
             />
 
             <div className="saved-templates-actions">
-              <button type="button" onClick={handleImportClick}>
-                {pt ? 'importar ficheiro' : 'import file'}
+              <button type="button" className="saved-templates-btn-with-icon" onClick={handleImportClick}>
+                <IconImportFile className="saved-templates-btn-svg" />
+                {pt ? 'Importar ficheiro' : 'Import file'}
               </button>
               <button type="button" disabled={!selectedId} onClick={handleDuplicate}>
-                {pt ? 'duplicar selecionado' : 'duplicate selected'}
+                {pt ? 'Duplicar selecionado' : 'Duplicate selected'}
               </button>
               <button type="button" disabled={!selectedId} onClick={handleDelete}>
-                {pt ? 'eliminar' : 'delete'}
+                {pt ? 'Eliminar' : 'Delete'}
               </button>
             </div>
           </section>

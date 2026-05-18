@@ -16,6 +16,9 @@
 .pipeline-header h1 {
   color: var(--wine, #5F1923);
   margin-bottom: 10px;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 600;
 }
 
 .subtitle {
@@ -464,7 +467,7 @@
   font-size: 1rem;
   font-weight: 600;
   transition: all 0.3s;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui);
 }
 
 .btn-primary {

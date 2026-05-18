@@ -303,16 +303,6 @@ const BedWizard = ({ onNavigateTab } = {}) => {
 
     return (
       <div className="mode-selection mode-selection--criar-hub">
-        <div className="mode-header">
-          <div className="mode-header-titles">
-            <h2>
-              <ThemeIcon light="bedLight.png" dark="bedDark.png" alt={t('createBed')} className="title-icon" />
-              {t('selectMode')}
-            </h2>
-            <p className="mode-header-subtitle">{t('createHubSubtitle')}</p>
-          </div>
-        </div>
-
         <div className="mode-cards mode-cards-terminal mode-cards-criar-all">
           <div
             className="mode-card"
@@ -403,7 +393,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
               }
             }}
           >
-            <ThemeIcon light="runLight.png" dark="runLight.png" alt="" className="mode-icon-small" />
+            <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="mode-icon-small" />
             <h3>{t('hubCardQuickTitle')}</h3>
             <p className="mode-card-desc">{t('hubCardQuickDesc')}</p>
           </div>
@@ -1127,8 +1117,21 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       )}
 
       {/* conteúdo do wizard */}
-      <div className="wizard-content">
-        {step === 0 && renderModeSelection()}
+      <div className={step === 0 ? 'wizard-content wizard-content--step0-hub' : 'wizard-content'}>
+        {step === 0 && (
+          <>
+            <header className="criar-hub-page-heading">
+              <ThemeIcon
+                light="create_bed_white.png"
+                dark="create_bed_white.png"
+                alt=""
+                className="criar-hub-title-icon"
+              />
+              <h1 className="criar-hub-page-title">{t('selectMode')}</h1>
+            </header>
+            <div className="criar-hub-cards-panel">{renderModeSelection()}</div>
+          </>
+        )}
         {step === 1 && renderBedSection()}
         {step === 2 && renderLidsSection()}
         {step === 3 && renderParticlesSection()}

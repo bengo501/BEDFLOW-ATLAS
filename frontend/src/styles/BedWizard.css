@@ -67,7 +67,7 @@
 
 .mode-card {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 12px;
   padding: 2rem;
   text-align: center;
@@ -136,11 +136,59 @@
 /* conteúdo do wizard */
 .wizard-content {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 12px;
   padding: 2rem;
   box-shadow: var(--card-shadow);
   min-height: 500px;
+}
+
+/* passo 0: título fora da caixa; só a grelha fica no painel */
+.wizard-content--step0-hub {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0.45rem 0.5rem 1rem;
+  min-height: auto;
+}
+
+.criar-hub-page-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+}
+
+.criar-hub-title-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.criar-hub-page-title {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+[data-theme="light"] .criar-hub-title-icon {
+  filter: brightness(0);
+}
+
+[data-theme="dark"] .criar-hub-title-icon {
+  filter: none;
+}
+
+.criar-hub-cards-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--subcard-border-color, var(--border));
+  border-radius: 6px;
+  padding: 0.5rem 0.55rem;
+  box-shadow: var(--card-shadow);
 }
 
 .form-section h2 {
@@ -1119,7 +1167,7 @@
 
 .mode-cards-criar-all .mode-card {
   padding: 0.65rem 0.75rem;
-  border-radius: 6px;
+  border-radius: 5px;
   text-align: center;
 }
 
@@ -1165,19 +1213,13 @@
 .mode-cards-criar-all .btn-mode-option {
   padding: 0.28rem 0.45rem;
   font-size: 0.65rem;
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
 .mode-cards-criar-all .btn-mode-option:hover {
   transform: none;
 }
 
-.mode-selection--criar-hub .mode-header-titles h2 {
-  font-size: 1.35rem;
-  margin: 0 0 0.35rem;
-}
-
-.mode-selection--criar-hub .mode-header-subtitle {
-  font-size: 0.78rem;
-  margin-bottom: 0.75rem;
+.mode-selection--criar-hub {
+  padding: 0;
 }

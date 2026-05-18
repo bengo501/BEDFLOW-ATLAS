@@ -1,5 +1,5 @@
-/* importar fontes profissionais estilo CAD */
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&family=Source+Code+Pro:wght@300;400;500;600;700&family=Fira+Code:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+/* open sans (ui) + mono (código) + orbitron (marca) */
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&family=Roboto+Mono:wght@300;400;500;600;700&family=Source+Code+Pro:wght@300;400;500;600;700&family=Fira+Code:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
 
 /* reset e variáveis */
 * {
@@ -19,12 +19,15 @@
   --lope-green-dark: #3A7D44;    /* verde escuro do canto inferior esquerdo */
   --lope-green-light: #6BBF59;   /* verde claro do canto inferior direito */
   
-  /* cores neutras para light mode */
-  --white: #FFFFFF;
-  --gray-light: #F8F8F8;
-  --gray-medium: #E0E0E0;
-  --gray-dark: #666666;
-  --black: #333333;
+  /* cores neutras para light mode (fundo ligeiramente mais escuro que o card para hierarquia) */
+  --white: #ffffff;
+  --gray-light: #e6e9ef;
+  --gray-medium: #c9ced8;
+  --gray-dark: #5c6370;
+  --black: #1f2430;
+  /* superfície interior (inputs, linhas dentro de cards) */
+  --surface-subtle: #f0f2f6;
+  --surface-elevated: #ffffff;
   
   /* tema light (padrão) */
   --primary: var(--lope-red);
@@ -50,10 +53,14 @@
   /* cores de borda light mode */
   --border: var(--gray-medium);
   --border-light: #E9ECEF;
+  /* contorno tipo modos de criação: subcaixas com borda escura legível (cor só; usar com border: 1px solid) */
+  --subcard-border-color: rgba(0, 0, 0, 0.88);
   
-  /* cores de card light mode */
-  --card-bg: var(--white);
-  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  /* cards: elevação suave + borda legível no modo claro */
+  --card-bg: var(--surface-elevated);
+  --card-shadow: 0 1px 0 rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.05), 0 6px 20px rgba(15, 23, 42, 0.06);
+  --card-shadow-hover: 0 2px 6px rgba(15, 23, 42, 0.07), 0 10px 28px rgba(15, 23, 42, 0.08);
+  --radius-card: 5px;
   
   /* cores específicas para header, footer e sidebar light mode */
   --header-bg: var(--lope-red);
@@ -72,6 +79,10 @@
   /* shell: sidebar e desvio do header (alinhar padding-top da sidebar à altura real do header) */
   --app-sidebar-width: 232px;
   --app-sidebar-top-pad: 76px;
+
+  /* tipografia ui (texto e botões usam open sans; mono reservado a código) */
+  --font-ui: 'Open Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Consolas', monospace;
 }
 
 /* tema dark baseado no logo LOPE */
@@ -102,10 +113,15 @@
   /* cores de borda dark mode */
   --border: #424242;                    /* bordas escuras */
   --border-light: #505050;              /* bordas mais claras */
+  --subcard-border-color: rgba(255, 255, 255, 0.16);
   
-  /* cores de card dark mode */
-  --card-bg: #2C2C2C;                   /* fundo de cards */
-  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* sombras mais pronunciadas */
+  /* cards dark: contraste sem brilho excessivo */
+  --card-bg: #2c2c2c;
+  --surface-subtle: #252525;
+  --surface-elevated: #2c2c2c;
+  --card-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.35);
+  --card-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --radius-card: 5px;
   
   /* cores específicas para header, footer e sidebar dark mode */
   --header-bg: #2C2C2C;                 /* cinza escuro para dark mode */
@@ -123,7 +139,8 @@
 }
 
 body {
-  font-family: 'Roboto Mono', 'Source Code Pro', 'Fira Code', 'JetBrains Mono', monospace;
+  font-family: var(--font-ui);
+  font-weight: 400;
   background: var(--bg);
   color: var(--text);
   line-height: 1.7;
@@ -133,9 +150,14 @@ body {
   cursor: default; /* cursor padrão profissional */
 }
 
+/* títulos: peso normal em todo o frontend */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: normal !important;
+}
+
 /* fonte monospace para códigos */
 code, pre, .monospace {
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
 /* ==================== cursors personalizados ==================== */
@@ -276,28 +298,32 @@ a, .link {
   cursor: pointer !important;
 }
 
-/* tamanhos de fonte aumentados */
+/* hierarquia: títulos grandes = open sans light (300), corpo = regular, botões = semibold (regra em button) */
 h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
+  font-family: var(--font-ui);
+  font-size: 2.35rem;
+  font-weight: 300;
   line-height: 1.2;
 }
 
 h2 {
-  font-size: 2rem;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: 1.85rem;
+  font-weight: 300;
   line-height: 1.3;
 }
 
 h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: 1.35rem;
+  font-weight: 400;
   line-height: 1.4;
 }
 
 h4 {
-  font-size: 1.25rem;
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-size: 1.15rem;
+  font-weight: 400;
   line-height: 1.5;
 }
 
@@ -307,12 +333,14 @@ p {
 }
 
 button {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui);
+  font-weight: 600;
   font-size: 1rem;
 }
 
 input, textarea, select {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui);
+  font-weight: 400;
   font-size: 1rem;
 }
 
@@ -433,12 +461,12 @@ input, textarea, select {
 .logo-text .subtitle {
   display: block;
   font-size: 0.62rem;
-  font-weight: 500;
+  font-weight: 400;
   opacity: 0.9;
   margin-top: 0.22rem;
   text-transform: uppercase;
   letter-spacing: 0.85px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui);
   color: var(--text-light); /* manter sempre clara em ambos os temas */
   white-space: normal;
   line-height: 1.3;
@@ -1075,11 +1103,12 @@ legend {
 }
 
 .jobs-page-heading {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 300;
   color: var(--text);
   margin: 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .jobs-layout {
@@ -1093,6 +1122,7 @@ legend {
   background: var(--card-bg);
   padding: 0.9rem 1rem;
   border-radius: 6px;
+  border: 1px solid var(--subcard-border-color, var(--border));
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
@@ -1112,7 +1142,7 @@ legend {
 
 .job-item {
   padding: 0.65rem 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.2s;
@@ -1303,11 +1333,12 @@ legend {
 }
 
 .results-page-heading {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 300;
   color: var(--text);
   margin: 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .results-layout {
@@ -1320,12 +1351,18 @@ legend {
   background: var(--card-bg);
   padding: 0.9rem 1rem;
   border-radius: 6px;
+  border: 1px solid var(--subcard-border-color, var(--border));
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .results-section h3 {
-  margin-bottom: 0.65rem;
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.65rem 0;
+  font-size: 1.2rem;
+  font-weight: normal;
 }
 
 .results-filters {
@@ -1367,7 +1404,8 @@ legend {
 
 .file-card {
   padding: 0.75rem 0.85rem;
-  border: 1px solid var(--border);
+  background: var(--card-bg);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 5px;
   transition: all 0.2s;
 }
@@ -1431,6 +1469,57 @@ legend {
   max-height: 90%;
   overflow: auto;
   position: relative;
+}
+
+/* modais do footer (créditos / saiba mais): títulos legíveis no tema escuro */
+.modal-header--footer-modals {
+  border-bottom: 1px solid var(--border, #e0e0e0);
+}
+
+.modal-header--footer-modals h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text, #333);
+}
+
+[data-theme='dark'] .modal-credits-simple .modal-header--footer-modals h2,
+[data-theme='dark'] .modal-footer-saiba-mais .modal-header--footer-modals h2 {
+  color: #ffffff;
+}
+
+.modal-credits-simple .modal-close,
+.modal-footer-saiba-mais .modal-close {
+  color: var(--text-muted, #999);
+}
+
+[data-theme='dark'] .modal-credits-simple .modal-close,
+[data-theme='dark'] .modal-footer-saiba-mais .modal-close {
+  color: #d1d5db;
+}
+
+[data-theme='dark'] .modal-credits-simple .modal-close:hover,
+[data-theme='dark'] .modal-footer-saiba-mais .modal-close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-body--footer-saiba {
+  padding-top: 0.65rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem 0.65rem;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .modal-body--footer-saiba {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-saiba-section {
+    max-height: none;
+  }
 }
 
 .modal-close {
@@ -1543,7 +1632,7 @@ legend {
 
 .template-card {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 12px;
   padding: 1.5rem;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -1610,49 +1699,56 @@ legend {
 }
 
 .footer-content {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 3rem 2rem 2rem;
+  max-width: 1280px;
+  margin: 0 auto 0 0;
+  padding: 1rem 1rem 0.85rem 1rem;
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 2.5rem;
+  grid-template-columns: minmax(200px, min(460px, 50vw)) auto;
+  gap: 0.6rem;
+  align-items: start;
+  justify-items: start;
+}
+
+.footer-section.footer-academic {
+  max-width: 240px;
+  width: 100%;
 }
 
 
 .footer-section h4 {
-  font-size: 1.1rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  margin-bottom: 1rem;
+  margin-bottom: 0.45rem;
   color: var(--accent);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.06em;
 }
 
 /* seção info */
 .footer-info {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.45rem;
 }
 
 .footer-logo {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
 }
 
 .footer-icon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
 }
 
 .footer-title {
-  font-size: 1.5rem;
+  font-size: 1.15rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.06em;
 }
 
 .footer-brand-title {
@@ -1661,35 +1757,35 @@ legend {
 }
 
 .footer-description {
-  font-size: 0.95rem;
-  line-height: 1.6;
-  opacity: 0.9;
-  max-width: 400px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  opacity: 0.92;
+  max-width: 380px;
 }
 
 .footer-version {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.45rem;
   align-items: center;
-  margin-top: 0.5rem;
+  margin-top: 0.15rem;
 }
 
 .version-badge {
-  padding: 0.4rem 0.9rem;
+  padding: 0.22rem 0.5rem;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  font-size: 0.85rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
   font-weight: 600;
   font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
 }
 
 .version-status {
-  padding: 0.4rem 0.9rem;
+  padding: 0.22rem 0.5rem;
   background: var(--accent);
   color: var(--primary);
-  border-radius: 6px;
-  font-size: 0.85rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -1880,7 +1976,7 @@ legend {
 .page-container {
   padding: 2rem;
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 8px;
   box-shadow: var(--card-shadow);
   margin: 1rem;
@@ -1927,10 +2023,10 @@ legend {
 
 .wip-title {
   font-size: 2.5rem;
-  font-weight: 700;
+  font-weight: 300;
   color: var(--text-primary);
   margin: 0;
-  font-family: 'Roboto Mono', monospace; /* Fonte profissional CAD-style */
+  font-family: var(--font-ui);
 }
 
 /* estilos para botões de ação */
@@ -1944,7 +2040,8 @@ legend {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-weight: 600;
   transition: background 0.3s ease;
 }
 
@@ -1968,7 +2065,8 @@ legend {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-weight: 600;
   transition: none;
 }
 
@@ -2048,7 +2146,7 @@ legend {
 
 .setting-card {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 12px;
   padding: 1.5rem;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -2095,18 +2193,25 @@ legend {
 .academic-logos {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: 0.32rem;
+  margin-bottom: 0.38rem;
+  max-width: 220px;
+  width: 100%;
+}
+
+.academic-logos a {
+  display: block;
+  max-width: 100%;
 }
 
 .academic-logo {
   width: 100%;
   height: auto;
-  max-height: 60px;
+  max-height: 36px;
   object-fit: contain;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  padding: 0.75rem;
+  border-radius: 3px;
+  padding: 0.28rem 0.38rem;
   transition: none;
 }
 
@@ -2116,27 +2221,31 @@ legend {
 }
 
 .academic-info {
-  font-size: 0.95rem;
-  line-height: 1.7;
-  opacity: 0.9;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  opacity: 0.92;
 }
 
 .academic-info strong {
   color: var(--accent);
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.82rem;
 }
 
 .academic-year {
-  margin-top: 1rem;
-  padding: 0.6rem 1rem;
+  margin-top: 0.38rem;
+  padding: 0.26rem 0.5rem;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  font-size: 1.1rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
   font-weight: 700;
   text-align: center;
   color: var(--accent);
   font-family: 'JetBrains Mono', monospace;
+  display: inline-block;
+  width: auto;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .footer-credits-detail {
@@ -2160,11 +2269,41 @@ legend {
   font-weight: 700;
 }
 
-/* botão de créditos no footer */
+/* coluna de ações do footer: créditos + saiba mais */
+.footer-actions-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 118px;
+  justify-self: start;
+  margin-left: 0;
+}
+
+.footer-hub-btn {
+  padding: 0.45rem 0.85rem;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--footer-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  font-family: inherit;
+  text-align: center;
+}
+
+.footer-hub-btn:hover {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--accent);
+}
+
+/* botão de créditos no footer (legado — mantido por compat) */
 .footer-credits-btn {
   margin-top: 0.75rem;
   padding: 0.5rem 1rem;
-  border-radius: 999px;
+  border-radius: 5px;
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.15);
   color: var(--footer-text);
@@ -2187,8 +2326,8 @@ legend {
 /* footer bottom */
 .footer-bottom {
   border-top: 1px solid rgba(255, 255, 255, 0.2);
-  margin-top: 2rem;
-  padding: 1.5rem 0 0;
+  margin-top: 1rem;
+  padding: 1.25rem 0 0;
 }
 
 .footer-bottom-content {
@@ -2231,25 +2370,184 @@ legend {
   object-fit: contain;
 }
 
+.modal-footer-saiba-mais {
+  max-width: min(96vw, 920px);
+  width: 100%;
+}
+
+.modal-credits-simple {
+  max-width: 34rem;
+  width: 100%;
+}
+
+.credits-content--plain {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+[data-theme='dark'] .modal-credits-simple .credits-content--plain {
+  color: #e5e7eb;
+}
+
+.credits-content--plain .credits-lead {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  opacity: 0.95;
+}
+
+.credits-content--plain p {
+  margin: 0 0 0.75rem 0;
+}
+
+.credits-content--plain strong {
+  color: var(--primary, #5f1923);
+}
+
+[data-theme='dark'] .credits-content--plain strong {
+  color: var(--accent, #e8c547);
+}
+
+.footer-saiba-section {
+  margin-bottom: 0;
+  min-width: 0;
+  max-height: min(62vh, 480px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.2rem;
+}
+
+.footer-saiba-section:last-child {
+  margin-bottom: 0;
+}
+
+.footer-saiba-section h3 {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  margin: 0 0 0.28rem 0;
+  opacity: 0.88;
+}
+
+[data-theme='dark'] .footer-saiba-section h3 {
+  color: #f3f4f6;
+  opacity: 1;
+}
+
+.footer-saiba-linklist,
+.footer-saiba-techlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.footer-saiba-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  max-width: none;
+  padding: 0.15rem 0;
+  text-decoration: none;
+  color: var(--primary, #5f1923);
+  font-size: 0.7rem;
+  line-height: 1.25;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.footer-saiba-row:hover {
+  opacity: 0.88;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footer-saiba-row--spread {
+  justify-content: space-between;
+  max-width: 100%;
+}
+
+.footer-saiba-row--btn {
+  text-decoration: none;
+}
+
+.footer-saiba-row-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+[data-theme='light'] .modal-footer-saiba-mais .footer-saiba-row-icon:not(.footer-saiba-row-icon--inv) {
+  filter: brightness(0);
+}
+
+[data-theme='light'] .modal-footer-saiba-mais .footer-saiba-row-icon--inv {
+  filter: none;
+  opacity: 1;
+}
+
+[data-theme='dark'] .footer-saiba-row-icon--inv {
+  filter: brightness(0) invert(1);
+}
+
+.footer-saiba-row-label {
+  flex: 1;
+}
+
+.footer-saiba-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.footer-saiba-techlist .footer-saiba-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footer-saiba-ver {
+  font-size: 0.62rem;
+  opacity: 0.8;
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+[data-theme='dark'] .modal-footer-saiba-mais .footer-saiba-row,
+[data-theme='dark'] .modal-footer-saiba-mais .footer-saiba-row--btn {
+  color: #fde68a;
+}
+
+[data-theme='dark'] .modal-footer-saiba-mais .footer-saiba-ver {
+  color: #f3f4f6;
+  opacity: 0.85;
+}
+
 /* responsividade do footer */
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
   .footer-content {
-    grid-template-columns: 2fr 1fr 1fr 1fr;
-    gap: 2rem;
-  }
-}
-
-@media (max-width: 1024px) {
-  .footer-content {
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 2rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .footer-content {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 1.5rem;
+  }
+
+  .footer-actions-column {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .footer-hub-btn {
+    flex: 1;
+    min-width: 120px;
   }
 }
 
@@ -2329,5 +2627,13 @@ legend {
     margin-left: 0;
     padding-bottom: 100px; /* espaço para sidebar no bottom */
   }
+}
+
+/* superfície elevada reutilizável (tokens globais de card) */
+.ui-raised-surface {
+  background: var(--card-bg);
+  border: 1px solid var(--subcard-border-color, var(--border));
+  border-radius: var(--radius-card, 5px);
+  box-shadow: var(--card-shadow);
 }
 

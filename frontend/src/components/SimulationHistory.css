@@ -10,19 +10,29 @@
   border-bottom: none;
 }
 
+.history-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
 .history-title {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0;
+  min-width: 0;
 }
 
 .history-title h1 {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.15;
   color: var(--text-primary);
   margin: 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .title-icon {
@@ -39,30 +49,21 @@
   max-width: 52rem;
 }
 
-.history-controls {
+.history-panels {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.65rem;
-  gap: 0.65rem;
+  flex-direction: column;
+  gap: 0.85rem;
 }
 
-.history-section {
-  margin-top: 0.85rem;
+.history-panel.results-section {
+  margin-top: 0;
 }
 
-.history-section-header {
+.history-section-heading {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 0.5rem;
-}
-
-.history-subtitle {
-  margin: 0;
-  font-size: 1rem;
-  color: var(--text-primary);
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .history-filter-grid {
@@ -117,8 +118,9 @@
 }
 
 .refresh-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
   object-fit: contain;
 }
 
@@ -211,6 +213,11 @@
   border: 1px dashed var(--border, #e8d5c4);
 }
 
+.history-panel .sim-history-empty {
+  border: 1px solid var(--subcard-border-color, var(--border-color));
+  background: var(--card-bg);
+}
+
 .sim-history-empty p {
   font-size: 0.85rem;
   color: var(--text-secondary, #555);
@@ -237,8 +244,8 @@
   flex-direction: column;
   gap: 0.45rem;
   padding: 0.65rem 0.75rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  border: 1px solid var(--subcard-border-color, var(--border-color));
   border-radius: 6px;
   transition: all 0.3s ease;
   min-width: 0;
@@ -308,7 +315,6 @@
 
 .simulation-name {
   font-size: 0.85rem;
-  font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 0.35rem 0;
   line-height: 1.25;

@@ -51,6 +51,28 @@ function mapApiSimulation(item, language) {
   };
 }
 
+/** ícone svg atualizar (contraste no botão primário) */
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
+}
+
 function slugify(s) {
   return String(s || 'simulacao')
     .normalize('NFD')
@@ -317,22 +339,21 @@ function SimulationHistory() {
   return (
     <div className="simulation-history">
       <div className="history-header">
-        <div className="history-title">
-          <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="histórico" className="title-icon" />
-          <h1>{language === 'pt' ? 'Histórico de simulações' : 'Simulation history'}</h1>
+        <div className="history-header-top">
+          <div className="history-title">
+            <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="histórico" className="title-icon" />
+            <h1>{language === 'pt' ? 'Histórico de simulações' : 'Simulation history'}</h1>
+          </div>
+          <button type="button" className="refresh-btn" onClick={() => void loadData()} disabled={loading}>
+            <IconRefresh className="refresh-icon" />
+            {language === 'pt' ? 'Atualizar' : 'Refresh'}
+          </button>
         </div>
         <p className="history-description">
           {language === 'pt'
             ? 'Visualize e gerencie todas as suas simulações cfd'
             : 'View and manage all your cfd simulations'}
         </p>
-      </div>
-
-      <div className="history-controls">
-        <button type="button" className="refresh-btn" onClick={loadData} disabled={loading}>
-          <ThemeIcon light="refreshLigh.png" dark="refreshDark.png" alt="atualizar" className="refresh-icon" />
-          {language === 'pt' ? 'Atualizar' : 'Refresh'}
-        </button>
       </div>
 
       {loadError && <BackendConnectionError message={loadError} />}
@@ -366,10 +387,19 @@ function SimulationHistory() {
         </div>
       )}
 
-      <section className="history-section">
-        <div className="history-section-header">
-          <h2 className="history-subtitle">{pt ? 'Simulações' : 'Simulations'}</h2>
-        </div>
+      <div className="history-panels">
+      <section className="results-section history-panel" aria-labelledby="history-simulations-heading">
+        <h3 id="history-simulations-heading" className="history-section-heading">
+          <ThemeIcon
+            light="cfd_gear_white.png"
+            dark="image-removebg-preview(12).png"
+            alt=""
+            className="section-icon"
+          />
+          <span>
+            {pt ? 'Simulações' : 'Simulations'} ({simTotal})
+          </span>
+        </h3>
 
         <div className="history-filter-grid">
           <div className="search-container">
@@ -542,10 +572,18 @@ function SimulationHistory() {
         )}
       </section>
 
-      <section className="history-section">
-        <div className="history-section-header">
-          <h2 className="history-subtitle">{pt ? 'Modelos 3d persistidos' : 'Persisted 3d models'}</h2>
-        </div>
+      <section className="results-section history-panel" aria-labelledby="history-models-heading">
+        <h3 id="history-models-heading" className="history-section-heading">
+          <ThemeIcon
+            light="modelLight-removebg-preview.png"
+            dark="modelDark-removebg-preview.png"
+            alt=""
+            className="section-icon"
+          />
+          <span>
+            {pt ? 'Modelos 3d persistidos' : 'Persisted 3d models'} ({modelTotal})
+          </span>
+        </h3>
 
         <div className="history-filter-grid">
           <div className="search-container">
@@ -709,6 +747,7 @@ function SimulationHistory() {
           </>
         )}
       </section>
+      </div>
 
       {viewModalId != null && (
         <div

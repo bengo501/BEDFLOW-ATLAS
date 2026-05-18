@@ -22,11 +22,12 @@
 }
 
 .reports-page-heading {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 300;
   color: var(--text);
   margin: 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-page-lead {
@@ -83,7 +84,7 @@
 
 .reports-mockup-card {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   padding: 0.9rem 1rem;
   box-shadow: var(--card-shadow);
@@ -98,7 +99,7 @@
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-toolbar {
@@ -117,7 +118,7 @@
   min-width: 140px;
   padding: 0.38rem 0.55rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text);
   font-size: 0.78rem;
@@ -126,12 +127,12 @@
 .reports-toolbar button {
   padding: 0.32rem 0.65rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text);
   font-size: 0.72rem;
   cursor: pointer;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-toolbar button:disabled {
@@ -149,7 +150,7 @@
   list-style: none;
   margin: 0 0 0.75rem 0;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 5px;
   overflow: hidden;
 }
@@ -197,7 +198,7 @@
   letter-spacing: 0.04em;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   grid-column: 2;
   grid-row: 1;
   align-self: start;
@@ -240,10 +241,10 @@
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--card-bg);
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
@@ -261,7 +262,7 @@
 
 .reports-side-panel {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   padding: 0.85rem;
   box-shadow: var(--card-shadow);
@@ -273,7 +274,7 @@
   font-size: 0.85rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   color: var(--text);
 }
 
@@ -319,7 +320,7 @@
   max-height: calc(100vh - 3rem);
   overflow-y: auto;
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
   margin-top: 0.5rem;
@@ -341,7 +342,7 @@
 .reports-modal-header h2 {
   margin: 0;
   font-size: 1.05rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   color: var(--text);
 }
 
@@ -384,11 +385,11 @@
 .reports-field textarea {
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text);
   font-size: 0.9rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-field-grow textarea {
@@ -406,13 +407,13 @@
 .reports-modal-actions button {
   padding: 0.45rem 0.9rem;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--primary);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
   font-size: 0.82rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-modal-actions button:disabled {
@@ -433,7 +434,7 @@
 .reports-attach-heading {
   font-size: 0.95rem;
   margin: 0 0 0.5rem 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   color: var(--text);
 }
 
@@ -441,7 +442,7 @@
   list-style: none;
   margin: 0 0 1.25rem 0;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 8px;
   overflow: hidden;
 }
@@ -498,7 +499,7 @@
   padding: 0.5rem;
   border-radius: 6px;
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   font-size: 0.75rem;
   white-space: pre-wrap;
   word-break: break-word;
@@ -511,7 +512,7 @@
   padding: 0.25rem 0.5rem;
   font-size: 0.72rem;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--card-bg);
   cursor: pointer;
   color: var(--text-muted);
@@ -537,7 +538,7 @@
   margin: 0.85rem 0 0.4rem 0;
   font-size: 0.82rem;
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-attach-add h4:first-child {
@@ -563,22 +564,22 @@
   min-width: 160px;
   padding: 0.45rem 0.55rem;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text);
   font-size: 0.82rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-attach-row button {
   padding: 0.45rem 0.75rem;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--card-bg);
   color: var(--text);
   font-size: 0.8rem;
   cursor: pointer;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .reports-attach-row button:disabled {

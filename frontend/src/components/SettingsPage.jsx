@@ -67,10 +67,8 @@ export default function SettingsPage({ navigateTab, onLogout }) {
         ? s.theme_mode
         : 'system';
       setThemeModeLocal(tm);
-      setThemeMode(tm);
       const lg = s.language === 'en' ? 'en' : 'pt';
       setLangLocal(lg);
-      setLanguage(lg);
       const j = Number(s.jobs_poll_interval_sec);
       setJobsPollSec(Number.isFinite(j) && j >= 3 && j <= 120 ? j : 5);
       setAdvancedHints(!!s.show_advanced_hints);
@@ -108,7 +106,7 @@ export default function SettingsPage({ navigateTab, onLogout }) {
     } finally {
       setLoading(false);
     }
-  }, [applySettingsFromApi, pt, setLanguage, setThemeMode, t]);
+  }, [applySettingsFromApi, pt, t]);
 
   useEffect(() => {
     load();
@@ -157,6 +155,8 @@ export default function SettingsPage({ navigateTab, onLogout }) {
       setUpdatedAt(s.updated_at || '');
       localStorage.setItem('jobsPollIntervalSec', String(jobsPollSec));
       applySettingsFromApi(s);
+      setThemeMode(themeMode);
+      setLanguage(lang);
     } catch (err) {
       console.error(err);
       if (isConnectionError(err)) {

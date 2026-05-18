@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getDatabasePanel, postDatabasePanelEvent } from '../services/api';
 import BackendConnectionError from './BackendConnectionError';
+import ThemeIcon from './ThemeIcon';
 import './DatabasePage.css';
 
 function isConnectionError(err) {
@@ -14,9 +15,71 @@ function isConnectionError(err) {
   return noResponse || network;
 }
 
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
+}
+
+function IconLink({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function IconCloudUpload({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+      <path d="M12 12v9" />
+      <path d="m16 16-4-4-4 4" />
+    </svg>
+  );
+}
+
 function eventLabel(type, pt) {
-  if (type === 'backup_request') return pt ? 'pedido de backup' : 'backup request';
-  if (type === 'connection_test') return pt ? 'teste de ligação' : 'connection test';
+  if (type === 'backup_request') return pt ? 'Pedido de backup' : 'Backup request';
+  if (type === 'connection_test') return pt ? 'Teste de ligação' : 'Connection test';
   return type;
 }
 
@@ -49,7 +112,7 @@ export default function DatabasePage() {
         setOpError(
           err.response?.data?.detail ||
             err.message ||
-            (pt ? 'não foi possível carregar o painel' : 'could not load panel')
+            (pt ? 'Não foi possível carregar o painel.' : 'Could not load panel.')
         );
       }
     } finally {
@@ -73,7 +136,7 @@ export default function DatabasePage() {
       if (isConnectionError(err)) setConnectionError(t('backendConnectionError'));
       else
         setOpError(
-          err.response?.data?.detail || (pt ? 'ação falhou' : 'action failed')
+          err.response?.data?.detail || (pt ? 'A ação falhou.' : 'Action failed.')
         );
     } finally {
       setActionLoading(false);
@@ -85,24 +148,24 @@ export default function DatabasePage() {
     counts != null
       ? [
           [
-            pt ? 'leitos (tabela beds)' : 'beds table',
+            pt ? 'Leitos (tabela beds)' : 'Beds table',
             String(counts.beds),
-            pt ? 'registos' : 'rows',
+            pt ? 'Registos' : 'Rows',
           ],
           [
-            pt ? 'simulações (simulations)' : 'simulations',
+            pt ? 'Simulações (simulations)' : 'Simulations',
             String(counts.simulations),
-            pt ? 'registos' : 'rows',
+            pt ? 'Registos' : 'Rows',
           ],
           [
-            pt ? 'resultados (results)' : 'results',
+            pt ? 'Resultados (results)' : 'Results',
             String(counts.results),
-            pt ? 'registos' : 'rows',
+            pt ? 'Registos' : 'Rows',
           ],
           [
-            pt ? 'templates .bed (bed_templates)' : 'bed templates',
+            pt ? 'Templates .bed (bed_templates)' : 'Bed templates',
             String(counts.bed_templates),
-            pt ? 'registos' : 'rows',
+            pt ? 'Registos' : 'Rows',
           ],
         ]
       : [];
@@ -110,14 +173,14 @@ export default function DatabasePage() {
   const integ = panel?.integrations || {};
   const integRows = [
     [
-      pt ? 'redis (filas / cache)' : 'redis (queues / cache)',
+      pt ? 'Redis (filas / cache)' : 'Redis (queues / cache)',
       integ.redis || '—',
-      pt ? 'estado' : 'status',
+      pt ? 'Estado' : 'Status',
     ],
     [
-      pt ? 'armazenamento de objetos (s3 / minio)' : 'object storage (s3 / minio)',
+      pt ? 'Armazenamento de objetos (S3 / MinIO)' : 'Object storage (S3 / MinIO)',
       integ.object_storage || '—',
-      pt ? 'estado' : 'status',
+      pt ? 'Estado' : 'Status',
     ],
   ];
 
@@ -132,20 +195,30 @@ export default function DatabasePage() {
           </div>
         )}
 
+        <div className="database-page-heading" aria-label={pt ? 'banco de dados' : 'database'}>
+          <ThemeIcon
+            light="database-01-svgrepo-com.svg"
+            dark="database-01-svgrepo-com.svg"
+            alt=""
+            className="database-page-heading-icon"
+            location="page"
+          />
+          <h2 className="database-page-title">{pt ? 'Banco de dados' : 'Database'}</h2>
+        </div>
+
         <div className="database-layout">
           <section
             className="database-mockup-card"
-            aria-label={pt ? 'painel do motor sql' : 'sql engine panel'}
+            aria-label={pt ? 'Painel do motor SQL' : 'SQL engine panel'}
           >
-            <h2>{pt ? 'banco de dados' : 'database'}</h2>
             <p className="database-mockup-lead">
               {pt
-                ? 'visão operacional do sqlite/postgresql usado pela api: contagens das tabelas principais e histórico de pedidos feitos a partir desta página.'
-                : 'operational view of the sqlite/postgresql used by the api: main table counts and history of requests made from this page.'}
+                ? 'Visão operacional do SQLite/PostgreSQL usado pela API: contagens das tabelas principais e histórico de pedidos feitos a partir desta página.'
+                : 'Operational view of the SQLite/PostgreSQL used by the API: main table counts and history of requests made from this page.'}
             </p>
 
             {loading ? (
-              <p className="database-status">{pt ? 'a carregar…' : 'loading…'}</p>
+              <p className="database-status">{pt ? 'A carregar…' : 'Loading…'}</p>
             ) : panel ? (
               <>
                 <div
@@ -153,21 +226,21 @@ export default function DatabasePage() {
                   role="status"
                 >
                   <span className="database-connection-label">
-                    {pt ? 'motor sql' : 'sql engine'}
+                    {pt ? 'Motor SQL' : 'SQL engine'}
                   </span>
                   <span className="database-connection-value">{panel.database_display}</span>
                   <span className="database-connection-badge">
                     {panel.connected
                       ? pt
-                        ? 'ligado'
-                        : 'connected'
+                        ? 'Ligado'
+                        : 'Connected'
                       : pt
-                        ? 'indisponível'
-                        : 'unavailable'}
+                        ? 'Indisponível'
+                        : 'Unavailable'}
                   </span>
                   {panel.checked_at && (
                     <span className="database-checked-at">
-                      {pt ? 'verificado:' : 'checked:'}{' '}
+                      {pt ? 'Verificado:' : 'Checked:'}{' '}
                       {new Date(panel.checked_at).toLocaleString(pt ? 'pt-PT' : 'en-GB')}
                     </span>
                   )}
@@ -179,7 +252,7 @@ export default function DatabasePage() {
                 )}
 
                 <h3 className="database-subheading">
-                  {pt ? 'dados persistidos (orm)' : 'persisted data (orm)'}
+                  {pt ? 'Dados persistidos (ORM)' : 'Persisted data (ORM)'}
                 </h3>
                 <ul className="database-mock-list">
                   {rows.map(([title, value, kind]) => (
@@ -193,7 +266,7 @@ export default function DatabasePage() {
                 </ul>
 
                 <h3 className="database-subheading">
-                  {pt ? 'integrações externas' : 'external integrations'}
+                  {pt ? 'Integrações externas' : 'External integrations'}
                 </h3>
                 <ul className="database-mock-list database-mock-list-muted">
                   {integRows.map(([title, value, kind]) => (
@@ -207,7 +280,7 @@ export default function DatabasePage() {
                 </ul>
 
                 <h3 className="database-subheading">
-                  {pt ? 'registo de ações (admin_panel_events)' : 'action log (admin_panel_events)'}
+                  {pt ? 'Registo de ações (admin_panel_events)' : 'Action log (admin_panel_events)'}
                 </h3>
                 {panel.recent_events?.length ? (
                   <ul className="database-events-list">
@@ -228,38 +301,44 @@ export default function DatabasePage() {
                 ) : (
                   <p className="database-events-empty">
                     {pt
-                      ? 'ainda não há eventos. use os botões abaixo para registar pedidos.'
-                      : 'no events yet. use the buttons below to log requests.'}
+                      ? 'Ainda não há eventos. Use os botões abaixo para registar pedidos.'
+                      : 'No events yet. Use the buttons below to log requests.'}
                   </p>
                 )}
 
                 <div className="database-actions-mock">
                   <button
                     type="button"
+                    className="database-btn-with-icon"
                     onClick={() => loadPanel()}
                     disabled={loading || actionLoading}
                   >
-                    {pt ? 'atualizar' : 'refresh'}
+                    <IconRefresh className="database-btn-svg" />
+                    {pt ? 'Atualizar' : 'Refresh'}
                   </button>
                   <button
                     type="button"
+                    className="database-btn-with-icon"
                     onClick={() => runAction('connection_test')}
                     disabled={actionLoading || !!connectionError}
                   >
-                    {pt ? 'testar ligação' : 'test connection'}
+                    <IconLink className="database-btn-svg" />
+                    {pt ? 'Testar ligação' : 'Test connection'}
                   </button>
                   <button
                     type="button"
+                    className="database-btn-with-icon"
                     onClick={() => runAction('backup_request')}
                     disabled={actionLoading || !!connectionError}
                   >
-                    {pt ? 'pedir backup manual' : 'request manual backup'}
+                    <IconCloudUpload className="database-btn-svg" />
+                    {pt ? 'Pedir backup manual' : 'Request manual backup'}
                   </button>
                 </div>
                 <p className="database-actions-hint">
                   {pt
-                    ? 'o backup manual apenas regista o pedido na base de dados; a cópia física (pg_dump, ficheiro sqlite, etc.) deve ser feita à parte nos seus scripts de operação.'
-                    : 'manual backup only logs the request in the database; physical backup (pg_dump, sqlite file copy, etc.) must be done separately in your ops scripts.'}
+                    ? 'O backup manual apenas regista o pedido na base de dados; a cópia física (pg_dump, ficheiro SQLite, etc.) deve ser feita à parte nos seus scripts de operação.'
+                    : 'Manual backup only logs the request in the database; physical backup (pg_dump, SQLite file copy, etc.) must be done separately in your ops scripts.'}
                 </p>
               </>
             ) : null}

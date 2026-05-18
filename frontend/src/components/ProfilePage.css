@@ -21,11 +21,12 @@
 }
 
 .profile-page-heading {
-  font-size: 1.45rem;
+  font-size: 32px;
+  line-height: 1.15;
   font-weight: 700;
   color: var(--text);
   margin: 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .profile-op-error {
@@ -44,7 +45,7 @@
 
 .profile-mockup-card {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   padding: 0.9rem 1rem;
   box-shadow: var(--card-shadow);
@@ -76,7 +77,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -84,7 +85,7 @@
   font-weight: 700;
   color: var(--primary);
   flex-shrink: 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .profile-avatar-meta {
@@ -131,11 +132,11 @@
   box-sizing: border-box;
   padding: 0.38rem 0.55rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text);
   font-size: 0.8rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .profile-field textarea {
@@ -170,7 +171,7 @@
   border: 1px solid var(--primary);
   background: var(--primary);
   color: #fff;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .profile-btn-save:disabled {
@@ -184,10 +185,10 @@
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--card-bg);
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .profile-btn-secondary:disabled {
@@ -205,12 +206,12 @@
   border: 1px dashed var(--border);
   background: var(--bg);
   color: var(--text-muted);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .profile-side-panel {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   padding: 0.9rem 1rem;
   box-shadow: var(--card-shadow);
@@ -222,7 +223,7 @@
   font-size: 0.82rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   color: var(--text);
 }
 

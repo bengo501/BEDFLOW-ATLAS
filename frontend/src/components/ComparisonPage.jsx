@@ -240,7 +240,7 @@ function ComparisonPage() {
 
       <div className="comparison-page-toolbar">
         <button type="button" className="comparison-refresh-btn" onClick={loadSimulations} disabled={loading}>
-          <ThemeIcon light="refreshLigh.png" dark="refreshDark.png" alt="" className="comparison-refresh-icon" />
+          <ThemeIcon light="refreshLight.png" dark="refreshDark.png" alt="" className="comparison-refresh-icon" />
           {language === 'pt' ? 'Atualizar' : 'Refresh'}
         </button>
         <button

@@ -8,20 +8,35 @@
   display: block;
 }
 
-.database-mockup-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.9rem 1rem;
-  box-shadow: var(--card-shadow);
+.database-page-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
 }
 
-.database-mockup-card h2 {
-  font-size: 1.05rem;
-  font-weight: 600;
+.database-page-heading-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.database-page-title {
+  font-family: var(--font-ui);
+  font-size: 32px;
+  font-weight: 300;
   color: var(--text);
-  margin: 0 0 0.35rem 0;
-  font-family: 'Roboto Mono', monospace;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.database-mockup-card {
+  background: var(--card-bg);
+  border: 1px solid var(--subcard-border-color, var(--border));
+  border-radius: var(--radius-card, 5px);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--card-shadow);
 }
 
 .database-mockup-lead {
@@ -36,7 +51,7 @@
   font-weight: 600;
   margin: 0.85rem 0 0.35rem 0;
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .database-subheading:first-of-type {
@@ -66,9 +81,9 @@
   gap: 0.35rem 0.65rem;
   padding: 0.5rem 0.65rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   margin-bottom: 0.55rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   font-size: 0.74rem;
 }
 
@@ -100,7 +115,7 @@
   letter-spacing: 0.04em;
   padding: 0.15rem 0.38rem;
   border-radius: 3px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
 }
 
@@ -127,7 +142,7 @@
   list-style: none;
   margin: 0 0 0.65rem 0;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 5px;
   overflow: hidden;
 }
@@ -146,7 +161,7 @@
   color: var(--text);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .database-mock-list li:last-child {
@@ -165,7 +180,7 @@
   list-style: none;
   margin: 0 0 0.65rem 0;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 5px;
   overflow: hidden;
 }
@@ -187,7 +202,7 @@
 .database-events-type {
   font-weight: 600;
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .database-events-list time {
@@ -221,12 +236,28 @@
   padding: 0.32rem 0.65rem;
   border-radius: 5px;
   font-size: 0.72rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--card-bg);
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
+}
+
+.database-btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.database-btn-svg {
+  flex-shrink: 0;
+  color: var(--text);
+}
+
+[data-theme='light'] .database-btn-svg {
+  color: #1a1a1a;
 }
 
 .database-actions-mock button:disabled {
@@ -243,8 +274,8 @@
 
 .database-side-panel {
   background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--subcard-border-color, var(--border));
+  border-radius: var(--radius-card, 5px);
   padding: 0.85rem;
   box-shadow: var(--card-shadow);
   position: sticky;
@@ -256,7 +287,7 @@
   font-weight: 600;
   margin: 0 0 0.45rem 0;
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .database-side-list {

@@ -153,6 +153,28 @@ function mapSimulationFromApi(sim, language) {
   };
 }
 
+/** ícone svg atualizar (alinhado a database / templates salvos) */
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
+}
+
 function Dashboard() {
   const { language, t } = useLanguage();
   const pt = language === 'pt';
@@ -177,6 +199,7 @@ function Dashboard() {
   const [totalSimulationsList, setTotalSimulationsList] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [silentBusy, setSilentBusy] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const [artifacts, setArtifacts] = useState({
     bytes_used: 0,
@@ -256,61 +279,67 @@ function Dashboard() {
     return () => window.removeEventListener('keydown', onKey);
   }, [modalOpen, closeModal]);
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
+  const loadData = useCallback(
+    async (opts = {}) => {
+      const silent = opts.silent === true;
+      if (silent) setSilentBusy(true);
+      else setLoading(true);
       setConnectionError(null);
-      const [summary, simData, storageRes] = await Promise.all([
-        getDashboardSummary(8),
-        listSimulations({
-          page,
-          limit,
-          search: searchTerm || null,
-          status: activeFilter === 'all' ? null : activeFilter,
-        }),
-        getArtifactsStorage().catch(() => null),
-      ]);
+      try {
+        const [summary, simData, storageRes] = await Promise.all([
+          getDashboardSummary(8),
+          listSimulations({
+            page,
+            limit,
+            search: searchTerm || null,
+            status: activeFilter === 'all' ? null : activeFilter,
+          }),
+          getArtifactsStorage().catch(() => null),
+        ]);
 
-      if (storageRes && typeof storageRes.bytes_used === 'number') {
-        setArtifacts({
-          bytes_used: storageRes.bytes_used,
-          bytes_cap: storageRes.bytes_cap ?? 60 * 1024 ** 3,
-          cap_gb: storageRes.cap_gb ?? 60,
-          percent_of_cap: Number(storageRes.percent_of_cap) || 0,
-          breakdown: Array.isArray(storageRes.breakdown) ? storageRes.breakdown : [],
+        if (storageRes && typeof storageRes.bytes_used === 'number') {
+          setArtifacts({
+            bytes_used: storageRes.bytes_used,
+            bytes_cap: storageRes.bytes_cap ?? 60 * 1024 ** 3,
+            cap_gb: storageRes.cap_gb ?? 60,
+            percent_of_cap: Number(storageRes.percent_of_cap) || 0,
+            breakdown: Array.isArray(storageRes.breakdown) ? storageRes.breakdown : [],
+          });
+        }
+
+        setDashboardData({
+          totalSimulations: summary.total_simulations || 0,
+          totalModels3D: summary.total_models_3d || 0,
+          completedSimulations: summary.by_status?.completed || 0,
+          runningSimulations: summary.by_status?.running || 0,
+          failedSimulations: summary.by_status?.failed || 0,
+          pendingSimulations: summary.by_status?.pending || 0,
+          successRate: summary.success_rate || 0,
+          averageExecutionTime: summary.average_execution_time,
+          averagePressureDrop: summary.average_pressure_drop,
+          averageReynoldsNumber: summary.average_reynolds_number,
         });
+
+        const recentItems = Array.isArray(simData?.items) ? simData.items : [];
+        setSimulations(recentItems.map((sim) => mapSimulationFromApi(sim, language)));
+        setTotalSimulationsList(simData?.total || 0);
+        setTotalPages(simData?.total_pages || simData?.pages || 1);
+      } catch (error) {
+        console.error('erro ao carregar dados do dashboard:', error);
+        setConnectionError(t('backendConnectionError'));
+        setSimulations([]);
+        setTotalSimulationsList(0);
+      } finally {
+        setLoading(false);
+        setSilentBusy(false);
       }
-
-      setDashboardData({
-        totalSimulations: summary.total_simulations || 0,
-        totalModels3D: summary.total_models_3d || 0,
-        completedSimulations: summary.by_status?.completed || 0,
-        runningSimulations: summary.by_status?.running || 0,
-        failedSimulations: summary.by_status?.failed || 0,
-        pendingSimulations: summary.by_status?.pending || 0,
-        successRate: summary.success_rate || 0,
-        averageExecutionTime: summary.average_execution_time,
-        averagePressureDrop: summary.average_pressure_drop,
-        averageReynoldsNumber: summary.average_reynolds_number,
-      });
-
-      const recentItems = Array.isArray(simData?.items) ? simData.items : [];
-      setSimulations(recentItems.map((sim) => mapSimulationFromApi(sim, language)));
-      setTotalSimulationsList(simData?.total || 0);
-      setTotalPages(simData?.total_pages || simData?.pages || 1);
-    } catch (error) {
-      console.error('erro ao carregar dados do dashboard:', error);
-      setConnectionError(t('backendConnectionError'));
-      setSimulations([]);
-      setTotalSimulationsList(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeFilter, language, limit, page, searchTerm, pt, t]);
+    },
+    [activeFilter, language, limit, page, searchTerm, t],
+  );
 
   useEffect(() => {
-    loadData();
-    const timer = window.setInterval(loadData, 5000);
+    void loadData({ silent: false });
+    const timer = window.setInterval(() => void loadData({ silent: true }), 5000);
     return () => window.clearInterval(timer);
   }, [activeUserId, loadData]);
 
@@ -321,7 +350,7 @@ function Dashboard() {
           <ThemeIcon light="analiseLight.png" dark="analiseLight.png" alt="" className="dashboard-title-icon" location="sidebar" />
           <h1>{pt ? 'Dashboard' : 'Dashboard'}</h1>
         </div>
-        <p>{pt ? 'Dados reais vindos do fastapi e persistidos no sqlite' : 'Real data from fastapi persisted in sqlite'}</p>
+        <p>{pt ? 'Dados reais vindos do FastAPI e persistidos no SQLite' : 'Real data from FastAPI persisted in SQLite'}</p>
       </div>
 
       {connectionError && <BackendConnectionError message={connectionError} />}
@@ -333,7 +362,7 @@ function Dashboard() {
           </div>
           <div className="metric-content">
             <div className="metric-value metric-value--sm">{dashboardData.totalSimulations}</div>
-            <div className="metric-label">{pt ? 'total de simulações' : 'total simulations'}</div>
+            <div className="metric-label">{pt ? 'Total de simulações' : 'Total simulations'}</div>
             <div className="metric-subtitle">
               {dashboardData.completedSimulations} {pt ? 'concluídas' : 'completed'}
             </div>
@@ -346,8 +375,8 @@ function Dashboard() {
           </div>
           <div className="metric-content">
             <div className="metric-value metric-value--sm">{dashboardData.totalModels3D}</div>
-            <div className="metric-label">{pt ? 'modelos 3d' : '3d models'}</div>
-            <div className="metric-subtitle">{pt ? 'persistidos no sqlite' : 'persisted in sqlite'}</div>
+            <div className="metric-label">{pt ? 'Modelos 3D' : '3D models'}</div>
+            <div className="metric-subtitle">{pt ? 'Persistidos no SQLite' : 'Persisted in SQLite'}</div>
           </div>
         </div>
 
@@ -360,7 +389,7 @@ function Dashboard() {
               <DonutChart percent={dashboardData.successRate} size={48} stroke={5} />
               <div>
                 <div className="metric-value metric-value--sm">{dashboardData.successRate.toFixed(1)}%</div>
-                <div className="metric-label">{pt ? 'taxa de sucesso' : 'success rate'}</div>
+                <div className="metric-label">{pt ? 'Taxa de sucesso' : 'Success rate'}</div>
                 <div className="metric-subtitle">
                   {dashboardData.completedSimulations}/{dashboardData.totalSimulations || 0}
                 </div>
@@ -375,7 +404,7 @@ function Dashboard() {
           </div>
           <div className="metric-content">
             <div className="metric-value metric-value--sm">{dashboardData.runningSimulations}</div>
-            <div className="metric-label">{pt ? 'em execução' : 'running'}</div>
+            <div className="metric-label">{pt ? 'Em execução' : 'Running'}</div>
             <div className="metric-subtitle">
               {dashboardData.pendingSimulations} {pt ? 'pendentes' : 'pending'}
             </div>
@@ -401,8 +430,8 @@ function Dashboard() {
           </div>
           <div className="resource-content">
             <div className="resource-value resource-value--sm">{formatDurationSeconds(dashboardData.averageExecutionTime)}</div>
-            <div className="resource-label">{pt ? 'tempo médio' : 'average time'}</div>
-            <div className="resource-subtitle">{pt ? 'simulações concluídas' : 'completed simulations'}</div>
+            <div className="resource-label">{pt ? 'Tempo médio' : 'Average time'}</div>
+            <div className="resource-subtitle">{pt ? 'Simulações concluídas' : 'Completed simulations'}</div>
           </div>
         </div>
 
@@ -414,8 +443,8 @@ function Dashboard() {
             <div className="resource-value resource-value--sm">
               {dashboardData.averagePressureDrop != null ? dashboardData.averagePressureDrop.toFixed(2) : '—'}
             </div>
-            <div className="resource-label">{pt ? 'queda média de pressão' : 'average pressure drop'}</div>
-            <div className="resource-subtitle">pa</div>
+            <div className="resource-label">{pt ? 'Queda média de pressão' : 'Average pressure drop'}</div>
+            <div className="resource-subtitle">Pa</div>
           </div>
         </div>
 
@@ -427,8 +456,8 @@ function Dashboard() {
             <div className="resource-value resource-value--sm">
               {dashboardData.averageReynoldsNumber != null ? dashboardData.averageReynoldsNumber.toFixed(2) : '—'}
             </div>
-            <div className="resource-label">{pt ? 'reynolds médio' : 'average reynolds'}</div>
-            <div className="resource-subtitle">{pt ? 'dados reais' : 'real data'}</div>
+            <div className="resource-label">{pt ? 'Reynolds médio' : 'Average Reynolds'}</div>
+            <div className="resource-subtitle">{pt ? 'Dados reais' : 'Real data'}</div>
           </div>
         </div>
 
@@ -439,8 +468,8 @@ function Dashboard() {
           <div className="resource-content resource-content--row">
             <div>
               <div className="resource-value resource-value--sm">{dashboardData.failedSimulations}</div>
-              <div className="resource-label">{pt ? 'falhas' : 'failures'}</div>
-              <div className="resource-subtitle">{pt ? 'sincronizadas do backend' : 'synced from backend'}</div>
+              <div className="resource-label">{pt ? 'Falhas' : 'Failures'}</div>
+              <div className="resource-subtitle">{pt ? 'Sincronizadas do backend' : 'Synced from backend'}</div>
             </div>
             {dashboardData.totalSimulations > 0 ? (
               <div className="resource-mini-donut" title={pt ? '% falhas sobre o total' : '% failed of total'}>
@@ -459,87 +488,15 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="simulation-controls simulation-controls--compact">
-        <div className="search-section">
-          <input
-            type="text"
-            placeholder={pt ? 'Buscar simulações...' : 'Search simulations...'}
-            value={searchTerm}
-            onChange={(e) => {
-              setPage(1);
-              setSearchTerm(e.target.value);
-            }}
-            className="search-input search-input--compact"
-          />
-        </div>
-
-        <div className="filter-section">
-          <button
-            type="button"
-            className={`filter-btn filter-btn--sm ${activeFilter === 'all' ? 'active' : ''}`}
-            onClick={() => {
-              setPage(1);
-              setActiveFilter('all');
-            }}
-          >
-            {pt ? 'Todas' : 'All'} ({totalSimulationsList})
-          </button>
-          <button
-            type="button"
-            className={`filter-btn filter-btn--sm ${activeFilter === 'completed' ? 'active' : ''}`}
-            onClick={() => {
-              setPage(1);
-              setActiveFilter('completed');
-            }}
-          >
-            <ThemeIcon light="correctLight.png" dark="correctDark.png" alt="" className="filter-icon" />
-            {pt ? 'Concluídas' : 'Completed'}
-          </button>
-          <button
-            type="button"
-            className={`filter-btn filter-btn--sm ${activeFilter === 'running' ? 'active' : ''}`}
-            onClick={() => {
-              setPage(1);
-              setActiveFilter('running');
-            }}
-          >
-            <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="filter-icon" />
-            {pt ? 'Executando' : 'Running'}
-          </button>
-          <button
-            type="button"
-            className={`filter-btn filter-btn--sm ${activeFilter === 'pending' ? 'active' : ''}`}
-            onClick={() => {
-              setPage(1);
-              setActiveFilter('pending');
-            }}
-          >
-            <ThemeIcon light="refreshLight.png" dark="refreshDark.png" alt="" className="filter-icon" />
-            {pt ? 'Pendentes' : 'Pending'}
-          </button>
-          <button
-            type="button"
-            className={`filter-btn filter-btn--sm ${activeFilter === 'failed' ? 'active' : ''}`}
-            onClick={() => {
-              setPage(1);
-              setActiveFilter('failed');
-            }}
-          >
-            <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="filter-icon" />
-            {pt ? 'Falharam' : 'Failed'}
-          </button>
-        </div>
-      </div>
-
-      <div className="dash-artifacts-widget">
+      <div className="dash-artifacts-widget ui-raised-surface">
         <div className="dash-artifacts-row">
           <div className="dash-artifacts-text">
             <div className="dash-artifacts-title">
               {pt ? 'Disco — artefactos do projeto' : 'Disk — project artifacts'}
             </div>
             <div className="dash-artifacts-sub">
-              {formatGiB(artifacts.bytes_used)} / {artifacts.cap_gb} gib ·{' '}
-              {Number(artifacts.percent_of_cap).toFixed(1)}% {pt ? 'Do limite' : 'of cap'}
+              {formatGiB(artifacts.bytes_used)} / {artifacts.cap_gb} GiB ·{' '}
+              {Number(artifacts.percent_of_cap).toFixed(1)}% {pt ? 'do limite' : 'of cap'}
             </div>
           </div>
           <DonutChart percent={artifacts.percent_of_cap} size={44} stroke={5} />
@@ -556,7 +513,7 @@ function Dashboard() {
               <li key={row.label}>
                 <span>{row.label}</span>
                 <span>
-                  {formatGiB(row.size_bytes)} gib
+                  {formatGiB(row.size_bytes)} GiB
                 </span>
               </li>
             ))}
@@ -565,13 +522,100 @@ function Dashboard() {
       </div>
 
       <div className="dash-simulations-section">
-        <div className="dash-simulations-title-row">
-          <ThemeIcon light="jobLight.png" dark="jobDark.png" alt="" className="dash-simulations-title-icon" />
-          <h3>{pt ? 'Simulações' : 'Simulations'}</h3>
+        <div className="dash-simulations-head">
+          <div className="dash-simulations-title-row">
+            <ThemeIcon light="jobLight.png" dark="jobDark.png" alt="" className="dash-simulations-title-icon" />
+            <h3>{pt ? 'Simulações' : 'Simulations'}</h3>
+          </div>
+          <button
+            type="button"
+            className="dash-refresh-btn"
+            onClick={() => void loadData({ silent: true })}
+            disabled={loading || silentBusy}
+            aria-busy={silentBusy || undefined}
+            title={pt ? 'Atualizar dados do painel' : 'Refresh panel data'}
+          >
+            <IconRefresh className="dash-refresh-btn__icon" />
+            {pt ? 'Atualizar' : 'Refresh'}
+          </button>
         </div>
-        <div className="simulations-list simulations-list--compact">
+
+        <div className="simulation-controls simulation-controls--compact simulation-controls--under-sim-title ui-raised-surface">
+          <div className="search-section">
+            <input
+              type="text"
+              placeholder={pt ? 'Buscar simulações…' : 'Search simulations…'}
+              value={searchTerm}
+              onChange={(e) => {
+                setPage(1);
+                setSearchTerm(e.target.value);
+              }}
+              className="search-input search-input--compact"
+              aria-label={pt ? 'Buscar simulações' : 'Search simulations'}
+            />
+          </div>
+
+          <div className="filter-section">
+            <button
+              type="button"
+              className={`filter-btn filter-btn--sm ${activeFilter === 'all' ? 'active' : ''}`}
+              onClick={() => {
+                setPage(1);
+                setActiveFilter('all');
+              }}
+            >
+              {pt ? 'Todas' : 'All'} ({totalSimulationsList})
+            </button>
+            <button
+              type="button"
+              className={`filter-btn filter-btn--sm ${activeFilter === 'completed' ? 'active' : ''}`}
+              onClick={() => {
+                setPage(1);
+                setActiveFilter('completed');
+              }}
+            >
+              <ThemeIcon light="correctLight.png" dark="correctDark.png" alt="" className="filter-icon" />
+              {pt ? 'Concluídas' : 'Completed'}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn filter-btn--sm ${activeFilter === 'running' ? 'active' : ''}`}
+              onClick={() => {
+                setPage(1);
+                setActiveFilter('running');
+              }}
+            >
+              <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="filter-icon" />
+              {pt ? 'Executando' : 'Running'}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn filter-btn--sm ${activeFilter === 'pending' ? 'active' : ''}`}
+              onClick={() => {
+                setPage(1);
+                setActiveFilter('pending');
+              }}
+            >
+              <ThemeIcon light="refreshLight.png" dark="refreshDark.png" alt="" className="filter-icon" />
+              {pt ? 'Pendentes' : 'Pending'}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn filter-btn--sm ${activeFilter === 'failed' ? 'active' : ''}`}
+              onClick={() => {
+                setPage(1);
+                setActiveFilter('failed');
+              }}
+            >
+              <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="filter-icon" />
+              {pt ? 'Falharam' : 'Failed'}
+            </button>
+          </div>
+        </div>
+
+        <div className="simulations-list simulations-list--compact ui-raised-surface">
           <div className="simulations-grid simulations-grid--two-cols">
-          {loading && <p className="simulations-loading">{pt ? 'A carregar...' : 'Loading...'}</p>}
+          {loading && <p className="simulations-loading">{pt ? 'A carregar…' : 'Loading…'}</p>}
           {!loading && simulations.length === 0 && (
             <p className="simulations-empty">{pt ? 'Nenhuma simulação encontrada' : 'No simulations found'}</p>
           )}
@@ -604,7 +648,7 @@ function Dashboard() {
               <div className="simulation-meta">
                 <span>id {simulation.id}</span>
                 <span>
-                  {pt ? 'leito' : 'bed'} #{simulation.bedId}
+                  {pt ? 'Leito' : 'Bed'} #{simulation.bedId}
                 </span>
               </div>
               <div className="simulation-meta simulation-meta--muted">{simulation.date}</div>
@@ -613,11 +657,11 @@ function Dashboard() {
                 u = {simulation.inletVelocity != null ? `${simulation.inletVelocity} m/s` : '—'}
               </div>
               <div className="simulation-meta simulation-meta--muted">
-                {pt ? 'duração' : 'duration'}: {simulation.duration}
+                {pt ? 'Duração' : 'Duration'}: {simulation.duration}
                 {simulation.pressureDrop != null && (
                   <span className="simulation-meta-extra">
                     {' · Δp '}
-                    {Number(simulation.pressureDrop).toFixed(1)} pa
+                    {Number(simulation.pressureDrop).toFixed(1)} Pa
                   </span>
                 )}
               </div>

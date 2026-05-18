@@ -21,11 +21,12 @@
 }
 
 .settings-page-heading {
-  font-size: 1.45rem;
+  font-size: 32px;
+  line-height: 1.15;
   font-weight: 700;
   margin: 0;
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .settings-op-error {
@@ -42,7 +43,7 @@
   margin-bottom: 0.65rem;
   padding: 0.5rem 0.65rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text-muted);
   font-size: 0.78rem;
@@ -55,7 +56,7 @@
 
 .settings-main {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   padding: 0.9rem 1rem;
   box-shadow: var(--card-shadow);
@@ -87,7 +88,7 @@
 }
 
 .setting-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   padding: 0.65rem 0.75rem;
   background: var(--bg);
@@ -101,7 +102,7 @@
   margin: 0 0 0.28rem 0;
   font-size: 0.92rem;
   color: var(--text);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .setting-card-desc {
@@ -137,11 +138,11 @@
 .settings-control input[type='text'] {
   padding: 0.38rem 0.55rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--card-bg);
   color: var(--text);
   font-size: 0.8rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   text-transform: none;
   font-weight: 400;
 }
@@ -155,11 +156,11 @@
   min-height: 2.5rem;
   padding: 0.38rem 0.55rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--card-bg);
   color: var(--text);
   font-size: 0.78rem;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   resize: vertical;
   box-sizing: border-box;
 }
@@ -186,7 +187,7 @@
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .settings-danger-btn:hover {
@@ -202,7 +203,7 @@
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .settings-link-btn:hover {
@@ -241,7 +242,7 @@
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .settings-save-btn:disabled {
@@ -252,13 +253,13 @@
 .settings-reload-btn {
   padding: 0.38rem 0.75rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text);
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
 }
 
 .settings-reload-btn:disabled {
@@ -268,7 +269,7 @@
 
 .settings-side {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--subcard-border-color, var(--border));
   border-radius: 6px;
   padding: 0.9rem 1rem;
   box-shadow: var(--card-shadow);
@@ -280,7 +281,7 @@
   font-size: 0.82rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-ui);
   color: var(--text);
 }
 

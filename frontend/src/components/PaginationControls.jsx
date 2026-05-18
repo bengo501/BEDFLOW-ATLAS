@@ -30,17 +30,17 @@ export default function PaginationControls({
       <div className="pagination-summary">
         {label ? <span>{label} · </span> : null}
         <span>
-          {pt ? 'total filtrado' : 'filtered total'}: {total}
+          {pt ? 'Total filtrado' : 'Filtered total'}: {total}
         </span>
         <span>
-          {pt ? 'página' : 'page'} {page} / {totalPages}
+          {pt ? 'Página' : 'Page'} {page} / {totalPages}
         </span>
       </div>
 
       <div className="pagination-actions">
         {onLimitChange ? (
           <label className="pagination-limit">
-            <span>{pt ? 'itens' : 'items'}</span>
+            <span>{pt ? 'Itens' : 'Items'}</span>
             <select
               value={limit}
               onChange={(e) => onLimitChange(Number(e.target.value))}
@@ -60,7 +60,7 @@ export default function PaginationControls({
           onClick={() => onPageChange?.(Math.max(1, page - 1))}
           disabled={loading || page <= 1}
         >
-          {pt ? 'anterior' : 'previous'}
+          {pt ? 'Anterior' : 'Previous'}
         </button>
 
         <div className="pagination-pages">
@@ -82,7 +82,7 @@ export default function PaginationControls({
           onClick={() => onPageChange?.(Math.min(totalPages, page + 1))}
           disabled={loading || page >= totalPages}
         >
-          {pt ? 'próxima' : 'next'}
+          {pt ? 'Próxima' : 'Next'}
         </button>
       </div>
     </div>

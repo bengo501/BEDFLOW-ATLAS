@@ -1,6 +1,10 @@
 // componentes auxiliares para o wizard
+import { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getApiBase } from '../services/api';
+import ThemeIcon from './ThemeIcon';
+
+const REPO_BASE = 'https://github.com/bengo501/CFD-PIPELINE-TCC-1';
 
 export const HelpModal = ({ show, onClose, section, paramHelp }) => {
   if (!show) return null;
@@ -139,59 +143,267 @@ export const CreditsModal = ({ show, onClose }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{pt ? 'créditos' : 'credits'}</h2>
+      <div className="modal-content modal-credits-simple" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header modal-header--footer-modals">
+          <h2>{pt ? 'Créditos' : 'Credits'}</h2>
           <button type="button" className="modal-close" onClick={onClose}>×</button>
         </div>
 
         <div className="modal-body">
-          <div className="credits-content">
-            <section>
-              <h3>{pt ? 'projeto' : 'project'}</h3>
-              <p>
-                {pt
-                  ? 'bedflow atlas — sistema de simulação de leitos empacotados com openfoam e blender (tcc2).'
-                  : 'bedflow atlas — packed bed simulation with openfoam and blender (tcc2).'}
-              </p>
-            </section>
-
-            <section>
-              <h3>{pt ? 'equipe' : 'team'}</h3>
-              {pt ? (
-                <ul>
-                  <li><strong>aluno:</strong> Bernardo Klein Heitz</li>
-                  <li><strong>orientador</strong> — trabalho de conclusão de curso (ciência da computação): prof. Marco Aurélio Mangan</li>
-                  <li><strong>orientadora</strong> — iniciação científica voluntária: prof. Soraia Raupp Musse</li>
-                  <li><strong>orientadores</strong> — bolsa de iniciação científica lope: prof. Rubem Mário Vargas; Doutorando Henrique Martins Tavares</li>
-                </ul>
-              ) : (
-                <ul>
-                  <li><strong>student:</strong> Bernardo Klein Heitz</li>
-                  <li><strong>advisor</strong> — final project (computer science): prof. Marco Aurélio Mangan</li>
-                  <li><strong>advisor</strong> — voluntary scientific initiation: prof. Soraia Raupp Musse</li>
-                  <li><strong>advisors</strong> — lope scientific initiation scholarship: prof. Rubem Mário Vargas; doctoral researcher Henrique Martins Tavares</li>
-                </ul>
-              )}
-            </section>
-
-            <section>
-              <h3>{pt ? 'instituições' : 'institutions'}</h3>
-              <ul>
-                <li>pucrs — {pt ? 'escola politécnica' : 'polytechnic school'}</li>
-                <li>{pt ? 'laboratório lope' : 'lope laboratory'}</li>
-              </ul>
-            </section>
-
-            <section>
-              <h3>{pt ? 'agradecimentos' : 'acknowledgments'}</h3>
-              <p>
-                {pt
-                  ? 'à comunidade de software livre (openfoam, blender, python, react, vite) e aos laboratórios que apoiaram o desenvolvimento.'
-                  : 'to the open-source community (openfoam, blender, python, react, vite) and the labs that supported this work.'}
-              </p>
-            </section>
+          <div className="credits-content credits-content--plain">
+            {pt ? (
+              <>
+                <p className="credits-lead">
+                  Projeto de trabalho de conclusão de curso desenvolvido na pucrs / escola politécnica, em colaboração com o
+                  laboratório lope.
+                </p>
+                <p>
+                  <strong>Aluno:</strong> Bernardo Klein Heitz
+                </p>
+                <p>
+                  <strong>Orientador</strong> — trabalho de conclusão de curso (ciência da computação): prof. Marco Aurélio
+                  Mangan
+                </p>
+                <p>
+                  <strong>Orientadora</strong> — iniciação científica voluntária: prof. Soraia Raupp Musse
+                </p>
+                <p>
+                  <strong>Orientadores</strong> — bolsa de iniciação científica lope:
+                  <br />
+                  prof. Rubem Mário Vargas
+                  <br />
+                  Doutorando Henrique Martins Tavares
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="credits-lead">
+                  Final project developed at pucrs / school of engineering, in collaboration with the lope laboratory.
+                </p>
+                <p>
+                  <strong>Student:</strong> Bernardo Klein Heitz
+                </p>
+                <p>
+                  <strong>Advisor</strong> — final project (computer science): prof. Marco Aurélio Mangan
+                </p>
+                <p>
+                  <strong>Advisor</strong> — voluntary scientific initiation: prof. Soraia Raupp Musse
+                </p>
+                <p>
+                  <strong>Advisors</strong> — lope scientific initiation scholarship:
+                  <br />
+                  prof. Rubem Mário Vargas
+                  <br />
+                  doctoral researcher Henrique Martins Tavares
+                </p>
+              </>
+            )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** modal «saiba mais»: projeto (links), tecnologias e bases de dados com urls oficiais */
+export const FooterSaibaMaisModal = ({ show, onClose, onOpenHelp, onOpenDocs, onOpenCredits }) => {
+  const { language } = useLanguage();
+  if (!show) return null;
+
+  const pt = language === 'pt';
+
+  const projectLinks = [
+    {
+      key: 'github',
+      labelPt: 'GitHub',
+      labelEn: 'GitHub',
+      href: REPO_BASE,
+      iconLight: 'githubLight.png',
+      iconDark: 'githubLight.png',
+      kind: 'a',
+    },
+    {
+      key: 'issues',
+      labelPt: 'Issues',
+      labelEn: 'Issues',
+      href: `${REPO_BASE}/issues`,
+      iconLight: 'issuesLight.png',
+      iconDark: 'issuesLight.png',
+      kind: 'a',
+    },
+    {
+      key: 'kanban',
+      labelPt: 'Kanban',
+      labelEn: 'Kanban',
+      href: 'https://github.com/users/bengo501/projects/2',
+      iconLight: 'kanbanLight.png',
+      iconDark: 'kanbanLight.png',
+      kind: 'a',
+    },
+    {
+      key: 'sobre',
+      labelPt: 'Sobre',
+      labelEn: 'About',
+      iconLight: 'profileLight.png',
+      iconDark: 'profileLight.png',
+      kind: 'credits',
+    },
+    {
+      key: 'readme',
+      labelPt: 'Mais informações',
+      labelEn: 'More information',
+      href: `${REPO_BASE}/blob/main/README.md`,
+      iconLight: 'docsLight.png',
+      iconDark: 'docsLight.png',
+      kind: 'a',
+    },
+    {
+      key: 'repos',
+      labelPt: 'Mais projetos',
+      labelEn: 'More projects',
+      href: 'https://github.com/bengo501?tab=repositories',
+      iconLight: 'folderLight.png',
+      iconDark: 'folderDark.png',
+      kind: 'a',
+    },
+    {
+      key: 'help',
+      labelPt: 'Ajuda',
+      labelEn: 'Help',
+      iconLight: 'helpLight.png',
+      iconDark: 'helpLight.png',
+      kind: 'help',
+    },
+    {
+      key: 'docs',
+      labelPt: 'Documentação',
+      labelEn: 'Documentation',
+      iconLight: 'docsLight.png',
+      iconDark: 'docsLight.png',
+      kind: 'docs',
+    },
+  ];
+
+  const techRows = [
+    { key: 'openfoam', label: 'OpenFOAM', ver: '11', href: 'https://www.openfoam.org/', iconLight: 'triangle_white_outline.png', iconDark: 'triangle_black_outline.png' },
+    { key: 'blender', label: 'Blender', ver: '4.x', href: 'https://www.blender.org/', iconLight: 'blenderLight.png', iconDark: 'blenderLight.png' },
+    { key: 'react', label: 'React', ver: '18', href: 'https://react.dev/', iconLight: 'reactLight.png', iconDark: 'reactLight.png' },
+    { key: 'vite', label: 'Vite', ver: '5.x', href: 'https://vitejs.dev/', iconLight: 'viteLight.png', iconDark: 'viteLight.png' },
+    { key: 'python', label: 'Python', ver: '3.11', href: 'https://www.python.org/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
+    { key: 'wsl', label: 'WSL', ver: '2', href: 'https://learn.microsoft.com/windows/wsl/', iconLight: 'wslLogoLight.png', iconDark: 'wslLogoLight.png' },
+    { key: 'javascript', label: 'JavaScript', ver: 'ES6+', href: 'https://developer.mozilla.org/docs/Web/JavaScript', iconLight: 'jsLight.png', iconDark: 'jsLight.png' },
+    { key: 'java', label: 'Java', ver: '17', href: 'https://openjdk.org/', iconLight: 'javaLight.png', iconDark: 'javaLight.png' },
+    { key: 'css', label: 'CSS', ver: '3', href: 'https://developer.mozilla.org/docs/Web/CSS', iconLight: 'cssLight.png', iconDark: 'cssLight.png' },
+    { key: 'antlr', label: 'ANTLR', ver: '4.x', href: 'https://www.antlr.org/', iconLight: 'antlrLight.png', iconDark: 'antlrLight.png' },
+    { key: 'fastapi', label: 'FastAPI', ver: '0.x', href: 'https://fastapi.tiangolo.com/', iconLight: 'fastApiLight.png', iconDark: 'fastApiLight.png' },
+    { key: 'railway', label: 'Railway', ver: 'cloud', href: 'https://railway.app/', iconLight: 'railwayLight.png', iconDark: 'railwayLight.png' },
+    { key: 'three', label: 'Three.js', ver: 'r150+', href: 'https://threejs.org/', iconLight: 'cfd_gear_white.png', iconDark: 'cfd_gear_white.png' },
+    { key: 'axios', label: 'Axios', ver: '1.x', href: 'https://axios-http.com/', iconLight: 'docsLight.png', iconDark: 'docsLight.png' },
+    { key: 'docker', label: 'Docker', ver: '', href: 'https://www.docker.com/', iconLight: 'pipelineLight.png', iconDark: 'pipeline.png' },
+    { key: 'sqlalchemy', label: 'SQLAlchemy', ver: '2.x', href: 'https://www.sqlalchemy.org/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
+    { key: 'uvicorn', label: 'Uvicorn', ver: '0.x', href: 'https://www.uvicorn.org/', iconLight: 'fastApiLight.png', iconDark: 'fastApiLight.png' },
+    { key: 'pydantic', label: 'Pydantic', ver: '2.x', href: 'https://docs.pydantic.dev/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
+    { key: 'numpy', label: 'NumPy', ver: '1.x', href: 'https://numpy.org/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
+    { key: 'openmpi', label: 'Open MPI', ver: '', href: 'https://www.open-mpi.org/', iconLight: 'triangle_white_outline.png', iconDark: 'triangle_black_outline.png' },
+  ];
+
+  const dbRows = [
+    { key: 'pg', label: 'PostgreSQL', ver: '15', href: 'https://www.postgresql.org/', iconLight: '2106624.png', iconDark: 'postgresqlDark.png' },
+    { key: 'redis', label: 'Redis', ver: '7', href: 'https://redis.io/', iconLight: 'redis.png', iconDark: 'redisDark.png' },
+    { key: 'minio', label: 'MinIO', ver: 'S3', href: 'https://min.io/', iconLight: 'minio.png', iconDark: 'minioDark.png' },
+    { key: 'sqlite', label: 'SQLite', ver: '3', href: 'https://www.sqlite.org/', iconLight: 'docsLight.png', iconDark: 'docsLight.png' },
+    { key: 'celery', label: 'Celery', ver: '', href: 'https://docs.celeryq.dev/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
+  ];
+
+  const runAction = (fn) => {
+    onClose();
+    if (typeof fn === 'function') {
+      window.setTimeout(() => fn(), 0);
+    }
+  };
+
+  const rowIcon = (light, dark, invert = false) => (
+    <ThemeIcon
+      light={light}
+      dark={dark}
+      alt=""
+      className={`footer-saiba-row-icon${invert ? ' footer-saiba-row-icon--inv' : ''}`}
+      location="footer"
+    />
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-footer-saiba-mais" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header modal-header--footer-modals">
+          <h2>{pt ? 'Saiba mais' : 'Learn more'}</h2>
+          <button type="button" className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="modal-body modal-body--footer-saiba">
+          <section className="footer-saiba-section">
+            <h3>{pt ? 'Projeto' : 'Project'}</h3>
+            <ul className="footer-saiba-linklist">
+              {projectLinks.map((row) => (
+                <li key={row.key}>
+                  {row.kind === 'a' && (
+                    <a href={row.href} target="_blank" rel="noopener noreferrer" className="footer-saiba-row">
+                      {rowIcon(row.iconLight, row.iconDark)}
+                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                    </a>
+                  )}
+                  {row.kind === 'credits' && (
+                    <button type="button" className="footer-saiba-row footer-saiba-row--btn" onClick={() => runAction(onOpenCredits)}>
+                      {rowIcon(row.iconLight, row.iconDark)}
+                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                    </button>
+                  )}
+                  {row.kind === 'help' && (
+                    <button type="button" className="footer-saiba-row footer-saiba-row--btn" onClick={() => runAction(onOpenHelp)}>
+                      {rowIcon(row.iconLight, row.iconDark)}
+                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                    </button>
+                  )}
+                  {row.kind === 'docs' && (
+                    <button type="button" className="footer-saiba-row footer-saiba-row--btn" onClick={() => runAction(onOpenDocs)}>
+                      {rowIcon(row.iconLight, row.iconDark)}
+                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="footer-saiba-section">
+            <h3>{pt ? 'Tecnologias' : 'Technologies'}</h3>
+            <ul className="footer-saiba-techlist">
+              {techRows.map((row) => (
+                <li key={row.key}>
+                  <a href={row.href} target="_blank" rel="noopener noreferrer" className="footer-saiba-row footer-saiba-row--spread">
+                    {rowIcon(row.iconLight, row.iconDark)}
+                    <span className="footer-saiba-name">{row.label}</span>
+                    {row.ver ? <span className="footer-saiba-ver">{row.ver}</span> : null}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="footer-saiba-section">
+            <h3>{pt ? 'Banco de dados' : 'Database'}</h3>
+            <ul className="footer-saiba-techlist">
+              {dbRows.map((row) => (
+                <li key={row.key}>
+                  <a href={row.href} target="_blank" rel="noopener noreferrer" className="footer-saiba-row footer-saiba-row--spread">
+                    {rowIcon(row.iconLight, row.iconDark, true)}
+                    <span className="footer-saiba-name">{row.label}</span>
+                    {row.ver ? <span className="footer-saiba-ver">{row.ver}</span> : null}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
       </div>
     </div>
@@ -308,7 +520,4 @@ cfd {
     </div>
   );
 };
-
-// adicionar import useState
-import { useState } from 'react';
 

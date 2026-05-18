@@ -158,6 +158,16 @@ export const buildMeshStreamUrl = (meshId) => {
   return `${getApiBase()}/api/viewer/mesh-stream?mesh_id=${encodeURIComponent(meshId)}`;
 };
 
+export const launchMeshDesktopViewer = async (meshId) => {
+  const response = await api.post('/api/viewer/launch-desktop', { mesh_id: meshId });
+  return response.data;
+};
+
+export const launchMeshBlenderViewer = async (meshId) => {
+  const response = await api.post('/api/viewer/launch-blender', { mesh_id: meshId });
+  return response.data;
+};
+
 // transforma um caminho relativo dentro de generated em url publica do backend
 export const buildGeneratedFileUrl = (relativePath) => {
   if (!relativePath) return null;

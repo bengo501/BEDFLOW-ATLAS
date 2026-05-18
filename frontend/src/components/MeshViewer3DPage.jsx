@@ -5,7 +5,13 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { listViewerMeshes, buildMeshStreamUrl, parseApiError } from '../services/api';
+import {
+  listViewerMeshes,
+  buildMeshStreamUrl,
+  parseApiError,
+  launchMeshDesktopViewer,
+  launchMeshBlenderViewer,
+} from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import ThemeIcon from './ThemeIcon';
 import '../styles/MeshViewer3DPage.css';
@@ -14,20 +20,25 @@ const LS_LAST_MESH = 'bedflow_last_mesh_id';
 
 const DESKTOP_OPEN3D_FORMATS = new Set(['stl', 'obj', 'ply']);
 
-function joinRepoAbsolutePath(rootHint, relativePath) {
-  const r = String(rootHint || '').trim().replace(/[/\\]+$/, '');
-  const rel = String(relativePath || '').trim().replace(/^[/\\]+/, '');
-  if (!r || !rel) return '';
-  const winish = /\\/.test(r) || /^[a-z]:/i.test(r);
-  if (winish) {
-    return `${r}\\${rel.replace(/\//g, '\\')}`;
-  }
-  return `${r}/${rel.replace(/\\/g, '/')}`;
-}
-
-function isWindowsRepoPath(rootHint) {
-  const r = String(rootHint || '');
-  return /\\/.test(r) || /^[a-z]:/i.test(r);
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
 }
 
 function countVertices(obj) {
@@ -125,7 +136,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const axesRef = useRef(null);
 
   const [meshes, setMeshes] = useState([]);
-  const [projectRootHint, setProjectRootHint] = useState('');
+  const [meshesForBlender, setMeshesForBlender] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(() => {
     try {
@@ -140,9 +151,10 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const [wireframe, setWireframe] = useState(false);
   const [showAxes, setShowAxes] = useState(true);
   const [meta, setMeta] = useState(null);
-  const [streamNotice, setStreamNotice] = useState(null);
   const [toolNotice, setToolNotice] = useState(null);
-  const copyNoticeTimerRef = useRef(null);
+  const [toolModal, setToolModal] = useState(null);
+  const [toolModalPickId, setToolModalPickId] = useState('');
+  const [toolModalBusy, setToolModalBusy] = useState(false);
   const toolNoticeTimerRef = useRef(null);
 
   const pt = language === 'pt';
@@ -154,7 +166,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       const data = await listViewerMeshes({ q: search.trim() || undefined, limit: 120 });
       const all = data.meshes || [];
       setMeshes(all.filter((m) => (m.format || '').toLowerCase() !== 'blend'));
-      setProjectRootHint(data.project_root_hint || '');
+      setMeshesForBlender(all);
     } catch (e) {
       setErr(parseApiError(e));
       setMeshes([]);
@@ -367,93 +379,79 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     if (root && cam && ctr) fitCameraToObject(cam, ctr, root);
   };
 
-  const openMeshStream = () => {
-    const u = buildMeshStreamUrl(selectedId.trim());
-    if (u) window.open(u, '_blank', 'noopener,noreferrer');
-  };
-
   const showToolNotice = (payload) => {
     setToolNotice(payload);
     window.clearTimeout(toolNoticeTimerRef.current);
     toolNoticeTimerRef.current = window.setTimeout(() => setToolNotice(null), 3200);
   };
 
-  const copyDesktopViewerCommand = async () => {
-    const id = selectedId.trim();
-    if (!id) {
-      showToolNotice({ ok: false, text: pt ? 'escolha um modelo.' : 'pick a model.' });
-      return;
-    }
-    const info = meshes.find((m) => m.mesh_id === id);
-    const ext = (info?.format || '').toLowerCase();
-    if (!info || !DESKTOP_OPEN3D_FORMATS.has(ext)) {
-      showToolNotice({ ok: false, text: t('meshDesktopFmtWarn') });
-      return;
-    }
-    if (!projectRootHint) {
-      showToolNotice({ ok: false, text: t('meshRootMissing') });
-      return;
-    }
-    const meshAbs = joinRepoAbsolutePath(projectRootHint, info.relative_path);
-    const root = projectRootHint.trim();
-    const win = isWindowsRepoPath(root);
-    const script = win
-      ? 'scripts\\python_modeling\\mesh_viewer_desktop.py'
-      : 'scripts/python_modeling/mesh_viewer_desktop.py';
-    const cmd = win
-      ? `cd /d "${root}"\r\npython "${script}" "${meshAbs}"`
-      : `cd "${root}"\npython3 "${script}" "${meshAbs}"`;
-    try {
-      await navigator.clipboard.writeText(cmd);
-      showToolNotice({ ok: true, text: t('meshDesktopCmdCopied') });
-    } catch {
-      showToolNotice({ ok: false, text: t('meshToolCopyFail') });
-    }
+  const openToolModal = (kind) => {
+    const pool =
+      kind === 'desktop'
+        ? meshes.filter((m) => DESKTOP_OPEN3D_FORMATS.has((m.format || '').toLowerCase()))
+        : meshesForBlender;
+    const preferred =
+      kind === 'desktop'
+        ? selectedId && pool.some((m) => m.mesh_id === selectedId)
+          ? selectedId
+          : pool[0]?.mesh_id || ''
+        : selectedId && pool.some((m) => m.mesh_id === selectedId)
+          ? selectedId
+          : meshesForBlender[0]?.mesh_id || '';
+    setToolModalPickId(preferred);
+    setToolModal(kind);
   };
 
-  const copyBlenderOpenCommand = async () => {
-    const id = selectedId.trim();
-    if (!id) {
-      showToolNotice({ ok: false, text: pt ? 'escolha um modelo.' : 'pick a model.' });
-      return;
-    }
-    const info = meshes.find((m) => m.mesh_id === id);
-    if (!info) return;
-    if (!projectRootHint) {
-      showToolNotice({ ok: false, text: t('meshRootMissing') });
-      return;
-    }
-    const meshAbs = joinRepoAbsolutePath(projectRootHint, info.relative_path);
-    const cmd = `blender "${meshAbs}"`;
-    try {
-      await navigator.clipboard.writeText(cmd);
-      showToolNotice({ ok: true, text: t('meshBlenderCmdCopied') });
-    } catch {
-      showToolNotice({ ok: false, text: t('meshToolCopyFail') });
-    }
+  const closeToolModal = (force = false) => {
+    if (toolModalBusy && !force) return;
+    setToolModal(null);
+    setToolModalPickId('');
   };
 
-  const copyMeshStream = async () => {
-    const u = buildMeshStreamUrl(selectedId.trim());
-    if (!u) return;
+  const confirmToolModal = async () => {
+    const id = toolModalPickId.trim();
+    if (!id || !toolModal) return;
+    setToolModalBusy(true);
     try {
-      await navigator.clipboard.writeText(u);
-      setStreamNotice({ ok: true, text: t('meshStreamCopied') });
-      window.clearTimeout(copyNoticeTimerRef.current);
-      copyNoticeTimerRef.current = window.setTimeout(() => setStreamNotice(null), 2800);
-    } catch {
-      setStreamNotice({ ok: false, text: t('meshStreamCopyFail') });
-      window.clearTimeout(copyNoticeTimerRef.current);
-      copyNoticeTimerRef.current = window.setTimeout(() => setStreamNotice(null), 4500);
+      if (toolModal === 'desktop') {
+        await launchMeshDesktopViewer(id);
+        showToolNotice({ ok: true, text: t('meshLaunchDesktopOk') });
+      } else {
+        await launchMeshBlenderViewer(id);
+        showToolNotice({ ok: true, text: t('meshLaunchBlenderOk') });
+      }
+      setSelectedId(id);
+      try {
+        localStorage.setItem(LS_LAST_MESH, id);
+      } catch (_) {}
+      closeToolModal(true);
+    } catch (e) {
+      const detail = parseApiError(e);
+      showToolNotice({ ok: false, text: detail || t('meshLaunchFail') });
+    } finally {
+      setToolModalBusy(false);
     }
   };
 
   useEffect(() => {
+    if (toolModal == null) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeToolModal();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toolModal, toolModalBusy]);
+
+  useEffect(() => {
     return () => {
-      window.clearTimeout(copyNoticeTimerRef.current);
       window.clearTimeout(toolNoticeTimerRef.current);
     };
   }, []);
+
+  const toolModalMeshes =
+    toolModal === 'desktop'
+      ? meshes.filter((m) => DESKTOP_OPEN3D_FORMATS.has((m.format || '').toLowerCase()))
+      : meshesForBlender;
 
   const lastId = (() => {
     try {
@@ -467,24 +465,24 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     <div className="mesh-viewer-page">
       <header className="mesh-viewer-page-heading">
         <ThemeIcon
-          light="cfd_gear_white.png"
-          dark="cfd_gear_white.png"
+          light="modelLight-removebg-preview.png"
+          dark="modelDark-removebg-preview.png"
           alt=""
           className="mesh-viewer-page-title-icon"
-          location="sidebar"
         />
         <h1 className="mesh-viewer-page-title">
           {pt ? 'Visualização 3d' : '3d visualization'}
         </h1>
       </header>
       <div className="mesh-viewer-layout">
-        <aside className="mesh-viewer-sidebar">
+        <aside className="mesh-viewer-sidebar ui-raised-surface">
           <p className="mesh-viewer-lead">
             {pt
               ? 'malhas servidas pela api a partir de local_data e pastas geradas.'
               : 'meshes served by the api from local_data and generated folders.'}
           </p>
 
+          <section className="mesh-viewer-subpanel">
           <label className="mesh-viewer-label">{pt ? 'pesquisar' : 'search'}</label>
           <div className="mesh-viewer-search-row">
             <input
@@ -493,18 +491,25 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
               onChange={(e) => setSearch(e.target.value)}
               placeholder={pt ? 'filtro por nome…' : 'filter by name…'}
             />
-            <button type="button" className="mesh-viewer-btn" onClick={() => refreshList()}>
+            <button
+              type="button"
+              className="mesh-viewer-btn mesh-viewer-btn-refresh"
+              onClick={() => void refreshList()}
+              disabled={loadingList}
+            >
+              <IconRefresh className="mesh-viewer-refresh-icon" />
               {loadingList ? '…' : pt ? 'atualizar' : 'refresh'}
             </button>
           </div>
 
-          {lastId && (
+          {lastId ? (
             <p className="mesh-viewer-hint">
               {pt ? 'último id:' : 'last id:'} <code>{lastId}</code>
             </p>
-          )}
+          ) : null}
+          </section>
 
-          <div className="mesh-viewer-list-wrap">
+          <section className="mesh-viewer-subpanel mesh-viewer-subpanel--list">
             <ul className="mesh-viewer-list">
               {meshes.map((m) => (
                 <li key={m.mesh_id}>
@@ -528,10 +533,11 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
 
-          {err && <div className="mesh-viewer-error">{err}</div>}
+          {err ? <div className="mesh-viewer-error">{err}</div> : null}
 
+          <section className="mesh-viewer-subpanel">
           <div className="mesh-viewer-actions">
             <button
               type="button"
@@ -558,25 +564,6 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
             <button type="button" className="mesh-viewer-btn" onClick={resetCamera}>
               {pt ? 'repor câmara' : 'reset camera'}
             </button>
-          </div>
-
-          <div className="mesh-viewer-actions mesh-viewer-stream-row">
-            <button
-              type="button"
-              className="mesh-viewer-btn"
-              disabled={!selectedId.trim()}
-              onClick={openMeshStream}
-            >
-              {t('meshOpenStream')}
-            </button>
-            <button
-              type="button"
-              className="mesh-viewer-btn"
-              disabled={!selectedId.trim()}
-              onClick={() => void copyMeshStream()}
-            >
-              {t('meshCopyStream')}
-            </button>
             <label className="mesh-viewer-check">
               <input
                 type="checkbox"
@@ -586,36 +573,25 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
               {t('meshAxes')}
             </label>
           </div>
-          {streamNotice ? (
-            <p
-              className={
-                streamNotice.ok
-                  ? 'mesh-viewer-stream-notice'
-                  : 'mesh-viewer-stream-notice mesh-viewer-stream-notice--err'
-              }
-            >
-              {streamNotice.text}
-            </p>
-          ) : null}
+          </section>
 
-          <div className="mesh-viewer-actions mesh-viewer-cli-row">
+          <section className="mesh-viewer-subpanel mesh-viewer-subpanel--tools">
             <button
               type="button"
               className="mesh-viewer-btn mesh-viewer-btn-block"
-              disabled={!selectedId.trim() || !projectRootHint}
-              onClick={() => void copyDesktopViewerCommand()}
+              disabled={loadingList || meshes.length === 0}
+              onClick={() => openToolModal('desktop')}
             >
               {t('meshDesktopViewerBtn')}
             </button>
             <button
               type="button"
               className="mesh-viewer-btn mesh-viewer-btn-block"
-              disabled={!selectedId.trim() || !projectRootHint}
-              onClick={() => void copyBlenderOpenCommand()}
+              disabled={loadingList || meshesForBlender.length === 0}
+              onClick={() => openToolModal('blender')}
             >
               {t('meshBlenderViewerBtn')}
             </button>
-          </div>
           {toolNotice ? (
             <p
               className={
@@ -627,8 +603,10 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
               {toolNotice.text}
             </p>
           ) : null}
+          </section>
 
-          {meta && (
+          {meta ? (
+            <section className="mesh-viewer-subpanel mesh-viewer-subpanel--meta">
             <dl className="mesh-viewer-dl">
               <dt>{pt ? 'ficheiro' : 'file'}</dt>
               <dd>{meta.filename}</dd>
@@ -657,11 +635,89 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
                 </>
               ) : null}
             </dl>
-          )}
+            </section>
+          ) : null}
         </aside>
 
-        <div className="mesh-viewer-canvas-wrap" ref={mountRef} />
+        <section className="mesh-viewer-canvas-panel ui-raised-surface">
+          <div className="mesh-viewer-canvas-wrap" ref={mountRef} />
+        </section>
       </div>
+
+      {toolModal ? (
+        <div
+          className="mesh-viewer-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mesh-tool-modal-title"
+          onClick={() => closeToolModal()}
+        >
+          <div className="mesh-viewer-modal ui-raised-surface" onClick={(e) => e.stopPropagation()}>
+            <header className="mesh-viewer-modal-header">
+              <h2 id="mesh-tool-modal-title" className="mesh-viewer-modal-title">
+                {toolModal === 'desktop'
+                  ? t('meshPickModelTitleDesktop')
+                  : t('meshPickModelTitleBlender')}
+              </h2>
+              <button
+                type="button"
+                className="mesh-viewer-modal-close"
+                onClick={() => closeToolModal()}
+                aria-label={pt ? 'fechar' : 'close'}
+              >
+                ×
+              </button>
+            </header>
+            <p className="mesh-viewer-modal-hint">{t('meshPickModelHint')}</p>
+            {toolModalMeshes.length === 0 ? (
+              <p className="mesh-viewer-modal-empty">
+                {toolModal === 'desktop'
+                  ? t('meshPickModelEmptyDesktop')
+                  : t('meshPickModelEmptyBlender')}
+              </p>
+            ) : (
+              <ul className="mesh-viewer-modal-list">
+                {toolModalMeshes.map((m) => (
+                  <li key={m.mesh_id}>
+                    <button
+                      type="button"
+                      className={
+                        m.mesh_id === toolModalPickId
+                          ? 'mesh-viewer-modal-li active'
+                          : 'mesh-viewer-modal-li'
+                      }
+                      onClick={() => setToolModalPickId(m.mesh_id)}
+                    >
+                      <span className="mesh-li-name">{m.filename}</span>
+                      <span className="mesh-li-meta">
+                        {m.format} · {Math.round(m.size_bytes / 1024)} kb
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <footer className="mesh-viewer-modal-footer">
+              <button
+                type="button"
+                className="mesh-viewer-btn"
+                onClick={() => closeToolModal()}
+                disabled={toolModalBusy}
+              >
+                {t('meshPickModelCancel')}
+              </button>
+              <button
+                type="button"
+                className="mesh-viewer-btn primary"
+                disabled={toolModalBusy || !toolModalPickId.trim() || toolModalMeshes.length === 0}
+                onClick={() => void confirmToolModal()}
+              >
+                {toolModalBusy ? '…' : t('meshPickModelOpen')}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

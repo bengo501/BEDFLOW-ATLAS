@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../context/LanguageContext'
-import { useTheme } from '../context/ThemeContext'
 import ThemeIcon from './ThemeIcon'
 import BackendConnectionError from './BackendConnectionError'
 import '../styles/TemplateEditor.css'
@@ -12,9 +11,50 @@ import {
   deleteTemplate,
 } from '../services/api'
 
+function IconCopy({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+
+function IconDownload({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  )
+}
+
 function TemplateEditor() {
   const { language, t } = useLanguage()
-  const { theme } = useTheme()
+  const pt = language === 'pt'
   const [bedContent, setBedContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [savedTemplates, setSavedTemplates] = useState([])
@@ -137,7 +177,7 @@ function TemplateEditor() {
   return (
     <div className="template-editor-container">
       <div className="template-editor-header">
-        <h2>arquivo .bed</h2>
+        <h2>{pt ? 'Arquivo .bed' : '.bed file'}</h2>
       </div>
 
       {connectionError && <BackendConnectionError message={connectionError} />}
@@ -148,15 +188,19 @@ function TemplateEditor() {
           onClick={handleGenerateFromForm}
           disabled={isLoading}
         >
-          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="gerar" className="btn-icon" />
-          gerar automaticamente
-          <span className="btn-subtitle">baseado nos parâmetros do formulário</span>
+          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="btn-icon" location="page" />
+          {pt ? 'Gerar automaticamente' : 'Generate automatically'}
+          <span className="btn-subtitle">
+            {pt ? 'Baseado nos parâmetros do formulário' : 'Based on form parameters'}
+          </span>
         </button>
 
         <label className="btn-import">
-          <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="importar" className="btn-icon" />
-          importar arquivo
-          <span className="btn-subtitle">carregar arquivo .bed existente</span>
+          <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="" className="btn-icon" location="page" />
+          {pt ? 'Importar arquivo' : 'Import file'}
+          <span className="btn-subtitle">
+            {pt ? 'Carregar arquivo .bed existente' : 'Load an existing .bed file'}
+          </span>
           <input 
             type="file" 
             accept=".bed" 
@@ -168,15 +212,15 @@ function TemplateEditor() {
 
       <div className="template-editor-content">
         <div className="content-header">
-          <h3>conteúdo do arquivo .bed</h3>
+          <h3>{pt ? 'Conteúdo do arquivo .bed' : '.bed file contents'}</h3>
           <div className="content-actions">
-            <button className="btn-copy" onClick={handleCopyContent}>
-              <ThemeIcon light="copyLight.png" dark="copyDark.png" alt="copiar" className="btn-icon" />
-              copiar
+            <button type="button" className="btn-copy" onClick={handleCopyContent}>
+              <IconCopy className="template-toolbar-svg" />
+              {pt ? 'Copiar' : 'Copy'}
             </button>
-            <button className="btn-download" onClick={handleDownloadFile}>
-              <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="baixar" className="btn-icon" />
-              baixar
+            <button type="button" className="btn-download" onClick={handleDownloadFile}>
+              <IconDownload className="template-toolbar-svg" />
+              {pt ? 'Baixar' : 'Download'}
             </button>
           </div>
         </div>
@@ -185,24 +229,34 @@ function TemplateEditor() {
           <textarea
             value={bedContent}
             onChange={(e) => setBedContent(e.target.value)}
-            placeholder="conteúdo do arquivo .bed..."
+            placeholder={pt ? 'Conteúdo do arquivo .bed…' : '.bed file contents…'}
             className="bed-textarea"
           />
         </div>
 
-        <div className="template-info">
-          <p>este arquivo .bed é gerado automaticamente baseado nos parâmetros do formulário. você pode editá-lo manualmente se necessário.</p>
+        <div className="template-editor-hint">
+          <p>
+            {pt
+              ? 'Este arquivo .bed é gerado automaticamente com base nos parâmetros do formulário. Pode editá-lo manualmente se necessário.'
+              : 'This .bed file is generated automatically from the form parameters. You can edit it manually if needed.'}
+          </p>
         </div>
-      </div>
 
-      <div className="template-editor-footer">
-        <button className="btn-cancel">
-          cancelar
-        </button>
-        <button className="btn-execute" onClick={handleCreateAndExecute}>
-          <ThemeIcon light="playLight.png" dark="playDark.png" alt="executar" className="btn-icon" />
-          criar e executar
-        </button>
+        <div className="template-editor-inner-footer">
+          <button type="button" className="btn-cancel">
+            {pt ? 'Cancelar' : 'Cancel'}
+          </button>
+          <button type="button" className="btn-execute" onClick={handleCreateAndExecute}>
+            <ThemeIcon
+              light="playLight.png"
+              dark="playLight.png"
+              alt=""
+              className="btn-icon btn-icon--on-primary"
+              location="sidebar"
+            />
+            {pt ? 'Criar e executar' : 'Create and run'}
+          </button>
+        </div>
       </div>
 
       {/* modal para gerenciar templates */}

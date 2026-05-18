@@ -1,9 +1,12 @@
 # endpoints para listar e servir malhas 3d ao visualizador web e ferramentas cli
 from __future__ import annotations
 
+import shutil
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -40,6 +43,20 @@ class MeshListResponse(BaseModel):
     meshes: List[MeshInfo]
     total: int
     project_root_hint: str = Field(description="apenas informativo para o cli")
+
+
+class LaunchViewerRequest(BaseModel):
+    mesh_id: str = Field(..., min_length=8, max_length=32)
+
+
+def _resolve_mesh_file(mesh_id: str) -> Tuple[Path, Dict[str, Any]]:
+    for row in scan_project_mesh_files(max_files=2500):
+        if row["mesh_id"] == mesh_id:
+            p = resolve_validated_mesh_path(row["relative_path"])
+            if p is None:
+                raise HTTPException(status_code=404, detail="ficheiro invalido ou inexistente")
+            return p, row
+    raise HTTPException(status_code=404, detail="mesh nao encontrado")
 
 
 def _to_mesh_info(row: Dict[str, Any]) -> MeshInfo:
@@ -129,3 +146,66 @@ async def stream_mesh_file(
         filename=p.name,
         media_type="application/octet-stream",
     )
+
+
+@router.post("/viewer/launch-desktop", tags=["viewer"])
+async def launch_desktop_viewer(body: LaunchViewerRequest):
+    """abre mesh_viewer_desktop.py (open3d) para stl/obj/ply."""
+    mesh_path, row = _resolve_mesh_file(body.mesh_id)
+    ext = str(row.get("format") or mesh_path.suffix).lower().lstrip(".")
+    if ext not in ("stl", "obj", "ply"):
+        raise HTTPException(
+            status_code=400,
+            detail="formato nao suportado no visualizador desktop (use stl, obj ou ply)",
+        )
+    root = project_root()
+    script = root / "scripts" / "python_modeling" / "mesh_viewer_desktop.py"
+    if not script.is_file():
+        raise HTTPException(status_code=404, detail=f"script nao encontrado: {script}")
+    py = shutil.which("python") or shutil.which("python3") or sys.executable
+    try:
+        subprocess.Popen(
+            [py, str(script), str(mesh_path)],
+            cwd=str(root),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {
+        "ok": True,
+        "message": "visualizador desktop solicitado",
+        "filename": row.get("filename") or mesh_path.name,
+        "path": str(mesh_path),
+    }
+
+
+@router.post("/viewer/launch-blender", tags=["viewer"])
+async def launch_blender_viewer(body: LaunchViewerRequest):
+    """abre o ficheiro no blender (executavel detetado no servidor)."""
+    mesh_path, row = _resolve_mesh_file(body.mesh_id)
+    from backend.app.services.blender_service import BlenderService
+
+    svc = BlenderService()
+    if not svc.check_availability():
+        raise HTTPException(
+            status_code=503,
+            detail="blender nao encontrado no servidor (instale ou ajuste o PATH)",
+        )
+    try:
+        subprocess.Popen(
+            [svc.blender_exe, str(mesh_path)],
+            cwd=str(project_root()),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {
+        "ok": True,
+        "message": "blender solicitado",
+        "filename": row.get("filename") or mesh_path.name,
+        "path": str(mesh_path),
+    }

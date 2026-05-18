@@ -15,7 +15,7 @@ import SettingsPage from './components/SettingsPage'
 import MeshViewer3DPage from './components/MeshViewer3DPage'
 import DevModePanel from './components/DevModePanel'
 import ThemeIcon from './components/ThemeIcon'
-import { HelpModal, DocsModal, CreditsModal } from './components/WizardHelpers'
+import { HelpModal, DocsModal, CreditsModal, FooterSaibaMaisModal } from './components/WizardHelpers'
 import UserSwitcherModal from './components/UserSwitcherModal'
 import { getSystemStatus, getSettings } from './services/api'
 import api from './services/api'
@@ -52,6 +52,7 @@ function App() {
   const [showHelp, setShowHelp] = useState(false)
   const [showDocs, setShowDocs] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
+  const [showFooterSaibaMais, setShowFooterSaibaMais] = useState(false)
   const [showUserSwitcher, setShowUserSwitcher] = useState(false)
   const [expandedSections, setExpandedSections] = useState({})
   const [bootMeshViewerId, setBootMeshViewerId] = useState(null)
@@ -122,12 +123,6 @@ function App() {
       .then((s) => {
         if (cancelled) return;
         applySettingsFromApi(s);
-        const tm =
-          s.theme_mode === 'dark' || s.theme_mode === 'light' || s.theme_mode === 'system'
-            ? s.theme_mode
-            : 'system';
-        setThemeMode(tm);
-        setLanguage(s.language === 'en' ? 'en' : 'pt');
         const j = Number(s.jobs_poll_interval_sec);
         if (Number.isFinite(j) && j >= 3 && j <= 120) {
           localStorage.setItem('jobsPollIntervalSec', String(j));
@@ -137,7 +132,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [applySettingsFromApi, setLanguage, setThemeMode]);
+  }, [applySettingsFromApi]);
 
   useEffect(() => {
     if (!simpleMode) return;
@@ -186,6 +181,7 @@ function App() {
         if (showHelp) setShowHelp(false)
         if (showDocs) setShowDocs(false)
         if (showCredits) setShowCredits(false)
+        if (showFooterSaibaMais) setShowFooterSaibaMais(false)
       }
     }
 
@@ -195,7 +191,7 @@ function App() {
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showHelp, showDocs, showCredits])
+  }, [showHelp, showDocs, showCredits, showFooterSaibaMais])
 
   const handleLogout = useCallback(() => {
     sessionStorage.clear();
@@ -770,8 +766,8 @@ function App() {
             </div>
             <p className="footer-description">
               {language === 'pt' 
-                ? 'sistema de simulação de leitos empacotados com openfoam e blender'
-                : 'packed bed simulation system with openfoam and blender'}
+                ? 'Sistema de simulação de leitos empacotados com openfoam e blender'
+                : 'Packed bed simulation system with openfoam and blender'}
             </p>
             <div className="footer-version">
               <span className="version-badge">v0.1.0</span>
@@ -779,7 +775,7 @@ function App() {
             </div>
             
             <div className="footer-section footer-academic">
-              <h4>{language === 'pt' ? 'acadêmico' : 'academic'}</h4>
+              <h4>{language === 'pt' ? 'Acadêmico' : 'Academic'}</h4>
               <div className="academic-logos">
                 <a 
                   href="https://vhlab.com.br/" 
@@ -816,208 +812,20 @@ function App() {
                 </a>
               </div>
               <p className="academic-info">
-              <strong>{language === 'pt' ? 'trabalho de conclusão de curso' : 'final project'}</strong><br />
-                {language === 'pt' ? 'ciência da computação' : 'computer science'}<br />
-                {language === 'pt' ? 'engenharia química' : 'chemical engineering'}
+                <strong>{language === 'pt' ? 'Trabalho de conclusão de curso' : 'Final project'}</strong>
+                <br />
+                {language === 'pt' ? 'Ciência da computação' : 'Computer science'}
               </p>
               <p className="academic-year">2024/2026</p>
             </div>
           </div>
 
-          <div className="footer-section footer-links">
-            <h4>{language === 'pt' ? 'projeto' : 'project'}</h4>
-            <ul>
-              <li>
-                <a href="https://github.com/bengo501/CFD-PIPELINE-TCC-1" target="_blank" rel="noopener noreferrer">
-                  <ThemeIcon light="githubLight.png" dark="githubLight.png" alt="github" className="link-icon" location="footer" />
-                  github
-                </a>
-              </li>
-              <li>
-                <a href="https://github.com/bengo501/CFD-PIPELINE-TCC-1/issues" target="_blank" rel="noopener noreferrer">
-                  <ThemeIcon light="issuesLight.png" dark="issuesLight.png" alt="issues" className="link-icon" />
-                  {language === 'pt' ? 'issues' : 'issues'}
-                </a>
-              </li>
-              <li>
-                <a href="https://github.com/users/bengo501/projects/2" target="_blank" rel="noopener noreferrer">
-                  <ThemeIcon light="kanbanLight.png" dark="kanbanLight.png" alt="kanban" className="link-icon" />
-                  {language === 'pt' ? 'kanban' : 'kanban'}
-                </a>
-              </li>
-              <li>
-                <button type="button" className="footer-about-btn" onClick={() => setShowCredits(true)}>
-                  <ThemeIcon light="profileLight.png" dark="profileLight.png" alt="" className="link-icon" location="footer" />
-                  {language === 'pt' ? 'sobre' : 'about'}
-                </button>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/bengo501/CFD-PIPELINE-TCC-1/blob/main/README.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ThemeIcon light="docsLight.png" dark="docsLight.png" alt="" className="link-icon" location="footer" />
-                  {language === 'pt' ? 'mais informações' : 'more information'}
-                </a>
-              </li>
-              <li>
-                <a href="https://github.com/bengo501?tab=repositories" target="_blank" rel="noopener noreferrer">
-                  <ThemeIcon light="folderLight.png" dark="folderLight.png" alt="" className="link-icon" location="footer" />
-                  {language === 'pt' ? 'mais projetos' : 'more projects'}
-                </a>
-              </li>
-              <li>
-                <button className="footer-help-btn" onClick={() => setShowHelp(true)}>
-                  <ThemeIcon light="helpLight.png" dark="helpLight.png" alt="ajuda" className="link-icon" location="footer" />
-                  {language === 'pt' ? 'ajuda' : 'help'}
-                </button>
-              </li>
-              <li>
-                <button className="footer-docs-btn" onClick={() => setShowDocs(true)}>
-                  <ThemeIcon light="docsLight.png" dark="docsLight.png" alt="documentação" className="link-icon" location="footer" />
-                  {language === 'pt' ? 'documentação' : 'documentation'}
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          <div className="footer-section footer-tech">
-            <h4>{language === 'pt' ? 'tecnologias' : 'technologies'}</h4>
-            <ul>
-              <li>
-                <ThemeIcon light="triangle_white_outline.png" dark="triangle_white_outline.png" alt="openfoam" className="tech-icon openfoam-icon" />
-                <span className="tech-badge">openfoam</span>
-                <span className="tech-version">11</span>
-              </li>
-              <li>
-                <ThemeIcon light="blenderLight.png" dark="blenderLight.png" alt="blender" className="tech-icon" />
-                <span className="tech-badge">blender</span>
-                <span className="tech-version">4.x</span>
-              </li>
-              <li>
-                <ThemeIcon light="reactLight.png" dark="reactLight.png" alt="react" className="tech-icon" />
-                <span className="tech-badge">react</span>
-                <span className="tech-version">18</span>
-              </li>
-              <li>
-                <ThemeIcon light="viteLight.png" dark="viteLight.png" alt="vite" className="tech-icon" />
-                <span className="tech-badge">vite</span>
-                <span className="tech-version">5.x</span>
-              </li>
-              <li>
-                <ThemeIcon light="pythonLogoLight.png" dark="pythonLogoLight.png" alt="python" className="tech-icon" />
-                <span className="tech-badge">python</span>
-                <span className="tech-version">3.11</span>
-              </li>
-              <li>
-                <ThemeIcon light="wslLogoLight.png" dark="wslLogoLight.png" alt="wsl" className="tech-icon" />
-                <span className="tech-badge">wsl</span>
-                <span className="tech-version">2</span>
-              </li>
-              <li>
-                <ThemeIcon light="jsLight.png" dark="jsLight.png" alt="javascript" className="tech-icon" />
-                <span className="tech-badge">javascript</span>
-                <span className="tech-version">es6+</span>
-              </li>
-              <li>
-                <ThemeIcon light="javaLight.png" dark="javaLight.png" alt="java" className="tech-icon" />
-                <span className="tech-badge">java</span>
-                <span className="tech-version">17</span>
-              </li>
-              <li>
-                <ThemeIcon light="cssLight.png" dark="cssLight.png" alt="css" className="tech-icon" />
-                <span className="tech-badge">css</span>
-                <span className="tech-version">3</span>
-              </li>
-              <li>
-                <ThemeIcon light="antlrLight.png" dark="antlrLight.png" alt="antlr" className="tech-icon" />
-                <span className="tech-badge">antlr</span>
-                <span className="tech-version">4.x</span>
-              </li>
-              <li>
-                <ThemeIcon light="fastApiLight.png" dark="fastApiLight.png" alt="fastapi" className="tech-icon" />
-                <span className="tech-badge">fastapi</span>
-                <span className="tech-version">0.x</span>
-              </li>
-              <li>
-                <ThemeIcon light="railwayLight.png" dark="railwayLight.png" alt="railway" className="tech-icon" />
-                <span className="tech-badge">railway</span>
-                <span className="tech-version">cloud</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="footer-section footer-database">
-            <h4>{language === 'pt' ? 'banco de dados' : 'database'}</h4>
-            <ul>
-              <li>
-                <ThemeIcon light="2106624.png" dark="postgresqlDark.png" alt="postgresql" className="db-icon" />
-                <span className="db-badge">postgresql</span>
-                <span className="db-version">15</span>
-              </li>
-              <li>
-                <ThemeIcon light="redis.png" dark="redisDark.png" alt="redis" className="db-icon" />
-                <span className="db-badge">redis</span>
-                <span className="db-version">7</span>
-              </li>
-              <li>
-                <ThemeIcon light="minio.png" dark="minioDark.png" alt="minio" className="db-icon" />
-                <span className="db-badge">minio</span>
-                <span className="db-version">s3</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="footer-section footer-credits">
-            <h4>{language === 'pt' ? 'créditos' : 'credits'}</h4>
-            <p className="credits-text">
-              {language === 'pt'
-                ? 'projeto de trabalho de conclusão de curso desenvolvido na pucrs / escola politécnica, em colaboração com o laboratório lope.'
-                : 'final project developed at pucrs / school of engineering, in collaboration with lope laboratory.'}
-            </p>
-            <div className="footer-credits-detail">
-              {language === 'pt' ? (
-                <>
-                  <p>
-                    <strong>aluno:</strong> Bernardo Klein Heitz
-                  </p>
-                  <p>
-                    <strong>orientador</strong> — trabalho de conclusão de curso (ciência da computação): prof. Marco Aurélio Mangan
-                  </p>
-                  <p>
-                    <strong>orientadora</strong> — iniciação científica voluntária: prof. Soraia Raupp Musse
-                  </p>
-                  <p>
-                    <strong>orientadores</strong> — bolsa de iniciação científica lope:<br />
-                    prof. Rubem Mário Vargas<br />
-                    Doutorando Henrique Martins Tavares
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p>
-                    <strong>student:</strong> Bernardo Klein Heitz
-                  </p>
-                  <p>
-                    <strong>advisor</strong> — final project (computer science): prof. Marco Aurélio Mangan
-                  </p>
-                  <p>
-                    <strong>advisor</strong> — voluntary scientific initiation: prof. Soraia Raupp Musse
-                  </p>
-                  <p>
-                    <strong>advisors</strong> — lope scientific initiation scholarship:<br />
-                    prof. Rubem Mário Vargas<br />
-                    doctoral researcher Henrique Martins Tavares
-                  </p>
-                </>
-              )}
-            </div>
-            <button
-              className="footer-credits-btn"
-              onClick={() => setShowCredits(true)}
-            >
-              {language === 'pt' ? 'ver créditos' : 'view credits'}
+          <div className="footer-section footer-actions-column">
+            <button type="button" className="footer-hub-btn" onClick={() => setShowCredits(true)}>
+              {language === 'pt' ? 'Créditos' : 'Credits'}
+            </button>
+            <button type="button" className="footer-hub-btn" onClick={() => setShowFooterSaibaMais(true)}>
+              {language === 'pt' ? 'Saiba mais' : 'Learn more'}
             </button>
           </div>
 
@@ -1082,6 +890,13 @@ function App() {
       <CreditsModal 
         show={showCredits} 
         onClose={() => setShowCredits(false)} 
+      />
+      <FooterSaibaMaisModal
+        show={showFooterSaibaMais}
+        onClose={() => setShowFooterSaibaMais(false)}
+        onOpenCredits={() => setShowCredits(true)}
+        onOpenHelp={() => setShowHelp(true)}
+        onOpenDocs={() => setShowDocs(true)}
       />
 
       {showUserSwitcher && (
