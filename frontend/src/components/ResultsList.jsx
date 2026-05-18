@@ -5,6 +5,9 @@ import {
   getSimulation,
   getSimulationResults,
   buildGeneratedFileUrl,
+  buildMeshStreamUrl,
+  listViewerMeshes,
+  mergeDbModelsWithProjectMeshes,
 } from '../services/api'
 import ModelViewer from './ModelViewer'
 import ThemeIcon from './ThemeIcon'
@@ -12,6 +15,51 @@ import BackendConnectionError from './BackendConnectionError'
 import PaginationControls from './PaginationControls'
 import { useLanguage } from '../context/LanguageContext'
 import { useActiveUser } from '../context/UserContext'
+import '../styles/CasosCFD.css'
+import '../styles/MeshViewer3DPage.css'
+
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  )
+}
+
+function getSimStatusBadgeClass(status) {
+  switch (status) {
+    case 'completed':
+      return 'status-completed'
+    case 'running':
+      return 'status-running'
+    case 'pending':
+      return 'status-configured'
+    case 'failed':
+      return 'status-unknown'
+    default:
+      return 'status-unknown'
+  }
+}
+
+function formatBytes(bytes) {
+  if (typeof bytes !== 'number' || bytes < 0) return '—'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 function ResultsList() {
   const { t, language } = useLanguage()
@@ -25,7 +73,10 @@ function ResultsList() {
   const [simulationResultsMeta, setSimulationResultsMeta] = useState({ page: 1, limit: 12, total: 0, total_pages: 1 })
   const [simulationResultsFilter, setSimulationResultsFilter] = useState({ resultType: '', search: '' })
   const [loading, setLoading] = useState(false)
+  const [modelsRefreshing, setModelsRefreshing] = useState(false)
+  const [simsRefreshing, setSimsRefreshing] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
+  const pt = language === 'pt'
   const [modelPage, setModelPage] = useState(1)
   const [modelLimit, setModelLimit] = useState(8)
   const [modelTotal, setModelTotal] = useState(0)
@@ -46,11 +97,11 @@ function ResultsList() {
     regime: '',
   })
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadModels = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setModelsRefreshing(true)
     try {
       setConnectionError(null)
-      const [modelsData, simsData] = await Promise.all([
+      const [modelsData, meshData] = await Promise.all([
         listModels3D({
           page: modelPage,
           limit: modelLimit,
@@ -59,29 +110,51 @@ function ResultsList() {
           has_blend: modelFilters.has_blend === '' ? null : modelFilters.has_blend === 'true',
           has_stl: modelFilters.has_stl === '' ? null : modelFilters.has_stl === 'true',
         }),
-        listSimulations({
-          page: simPage,
-          limit: simLimit,
-          search: simFilters.search,
-          status: simFilters.status || null,
-          regime: simFilters.regime || null,
-        }),
+        listViewerMeshes({ q: modelFilters.search || undefined, limit: 500 }),
       ])
-      setModels(Array.isArray(modelsData?.items) ? modelsData.items : [])
-      setSimulations(Array.isArray(simsData?.items) ? simsData.items : [])
-      setModelTotal(modelsData?.total || 0)
+      const dbItems = Array.isArray(modelsData?.items) ? modelsData.items : []
+      const merged = mergeDbModelsWithProjectMeshes(dbItems, meshData)
+      setModels(merged)
+      const extra = merged.length - dbItems.length
+      setModelTotal((modelsData?.total || 0) + extra)
       setModelTotalPages(modelsData?.total_pages || modelsData?.pages || 1)
+    } catch (error) {
+      console.error('erro ao carregar modelos:', error)
+      setConnectionError(t('backendConnectionError'))
+      setModels([])
+    } finally {
+      if (!silent) setModelsRefreshing(false)
+    }
+  }, [modelFilters, modelLimit, modelPage, t])
+
+  const loadSimulations = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setSimsRefreshing(true)
+    try {
+      setConnectionError(null)
+      const simsData = await listSimulations({
+        page: simPage,
+        limit: simLimit,
+        search: simFilters.search,
+        status: simFilters.status || null,
+        regime: simFilters.regime || null,
+      })
+      setSimulations(Array.isArray(simsData?.items) ? simsData.items : [])
       setSimTotal(simsData?.total || 0)
       setSimTotalPages(simsData?.total_pages || simsData?.pages || 1)
     } catch (error) {
-      console.error('erro ao carregar resultados reais:', error)
+      console.error('erro ao carregar simulações:', error)
       setConnectionError(t('backendConnectionError'))
-      setModels([])
       setSimulations([])
     } finally {
-      setLoading(false)
+      if (!silent) setSimsRefreshing(false)
     }
-  }, [modelFilters, modelLimit, modelPage, simFilters, simLimit, simPage, t])
+  }, [simFilters, simLimit, simPage, t])
+
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true)
+    await Promise.all([loadModels({ silent: true }), loadSimulations({ silent: true })])
+    if (!silent) setLoading(false)
+  }, [loadModels, loadSimulations])
 
   useEffect(() => {
     loadData()
@@ -139,6 +212,7 @@ function ResultsList() {
   }
 
   const getModelPreviewPath = (model) => {
+    if (model.mesh_id) return buildMeshStreamUrl(model.mesh_id)
     return model.preview_model_url
       ? buildGeneratedFileUrl(model.preview_model_url.replace(/^\/files\//, ''))
       : buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
@@ -161,10 +235,26 @@ function ResultsList() {
 
       <div className="results-layout">
         <section className="results-section">
-          <h3>
-            <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="modelos" className="section-icon" />
-            {language === 'pt' ? 'Modelos 3d' : '3d models'} ({modelTotal})
-          </h3>
+          <div className="results-section-heading">
+            <div className="results-section-title">
+              <h3>
+                <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="modelos" className="results-section-icon" />
+                {pt ? 'Modelos 3D' : '3D models'} ({modelTotal})
+              </h3>
+            </div>
+            <div className="results-section-toolbar">
+              <button
+                type="button"
+                className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+                onClick={() => void loadModels()}
+                disabled={modelsRefreshing || loading}
+                aria-busy={modelsRefreshing || undefined}
+              >
+                <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+                {modelsRefreshing ? '…' : pt ? 'atualizar' : 'refresh'}
+              </button>
+            </div>
+          </div>
 
           <div className="results-filters">
             <input
@@ -218,43 +308,66 @@ function ResultsList() {
           ) : models.length === 0 ? (
             <p className="empty-state">{language === 'pt' ? 'Nenhum modelo encontrado' : 'No models found'}</p>
           ) : (
-            <div className="files-grid">
+            <div className="casos-grid">
               {models.map((model) => (
-                <div key={model.id} className="file-card">
-                  <div className="file-icon">
-                    <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="modelo" className="file-icon-img" />
+                <div key={model.id} className="caso-card">
+                  <div className="caso-header">
+                    <h3>{model.name}</h3>
+                    <span className="status-badge status-configured">{pt ? 'modelo 3d' : '3d model'}</span>
                   </div>
-
-                  <div className="file-info">
-                    <h4 className="file-name">{model.name}</h4>
-                    <p className="file-size">id {model.id}</p>
-                    <p className="file-date">
-                      {model.created_at
-                        ? new Date(model.created_at).toLocaleDateString(language === 'pt' ? 'pt-BR' : 'en-US')
-                        : '—'}
-                    </p>
-                    <p className="file-size">
-                      {model.blend_file_path ? '.blend ' : ''}
-                      {model.stl_file_path ? '.stl' : ''}
-                    </p>
+                  <div className="caso-info">
+                    <div className="info-row">
+                      <span className="info-label">id:</span>
+                      <span>{model.id}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'criado:' : 'created:'}</span>
+                      <span>
+                        {model.created_at
+                          ? new Date(model.created_at).toLocaleString(pt ? 'pt-BR' : 'en-US')
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'método:' : 'method:'}</span>
+                      <span>{model.packing_method || '—'}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'tamanho:' : 'size:'}</span>
+                      <span>{formatBytes(model.size_bytes)}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'ficheiros:' : 'files:'}</span>
+                      <span>
+                        {model.blend_file_path ? '.blend ' : ''}
+                        {model.stl_file_path ? '.stl' : '—'}
+                      </span>
+                    </div>
                   </div>
-
-                  <div className="file-actions">
+                  {model.description && (
+                    <div className="caso-caminho">
+                      <strong>{pt ? 'caminho:' : 'path:'}</strong>
+                      <code title={model.description}>{model.description}</code>
+                    </div>
+                  )}
+                  <div className="caso-acoes">
                     <button
-                      className="btn-small"
+                      type="button"
+                      className="btn-mode-option"
                       onClick={() => setSelectedModel({ ...model, path: getModelPreviewPath(model) })}
                       disabled={!getModelPreviewPath(model)}
                     >
-                      <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="visualizar" className="btn-icon" />
-                      {language === 'pt' ? 'Visualizar' : 'View'}
+                      <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="" className="btn-icon" />
+                      {pt ? 'visualizar' : 'view'}
                     </button>
                     <button
-                      className="btn-small"
+                      type="button"
+                      className="btn-mode-option"
                       onClick={() => window.open(getModelDownloadPath(model), '_blank')}
                       disabled={!getModelDownloadPath(model)}
                     >
-                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="baixar" className="btn-icon" />
-                      {language === 'pt' ? 'Baixar' : 'Download'}
+                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="btn-icon" />
+                      {pt ? 'baixar' : 'download'}
                     </button>
                   </div>
                 </div>
@@ -266,22 +379,38 @@ function ResultsList() {
             totalPages={modelTotalPages}
             total={modelTotal}
             limit={modelLimit}
-            loading={loading}
+            loading={loading || modelsRefreshing}
             onPageChange={setModelPage}
             onLimitChange={(value) => {
               setModelPage(1)
               setModelLimit(value)
             }}
-            label={language === 'pt' ? 'Modelos 3d' : '3d models'}
-            pt={language === 'pt'}
+            label={pt ? 'Modelos 3D' : '3D models'}
+            pt={pt}
           />
         </section>
 
         <section className="results-section">
-          <h3>
-            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="simulações" className="section-icon" />
-            {language === 'pt' ? 'Simulações' : 'Simulations'} ({simTotal})
-          </h3>
+          <div className="results-section-heading">
+            <div className="results-section-title">
+              <h3>
+                <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="simulações" className="results-section-icon" />
+                {pt ? 'Simulações' : 'Simulations'} ({simTotal})
+              </h3>
+            </div>
+            <div className="results-section-toolbar">
+              <button
+                type="button"
+                className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+                onClick={() => void loadSimulations()}
+                disabled={simsRefreshing || loading}
+                aria-busy={simsRefreshing || undefined}
+              >
+                <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+                {simsRefreshing ? '…' : pt ? 'atualizar' : 'refresh'}
+              </button>
+            </div>
+          </div>
 
           <div className="results-filters">
             <input
@@ -336,41 +465,54 @@ function ResultsList() {
           ) : simulations.length === 0 ? (
             <p className="empty-state">{language === 'pt' ? 'Nenhuma simulação encontrada' : 'No simulations found'}</p>
           ) : (
-            <div className="files-grid">
+            <div className="casos-grid">
               {simulations.map((sim) => (
-                <div key={sim.id} className="file-card">
-                  <div className="file-icon">
-                    <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="simulação" className="file-icon-img" />
+                <div key={sim.id} className="caso-card">
+                  <div className="caso-header">
+                    <h3>{sim.name}</h3>
+                    <span className={`status-badge ${getSimStatusBadgeClass(sim.status)}`}>{sim.status}</span>
                   </div>
-
-                  <div className="file-info">
-                    <h4 className="file-name">{sim.name}</h4>
-                    <p className="file-size">id {sim.id}</p>
-                    <p className="file-date">
-                      {sim.created_at
-                        ? new Date(sim.created_at).toLocaleDateString(language === 'pt' ? 'pt-BR' : 'en-US')
-                        : '—'}
-                    </p>
-                    <p className="file-size">{sim.status}</p>
+                  <div className="caso-info">
+                    <div className="info-row">
+                      <span className="info-label">id:</span>
+                      <span>{sim.id}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'criado:' : 'created:'}</span>
+                      <span>
+                        {sim.created_at
+                          ? new Date(sim.created_at).toLocaleString(pt ? 'pt-BR' : 'en-US')
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'regime:' : 'regime:'}</span>
+                      <span>{sim.regime || '—'}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'estado:' : 'status:'}</span>
+                      <span>{sim.status}</span>
+                    </div>
                   </div>
-
-                  <div className="file-actions">
+                  <div className="caso-acoes">
                     <button
-                      className="btn-small"
+                      type="button"
+                      className="btn-mode-option"
                       onClick={() => {
                         setSimulationResultsFilter({ resultType: '', search: '' })
                         setSimulationResultsMeta({ page: 1, limit: 12, total: 0, total_pages: 1 })
                         handleOpenSimulationResults(sim.id, { page: 1, limit: 12 })
                       }}
                     >
-                      <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="resultados" className="btn-icon" />
-                      {language === 'pt' ? 'Resultados' : 'Results'}
+                      <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="" className="btn-icon" />
+                      {pt ? 'resultados' : 'results'}
                     </button>
                     <button
-                      className="btn-small"
+                      type="button"
+                      className="btn-mode-option"
                       onClick={() => handleDownloadSimulationJson(sim.id)}
                     >
-                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="baixar" className="btn-icon" />
+                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="btn-icon" />
                       json
                     </button>
                   </div>
@@ -383,14 +525,15 @@ function ResultsList() {
             totalPages={simTotalPages}
             total={simTotal}
             limit={simLimit}
-            loading={loading}
+            loading={loading || simsRefreshing}
             onPageChange={setSimPage}
             onLimitChange={(value) => {
               setSimPage(1)
               setSimLimit(value)
             }}
-            label={language === 'pt' ? 'Simulações' : 'Simulations'}
-            pt={language === 'pt'}
+            label={pt ? 'Simulações' : 'Simulations'}
+            pt={pt}
+            
           />
         </section>
       </div>

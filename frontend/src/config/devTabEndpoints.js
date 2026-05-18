@@ -8,6 +8,7 @@ export const TAB_DEV_INFO = {
       'GET /api/status',
       'GET /api/simulations/summary',
       'GET /api/simulations/recent',
+      'GET /api/simulations/{id}',
     ],
     persistence: [
       'simulations',

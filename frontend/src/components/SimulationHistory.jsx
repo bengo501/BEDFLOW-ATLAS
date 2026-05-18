@@ -9,9 +9,14 @@ import {
   deleteSimulation,
   createSimulationRecord,
   buildGeneratedFileUrl,
+  buildMeshStreamUrl,
+  listViewerMeshes,
+  mergeDbModelsWithProjectMeshes,
 } from '../services/api';
 import { useActiveUser } from '../context/UserContext';
 import PaginationControls from './PaginationControls';
+import '../styles/CasosCFD.css';
+import '../styles/MeshViewer3DPage.css';
 import './SimulationHistory.css';
 
 function isConnectionError(err) {
@@ -83,6 +88,28 @@ function slugify(s) {
     .slice(0, 60) || 'simulacao';
 }
 
+function getSimStatusBadgeClass(status) {
+  switch (status) {
+    case 'completed':
+      return 'status-completed';
+    case 'running':
+      return 'status-running';
+    case 'pending':
+      return 'status-configured';
+    case 'failed':
+      return 'status-unknown';
+    default:
+      return 'status-unknown';
+  }
+}
+
+function formatBytes(bytes) {
+  if (typeof bytes !== 'number' || bytes < 0) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function SimulationHistory() {
   const { language, t } = useLanguage();
   const { activeUserId } = useActiveUser();
@@ -113,6 +140,8 @@ function SimulationHistory() {
     created_to: '',
   });
   const [loading, setLoading] = useState(true);
+  const [modelsRefreshing, setModelsRefreshing] = useState(false);
+  const [simsRefreshing, setSimsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [opError, setOpError] = useState(null);
   const [opSuccess, setOpSuccess] = useState(null);
@@ -121,20 +150,11 @@ function SimulationHistory() {
   const [viewDetail, setViewDetail] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadModels = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setModelsRefreshing(true);
     setLoadError(null);
     try {
-      const [simData, modelData] = await Promise.all([
-        listSimulations({
-          page: simPage,
-          limit: simLimit,
-          search: simFilters.search,
-          status: simFilters.status || null,
-          regime: simFilters.regime || null,
-          created_from: simFilters.created_from || null,
-          created_to: simFilters.created_to || null,
-        }),
+      const [modelData, meshData] = await Promise.all([
         listModels3D({
           page: modelPage,
           limit: modelLimit,
@@ -145,17 +165,16 @@ function SimulationHistory() {
           created_from: modelFilters.created_from || null,
           created_to: modelFilters.created_to || null,
         }),
+        listViewerMeshes({ q: modelFilters.search || undefined, limit: 500 }),
       ]);
-      const simItems = Array.isArray(simData?.items) ? simData.items : [];
-      const modelItems = Array.isArray(modelData?.items) ? modelData.items : [];
-      setSimulations(simItems.map((row) => mapApiSimulation(row, language)));
-      setModels3d(modelItems);
-      setSimTotal(simData?.total || 0);
-      setSimTotalPages(simData?.total_pages || simData?.pages || 1);
-      setModelTotal(modelData?.total || 0);
+      const dbItems = Array.isArray(modelData?.items) ? modelData.items : [];
+      const merged = mergeDbModelsWithProjectMeshes(dbItems, meshData);
+      setModels3d(merged);
+      const extra = merged.length - dbItems.length;
+      setModelTotal((modelData?.total || 0) + extra);
       setModelTotalPages(modelData?.total_pages || modelData?.pages || 1);
     } catch (err) {
-      console.error('simulation history:', err);
+      console.error('simulation history models:', err);
       if (isConnectionError(err)) {
         setLoadError(t('backendConnectionError'));
       } else {
@@ -163,19 +182,62 @@ function SimulationHistory() {
         setLoadError(
           typeof detail === 'string'
             ? detail
-            : language === 'pt'
+            : pt
+              ? 'erro ao carregar modelos 3d'
+              : 'failed to load 3d models'
+        );
+      }
+      setModels3d([]);
+      setModelTotal(0);
+    } finally {
+      if (!silent) setModelsRefreshing(false);
+    }
+  }, [modelFilters, modelLimit, modelPage, pt, t]);
+
+  const loadSimulations = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setSimsRefreshing(true);
+    setLoadError(null);
+    try {
+      const simData = await listSimulations({
+        page: simPage,
+        limit: simLimit,
+        search: simFilters.search,
+        status: simFilters.status || null,
+        regime: simFilters.regime || null,
+        created_from: simFilters.created_from || null,
+        created_to: simFilters.created_to || null,
+      });
+      const simItems = Array.isArray(simData?.items) ? simData.items : [];
+      setSimulations(simItems.map((row) => mapApiSimulation(row, language)));
+      setSimTotal(simData?.total || 0);
+      setSimTotalPages(simData?.total_pages || simData?.pages || 1);
+    } catch (err) {
+      console.error('simulation history simulations:', err);
+      if (isConnectionError(err)) {
+        setLoadError(t('backendConnectionError'));
+      } else {
+        const detail = err.response?.data?.detail;
+        setLoadError(
+          typeof detail === 'string'
+            ? detail
+            : pt
               ? 'erro ao carregar simulações'
               : 'failed to load simulations'
         );
       }
       setSimulations([]);
-      setModels3d([]);
       setSimTotal(0);
-      setModelTotal(0);
     } finally {
-      setLoading(false);
+      if (!silent) setSimsRefreshing(false);
     }
-  }, [language, modelFilters, modelLimit, modelPage, simFilters, simLimit, simPage, t]);
+  }, [language, simFilters, simLimit, simPage, pt, t]);
+
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    setLoadError(null);
+    await Promise.all([loadSimulations({ silent: true }), loadModels({ silent: true })]);
+    if (!silent) setLoading(false);
+  }, [loadModels, loadSimulations]);
 
   useEffect(() => {
     loadData();
@@ -344,9 +406,15 @@ function SimulationHistory() {
             <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="histórico" className="title-icon" />
             <h1>{language === 'pt' ? 'Histórico de simulações' : 'Simulation history'}</h1>
           </div>
-          <button type="button" className="refresh-btn" onClick={() => void loadData()} disabled={loading}>
-            <IconRefresh className="refresh-icon" />
-            {language === 'pt' ? 'Atualizar' : 'Refresh'}
+          <button
+            type="button"
+            className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+            onClick={() => void loadData()}
+            disabled={loading}
+            aria-busy={loading || undefined}
+          >
+            <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+            {loading ? '…' : pt ? 'atualizar' : 'refresh'}
           </button>
         </div>
         <p className="history-description">
@@ -389,17 +457,33 @@ function SimulationHistory() {
 
       <div className="history-panels">
       <section className="results-section history-panel" aria-labelledby="history-simulations-heading">
-        <h3 id="history-simulations-heading" className="history-section-heading">
-          <ThemeIcon
-            light="cfd_gear_white.png"
-            dark="image-removebg-preview(12).png"
-            alt=""
-            className="section-icon"
-          />
-          <span>
-            {pt ? 'Simulações' : 'Simulations'} ({simTotal})
-          </span>
-        </h3>
+        <div className="results-section-heading">
+          <div className="results-section-title">
+            <h3 id="history-simulations-heading" className="history-section-heading">
+              <ThemeIcon
+                light="cfd_gear_white.png"
+                dark="image-removebg-preview(12).png"
+                alt=""
+                className="results-section-icon"
+              />
+              <span>
+                {pt ? 'Simulações' : 'Simulations'} ({simTotal})
+              </span>
+            </h3>
+          </div>
+          <div className="results-section-toolbar">
+            <button
+              type="button"
+              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+              onClick={() => void loadSimulations()}
+              disabled={simsRefreshing || loading}
+              aria-busy={simsRefreshing || undefined}
+            >
+              <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+              {simsRefreshing ? '…' : pt ? 'atualizar' : 'refresh'}
+            </button>
+          </div>
+        </div>
 
         <div className="history-filter-grid">
           <div className="search-container">
@@ -487,67 +571,77 @@ function SimulationHistory() {
           </div>
         ) : (
           <>
-            <div className="simulations-list">
+            <div className="casos-grid">
               {simulations.map((simulation) => (
-                <div key={simulation.id} className="simulation-card">
-                  <div className="sim-card-row sim-card-row-top">
-                    <div className="simulation-status">
-                      {getStatusIcon(simulation.status)}
-                      <span className="status-text">{getStatusText(simulation.status)}</span>
-                    </div>
-                    <span className="simulation-id">{pt ? 'Id' : 'id'} {simulation.id}</span>
+                <div key={simulation.id} className="caso-card">
+                  <div className="caso-header">
+                    <h3>{simulation.name}</h3>
+                    <span className={`status-badge ${getSimStatusBadgeClass(simulation.status)}`}>
+                      {getStatusText(simulation.status)}
+                    </span>
                   </div>
-
-                  <div className="simulation-info">
-                    <h3 className="simulation-name">{simulation.name}</h3>
-                    {simulation.description ? (
-                      <p className="simulation-description">{simulation.description}</p>
+                  <div className="caso-info">
+                    <div className="info-row">
+                      <span className="info-label">id:</span>
+                      <span>{simulation.id}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'criado:' : 'created:'}</span>
+                      <span>{simulation.createdDate}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'duração:' : 'duration:'}</span>
+                      <span>{simulation.duration}</span>
+                    </div>
+                    {simulation.status === 'running' ? (
+                      <div className="info-row">
+                        <span className="info-label">{pt ? 'progresso:' : 'progress:'}</span>
+                        <span>{simulation.progress}%</span>
+                      </div>
                     ) : null}
-                    <div className="simulation-meta">
-                      <span className="simulation-date">{simulation.createdDate}</span>
-                      <span className="simulation-duration">{simulation.duration}</span>
-                      {simulation.status === 'running' ? (
-                        <span className="simulation-progress">{simulation.progress}%</span>
-                      ) : null}
-                    </div>
                   </div>
-
-                  <div className="simulation-actions">
+                  {simulation.description ? (
+                    <div className="caso-caminho">
+                      <strong>{pt ? 'descrição:' : 'description:'}</strong>
+                      <code>{simulation.description}</code>
+                    </div>
+                  ) : null}
+                  <div className="caso-acoes">
                     <button
                       type="button"
-                      className="action-btn view-btn"
+                      className="btn-mode-option"
                       onClick={() => handleViewSimulation(simulation.id)}
-                      title={language === 'pt' ? 'visualizar' : 'view'}
                       disabled={actionBusyId === simulation.id}
                     >
-                      <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="" className="action-icon" />
+                      <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="" className="btn-icon" />
+                      {pt ? 'visualizar' : 'view'}
                     </button>
                     <button
                       type="button"
-                      className="action-btn download-btn"
+                      className="btn-mode-option"
                       onClick={() => handleDownloadResults(simulation.id)}
-                      title={language === 'pt' ? 'baixar' : 'download'}
                       disabled={actionBusyId === simulation.id}
                     >
-                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="action-icon" />
+                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="btn-icon" />
+                      {pt ? 'baixar' : 'download'}
                     </button>
                     <button
                       type="button"
-                      className="action-btn delete-btn"
+                      className="btn-mode-option"
                       onClick={() => handleDeleteSimulation(simulation.id)}
-                      title={language === 'pt' ? 'deletar' : 'delete'}
                       disabled={actionBusyId === simulation.id}
                     >
-                      <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="action-icon" />
+                      <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="btn-icon" />
+                      {pt ? 'deletar' : 'delete'}
                     </button>
                     <button
                       type="button"
-                      className="action-btn rerun-btn"
+                      className="btn-mode-option"
                       onClick={() => handleRerunSimulation(simulation.id)}
-                      title={language === 'pt' ? 'reexecutar' : 'rerun'}
                       disabled={actionBusyId === simulation.id}
                     >
-                      <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="action-icon" />
+                      <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="btn-icon" />
+                      {pt ? 'reexecutar' : 'rerun'}
                     </button>
                   </div>
                 </div>
@@ -559,7 +653,7 @@ function SimulationHistory() {
               totalPages={simTotalPages}
               total={simTotal}
               limit={simLimit}
-              loading={loading}
+              loading={loading || simsRefreshing}
               onPageChange={setSimPage}
               onLimitChange={(value) => {
                 setSimPage(1);
@@ -573,17 +667,33 @@ function SimulationHistory() {
       </section>
 
       <section className="results-section history-panel" aria-labelledby="history-models-heading">
-        <h3 id="history-models-heading" className="history-section-heading">
-          <ThemeIcon
-            light="modelLight-removebg-preview.png"
-            dark="modelDark-removebg-preview.png"
-            alt=""
-            className="section-icon"
-          />
-          <span>
-            {pt ? 'Modelos 3d persistidos' : 'Persisted 3d models'} ({modelTotal})
-          </span>
-        </h3>
+        <div className="results-section-heading">
+          <div className="results-section-title">
+            <h3 id="history-models-heading" className="history-section-heading">
+              <ThemeIcon
+                light="modelLight-removebg-preview.png"
+                dark="modelDark-removebg-preview.png"
+                alt=""
+                className="results-section-icon"
+              />
+              <span>
+                {pt ? 'Modelos 3D' : '3D models'} ({modelTotal})
+              </span>
+            </h3>
+          </div>
+          <div className="results-section-toolbar">
+            <button
+              type="button"
+              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+              onClick={() => void loadModels()}
+              disabled={modelsRefreshing || loading}
+              aria-busy={modelsRefreshing || undefined}
+            >
+              <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+              {modelsRefreshing ? '…' : pt ? 'atualizar' : 'refresh'}
+            </button>
+          </div>
+        </div>
 
         <div className="history-filter-grid">
           <div className="search-container">
@@ -680,50 +790,78 @@ function SimulationHistory() {
 
         {!loading && modelTotal === 0 ? (
           <div className="sim-history-empty">
-            <p>{pt ? 'Nenhum modelo 3d encontrado com os filtros atuais' : 'No 3d models found for current filters'}</p>
+            <p>{pt ? 'Nenhum modelo 3D encontrado com os filtros atuais' : 'No 3d models found for current filters'}</p>
           </div>
         ) : (
           <>
-            <div className="simulations-list">
+            <div className="casos-grid">
               {models3d.map((model) => (
-                <div key={`model-${model.id}`} className="simulation-card">
-                  <div className="sim-card-row sim-card-row-top">
-                    <div className="simulation-status">
-                      <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="model" className="status-icon" />
-                      <span className="status-text">{pt ? 'Modelo 3d' : '3d model'}</span>
-                    </div>
-                    <span className="simulation-id">{pt ? 'Id' : 'id'} {model.id}</span>
+                <div key={`model-${model.id}`} className="caso-card">
+                  <div className="caso-header">
+                    <h3>{model.name}</h3>
+                    <span className="status-badge status-configured">{pt ? 'modelo 3d' : '3d model'}</span>
                   </div>
-
-                  <div className="simulation-info">
-                    <h3 className="simulation-name">{model.name}</h3>
-                    {model.description ? (
-                      <p className="simulation-description">{model.description}</p>
-                    ) : null}
-                    <div className="simulation-meta">
-                      <span className="simulation-date">
+                  <div className="caso-info">
+                    <div className="info-row">
+                      <span className="info-label">id:</span>
+                      <span>{model.id}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'criado:' : 'created:'}</span>
+                      <span>
                         {model.created_at
                           ? new Date(model.created_at).toLocaleString(pt ? 'pt-BR' : 'en-US')
                           : '—'}
                       </span>
-                      <span className="simulation-duration">
-                        {model.packing_method || '—'} · {model.blend_file_path ? '.blend ' : ''}{model.stl_file_path ? '.stl' : ''}
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'método:' : 'method:'}</span>
+                      <span>{model.packing_method || '—'}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'tamanho:' : 'size:'}</span>
+                      <span>{formatBytes(model.size_bytes)}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">{pt ? 'ficheiros:' : 'files:'}</span>
+                      <span>
+                        {model.blend_file_path ? '.blend ' : ''}
+                        {model.stl_file_path ? '.stl' : '—'}
                       </span>
                     </div>
                   </div>
-
-                  <div className="simulation-actions">
+                  {model.description && (
+                    <div className="caso-caminho">
+                      <strong>{pt ? 'caminho:' : 'path:'}</strong>
+                      <code title={model.description}>{model.description}</code>
+                    </div>
+                  )}
+                  <div className="caso-acoes">
                     <button
                       type="button"
-                      className="action-btn download-btn"
+                      className="btn-mode-option"
+                      onClick={() => {
+                        const url = model.mesh_id
+                          ? buildMeshStreamUrl(model.mesh_id)
+                          : buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path);
+                        if (url) window.open(url, '_blank');
+                      }}
+                      disabled={!model.mesh_id && !buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)}
+                    >
+                      <ThemeIcon light="viewLight-removebg-preview.png" dark="viewDark-removebg-preview.png" alt="" className="btn-icon" />
+                      {pt ? 'abrir' : 'open'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-mode-option"
                       onClick={() => {
                         const url = buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path);
                         if (url) window.open(url, '_blank');
                       }}
-                      title={pt ? 'Baixar modelo' : 'Download model'}
                       disabled={!buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)}
                     >
-                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="action-icon" />
+                      <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="btn-icon" />
+                      {pt ? 'baixar' : 'download'}
                     </button>
                   </div>
                 </div>
@@ -735,13 +873,13 @@ function SimulationHistory() {
               totalPages={modelTotalPages}
               total={modelTotal}
               limit={modelLimit}
-              loading={loading}
+              loading={loading || modelsRefreshing}
               onPageChange={setModelPage}
               onLimitChange={(value) => {
                 setModelPage(1);
                 setModelLimit(value);
               }}
-              label={pt ? 'Modelos 3d' : '3d models'}
+              label={pt ? 'Modelos 3D' : '3D models'}
               pt={pt}
             />
           </>

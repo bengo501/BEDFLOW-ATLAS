@@ -416,7 +416,7 @@ async def get_artifacts_storage(
 
 @router.get(
     "/simulations/{simulation_id}",
-    response_model=schemas.SimulationResponse,
+    response_model=schemas.SimulationDetailResponse,
     tags=["database", "simulations"],
 )
 async def get_simulation(
@@ -432,7 +432,13 @@ async def get_simulation(
         raise HTTPException(status_code=404, detail="simulacao nao encontrada")
     if db_simulation.user_id != user_id:
         raise HTTPException(status_code=404, detail="simulacao nao encontrada")
-    return db_simulation
+    try:
+        return schemas.SimulationDetailResponse.model_validate(db_simulation)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"erro ao serializar simulacao: {e}",
+        )
 
 
 @router.patch("/simulations/{simulation_id}", response_model=schemas.SimulationResponse, tags=["database", "simulations"])

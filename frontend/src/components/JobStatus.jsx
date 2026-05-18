@@ -1,21 +1,46 @@
 import { useState, useEffect } from 'react'
-import { listJobs } from '../services/api'
+import { listJobs, cancelJobs, restartJobs } from '../services/api'
 import ThemeIcon from './ThemeIcon'
 import BackendConnectionError from './BackendConnectionError'
 import { useLanguage } from '../context/LanguageContext'
+import '../styles/MeshViewer3DPage.css'
+
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  )
+}
 
 function JobStatus({ currentJob }) {
   const { t, language } = useLanguage()
+  const pt = language === 'pt'
   const [jobs, setJobs] = useState([])
   const [selectedJob, setSelectedJob] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [jobsActionBusy, setJobsActionBusy] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
+  const [actionMessage, setActionMessage] = useState(null)
 
   useEffect(() => {
-    loadJobs()
+    void loadJobs()
     const sec = parseInt(localStorage.getItem('jobsPollIntervalSec'), 10)
     const pollSec = Number.isFinite(sec) && sec >= 3 && sec <= 120 ? sec : 5
-    const interval = setInterval(loadJobs, pollSec * 1000)
+    const interval = setInterval(() => void loadJobs({ silent: true }), pollSec * 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -25,15 +50,15 @@ function JobStatus({ currentJob }) {
     }
   }, [currentJob])
 
-  const loadJobs = async () => {
+  const loadJobs = async ({ silent = false } = {}) => {
+    if (!silent) setRefreshing(true)
     try {
       const jobsList = await listJobs()
       setJobs(jobsList)
       setConnectionError(null)
 
-      // atualizar job selecionado se existir
       if (selectedJob) {
-        const updated = jobsList.find(j => j.job_id === selectedJob.job_id)
+        const updated = jobsList.find((j) => j.job_id === selectedJob.job_id)
         if (updated) {
           setSelectedJob(updated)
         }
@@ -41,6 +66,50 @@ function JobStatus({ currentJob }) {
     } catch (error) {
       console.error('erro ao carregar jobs:', error)
       setConnectionError(t('backendConnectionError'))
+    } finally {
+      if (!silent) setRefreshing(false)
+    }
+  }
+
+  const handleRestartJobs = async () => {
+    const ok = window.confirm(
+      pt
+        ? 'reiniciar todos os jobs com estado falhou? eles voltam para a fila.'
+        : 'restart all failed jobs? they will return to the queue.'
+    )
+    if (!ok) return
+    setJobsActionBusy(true)
+    setActionMessage(null)
+    try {
+      const res = await restartJobs()
+      setActionMessage(res?.message || (pt ? 'jobs reiniciados' : 'jobs restarted'))
+      await loadJobs({ silent: true })
+    } catch (error) {
+      console.error('erro ao reiniciar jobs:', error)
+      setConnectionError(t('backendConnectionError'))
+    } finally {
+      setJobsActionBusy(false)
+    }
+  }
+
+  const handleCancelJobs = async () => {
+    const ok = window.confirm(
+      pt
+        ? 'encerrar todos os jobs em fila ou em execução?'
+        : 'terminate all queued or running jobs?'
+    )
+    if (!ok) return
+    setJobsActionBusy(true)
+    setActionMessage(null)
+    try {
+      const res = await cancelJobs()
+      setActionMessage(res?.message || (pt ? 'jobs encerrados' : 'jobs terminated'))
+      await loadJobs({ silent: true })
+    } catch (error) {
+      console.error('erro ao encerrar jobs:', error)
+      setConnectionError(t('backendConnectionError'))
+    } finally {
+      setJobsActionBusy(false)
     }
   }
 
@@ -65,7 +134,6 @@ function JobStatus({ currentJob }) {
   }
 
   const getJobTypeLabel = (jobType) => {
-    const pt = language === 'pt'
     switch (jobType) {
       case 'compile':
         return (
@@ -75,7 +143,7 @@ function JobStatus({ currentJob }) {
           </>
         )
       case 'generate_model':
-        return pt ? 'Modelo 3d' : '3d model'
+        return pt ? 'Modelo 3D' : '3D model'
       case 'simulation':
         return pt ? 'Simulação' : 'Simulation'
       case 'full_pipeline':
@@ -85,33 +153,71 @@ function JobStatus({ currentJob }) {
     }
   }
 
-  const dateLocale = language === 'pt' ? 'pt-BR' : 'en-US'
+  const dateLocale = pt ? 'pt-BR' : 'en-US'
 
   return (
     <div className="job-status-container">
       <header className="jobs-page-header">
-        <div className="jobs-page-title">
-          <ThemeIcon light="job_monitor_clock_white.png" dark="job_monitor_clock_white.png" alt="" className="jobs-page-title-icon" />
-          <h1 className="jobs-page-heading">{language === 'pt' ? 'Monitoramento de jobs' : 'Job monitoring'}</h1>
+        <div className="jobs-page-header-row">
+          <div className="jobs-page-title">
+            <ThemeIcon light="job_monitor_clock_white.png" dark="job_monitor_clock_white.png" alt="" className="jobs-page-title-icon" />
+            <h1 className="jobs-page-heading">{pt ? 'Monitoramento de jobs' : 'Job monitoring'}</h1>
+          </div>
+          <div className="jobs-page-actions">
+            <button
+              type="button"
+              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+              onClick={() => void loadJobs()}
+              disabled={refreshing || jobsActionBusy}
+              aria-busy={refreshing || undefined}
+            >
+              <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+              {refreshing ? '…' : pt ? 'atualizar' : 'refresh'}
+            </button>
+            <button
+              type="button"
+              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+              onClick={() => void handleRestartJobs()}
+              disabled={refreshing || jobsActionBusy}
+            >
+              {pt ? 'reiniciar jobs' : 'restart jobs'}
+            </button>
+            <button
+              type="button"
+              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+              onClick={() => void handleCancelJobs()}
+              disabled={refreshing || jobsActionBusy}
+            >
+              {pt ? 'encerrar jobs' : 'terminate jobs'}
+            </button>
+          </div>
         </div>
       </header>
+
+      {actionMessage && (
+        <p className="jobs-action-message" role="status">{actionMessage}</p>
+      )}
 
       {connectionError && <BackendConnectionError message={connectionError} />}
 
       <div className="jobs-layout">
-        {/* lista de jobs */}
         <div className="jobs-list">
-          <h3>{language === 'pt' ? `Todos os jobs (${jobs.length})` : `All jobs (${jobs.length})`}</h3>
+          <h3>{pt ? `Todos os jobs (${jobs.length})` : `All jobs (${jobs.length})`}</h3>
 
           {jobs.length === 0 ? (
-            <p className="empty-state">{language === 'pt' ? 'Nenhum job encontrado' : 'No jobs found'}</p>
+            <p className="empty-state">{pt ? 'Nenhum job encontrado' : 'No jobs found'}</p>
           ) : (
             <div className="jobs-items">
-              {jobs.map(job => (
+              {jobs.map((job) => (
                 <div
                   key={job.job_id}
                   className={`job-item ${selectedJob?.job_id === job.job_id ? 'selected' : ''}`}
                   onClick={() => setSelectedJob(job)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setSelectedJob(job)
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="job-header">
                     <span className="job-icon">{getStatusIcon(job.status)}</span>
@@ -139,31 +245,30 @@ function JobStatus({ currentJob }) {
           )}
         </div>
 
-        {/* detalhes do job selecionado */}
         <div className="job-details">
           {selectedJob ? (
             <>
-              <h3>{language === 'pt' ? 'Detalhes do job' : 'Job details'}</h3>
+              <h3>{pt ? 'Detalhes do job' : 'Job details'}</h3>
 
               <div className="detail-group">
-                <label>{language === 'pt' ? 'Id:' : 'Id:'}</label>
+                <label>{pt ? 'Id:' : 'Id:'}</label>
                 <code>{selectedJob.job_id}</code>
               </div>
 
               <div className="detail-group">
-                <label>{language === 'pt' ? 'Tipo:' : 'Type:'}</label>
+                <label>{pt ? 'Tipo:' : 'Type:'}</label>
                 <span>{getJobTypeLabel(selectedJob.job_type)}</span>
               </div>
 
               <div className="detail-group">
-                <label>{language === 'pt' ? 'Status:' : 'Status:'}</label>
+                <label>{pt ? 'Status:' : 'Status:'}</label>
                 <span className={`badge ${getStatusColor(selectedJob.status)}`}>
                   {getStatusIcon(selectedJob.status)} {selectedJob.status}
                 </span>
               </div>
 
               <div className="detail-group">
-                <label>{language === 'pt' ? 'Progresso:' : 'Progress:'}</label>
+                <label>{pt ? 'Progresso:' : 'Progress:'}</label>
                 <div className="progress-bar-large">
                   <div
                     className="progress-fill"
@@ -174,18 +279,18 @@ function JobStatus({ currentJob }) {
               </div>
 
               <div className="detail-group">
-                <label>{language === 'pt' ? 'Criado em:' : 'Created:'}</label>
+                <label>{pt ? 'Criado em:' : 'Created:'}</label>
                 <span>{new Date(selectedJob.created_at).toLocaleString(dateLocale)}</span>
               </div>
 
               <div className="detail-group">
-                <label>{language === 'pt' ? 'Atualizado em:' : 'Updated:'}</label>
+                <label>{pt ? 'Atualizado em:' : 'Updated:'}</label>
                 <span>{new Date(selectedJob.updated_at).toLocaleString(dateLocale)}</span>
               </div>
 
               {selectedJob.output_files && selectedJob.output_files.length > 0 && (
                 <div className="detail-group">
-                  <label>{language === 'pt' ? 'Arquivos gerados:' : 'Output files:'}</label>
+                  <label>{pt ? 'Arquivos gerados:' : 'Output files:'}</label>
                   <ul className="output-files">
                     {selectedJob.output_files.map((file, idx) => (
                       <li key={idx}>
@@ -198,7 +303,7 @@ function JobStatus({ currentJob }) {
 
               {selectedJob.error_message && (
                 <div className="detail-group">
-                  <label>{language === 'pt' ? 'Erro:' : 'Error:'}</label>
+                  <label>{pt ? 'Erro:' : 'Error:'}</label>
                   <div className="error-message">
                     {selectedJob.error_message}
                   </div>
@@ -215,7 +320,7 @@ function JobStatus({ currentJob }) {
               )}
             </>
           ) : (
-            <p className="empty-state">{language === 'pt' ? 'Selecione um job para ver detalhes' : 'Select a job to see details'}</p>
+            <p className="empty-state">{pt ? 'Selecione um job para ver detalhes' : 'Select a job to see details'}</p>
           )}
         </div>
       </div>

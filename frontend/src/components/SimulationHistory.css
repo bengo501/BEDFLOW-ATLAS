@@ -41,6 +41,14 @@
   object-fit: contain;
 }
 
+[data-theme='light'] .title-icon {
+  filter: brightness(0);
+}
+
+[data-theme='dark'] .title-icon {
+  filter: brightness(0) invert(1);
+}
+
 .history-description {
   color: var(--text-secondary);
   font-size: 0.82rem;

@@ -505,18 +505,56 @@
   gap: 0.35rem;
 }
 
-/* secção simulações: cabeçalho + busca + grelha */
+/* secção simulações: título + painel único (filtros, grelha, paginação) */
 .dash-simulations-section {
   margin-bottom: 0;
 }
 
-.dash-simulations-head {
+.dash-simulations-title-row--section {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 0.55rem;
   margin-bottom: 0.5rem;
+}
+
+.dash-simulations-panel {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dash-simulations-panel-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.dash-sim-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.dash-sim-search-row .search-input {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.filter-section--in-panel {
+  margin-bottom: 0;
+}
+
+.dash-simulations-panel .simulations-grid {
+  width: 100%;
+}
+
+.dash-simulations-panel .pagination-controls {
+  margin-top: 0.15rem;
+  padding-top: 0;
+  border-top: none;
+  justify-content: center;
 }
 
 .dash-simulations-title-row {
@@ -524,40 +562,6 @@
   align-items: center;
   gap: 0.55rem;
   margin-bottom: 0;
-}
-
-.dash-refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.85rem;
-  border-radius: var(--radius-card, 5px);
-  border: 1px solid var(--subcard-border-color, var(--border));
-  background: var(--card-bg);
-  color: var(--text);
-  font-family: var(--font-ui);
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
-}
-
-.dash-refresh-btn:hover:not(:disabled) {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary-light) 35%, var(--card-bg));
-  box-shadow: var(--card-shadow-hover, 0 2px 8px rgba(0, 0, 0, 0.1));
-  color: var(--primary);
-}
-
-.dash-refresh-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.dash-refresh-btn__icon {
-  flex-shrink: 0;
-  color: currentColor;
 }
 
 .dash-simulations-title-icon {
@@ -610,8 +614,8 @@
 .simulations-list--compact .pagination-controls {
   width: 100%;
   margin-top: 0.25rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--subcard-border-color, var(--border));
+  padding-top: 0;
+  border-top: none;
 }
 
 .simulation-card {

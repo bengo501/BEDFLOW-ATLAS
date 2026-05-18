@@ -5,6 +5,7 @@ import ThemeIcon from './ThemeIcon';
 import BackendConnectionError from './BackendConnectionError';
 import PaginationControls from './PaginationControls';
 import './Dashboard.css';
+import '../styles/MeshViewer3DPage.css';
 import { getDashboardSummary, listSimulations, getSimulation, parseApiError, getArtifactsStorage } from '../services/api';
 import { useActiveUser } from '../context/UserContext';
 
@@ -245,22 +246,30 @@ function Dashboard() {
   const getStatusClass = (status) => `simulation-status ${normalizeSimulationStatus(status)}`;
 
   const openSimulationModal = useCallback(
-    async (id) => {
+    async (simOrId) => {
+      const id = typeof simOrId === 'object' ? simOrId?.id : simOrId;
+      const cached =
+        typeof simOrId === 'object'
+          ? simOrId
+          : simulations.find((s) => s.id === id);
       setModalId(id);
       setModalOpen(true);
       setModalLoading(true);
       setModalError(null);
-      setModalSim(null);
+      setModalSim(cached ?? null);
       try {
         const raw = await getSimulation(id);
         setModalSim(mapSimulationFromApi(raw, language));
+        setModalError(null);
       } catch (e) {
-        setModalError(parseApiError(e) || (pt ? 'erro ao carregar' : 'load error'));
+        if (!cached) {
+          setModalError(parseApiError(e) || (pt ? 'erro ao carregar' : 'load error'));
+        }
       } finally {
         setModalLoading(false);
       }
     },
-    [language, pt],
+    [language, pt, simulations],
   );
 
   const closeModal = useCallback(() => {
@@ -521,40 +530,39 @@ function Dashboard() {
       </div>
 
       <div className="dash-simulations-section">
-        <div className="dash-simulations-head">
-          <div className="dash-simulations-title-row">
-            <ThemeIcon light="jobLight.png" dark="jobDark.png" alt="" className="dash-simulations-title-icon" />
-            <h3>{pt ? 'Simulações' : 'Simulations'}</h3>
-          </div>
-          <button
-            type="button"
-            className="dash-refresh-btn"
-            onClick={() => void loadData({ silent: true })}
-            disabled={loading || silentBusy}
-            aria-busy={silentBusy || undefined}
-            title={pt ? 'Atualizar dados do painel' : 'Refresh panel data'}
-          >
-            <IconRefresh className="dash-refresh-btn__icon" />
-            {pt ? 'Atualizar' : 'Refresh'}
-          </button>
+        <div className="dash-simulations-title-row dash-simulations-title-row--section">
+          <ThemeIcon light="jobLight.png" dark="jobDark.png" alt="" className="dash-simulations-title-icon" />
+          <h3>{pt ? 'Simulações' : 'Simulations'}</h3>
         </div>
 
-        <div className="simulation-controls simulation-controls--compact simulation-controls--under-sim-title ui-raised-surface">
-          <div className="search-section">
-            <input
-              type="text"
-              placeholder={pt ? 'Buscar simulações…' : 'Search simulations…'}
-              value={searchTerm}
-              onChange={(e) => {
-                setPage(1);
-                setSearchTerm(e.target.value);
-              }}
-              className="search-input search-input--compact"
-              aria-label={pt ? 'Buscar simulações' : 'Search simulations'}
-            />
-          </div>
+        <div className="dash-simulations-panel ui-raised-surface">
+          <div className="dash-simulations-panel-toolbar">
+            <div className="dash-sim-search-row">
+              <input
+                type="text"
+                placeholder={pt ? 'Buscar simulações…' : 'Search simulations…'}
+                value={searchTerm}
+                onChange={(e) => {
+                  setPage(1);
+                  setSearchTerm(e.target.value);
+                }}
+                className="search-input search-input--compact"
+                aria-label={pt ? 'Buscar simulações' : 'Search simulations'}
+              />
+              <button
+                type="button"
+                className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+                onClick={() => void loadData({ silent: true })}
+                disabled={loading || silentBusy}
+                aria-busy={silentBusy || undefined}
+                title={pt ? 'atualizar lista' : 'refresh list'}
+              >
+                <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+                {loading || silentBusy ? '…' : pt ? 'atualizar' : 'refresh'}
+              </button>
+            </div>
 
-          <div className="filter-section">
+            <div className="filter-section filter-section--in-panel">
             <button
               type="button"
               className={`filter-btn filter-btn--sm ${activeFilter === 'all' ? 'active' : ''}`}
@@ -609,10 +617,9 @@ function Dashboard() {
               <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="filter-icon" />
               {pt ? 'Falharam' : 'Failed'}
             </button>
+            </div>
           </div>
-        </div>
 
-        <div className="simulations-list simulations-list--compact ui-raised-surface">
           <div className="simulations-grid simulations-grid--two-cols">
           {loading && <p className="simulations-loading">{pt ? 'A carregar…' : 'Loading…'}</p>}
           {!loading && simulations.length === 0 && (
@@ -625,7 +632,7 @@ function Dashboard() {
               key={simulation.id}
               type="button"
               className="simulation-card simulation-card--clickable"
-              onClick={() => void openSimulationModal(simulation.id)}
+              onClick={() => void openSimulationModal(simulation)}
             >
               <div className="simulation-header">
                 <div className="simulation-name" title={simulation.name}>
@@ -668,6 +675,7 @@ function Dashboard() {
             );
           })}
           </div>
+
           <PaginationControls
             page={page}
             totalPages={totalPages}
@@ -712,8 +720,10 @@ function Dashboard() {
               </div>
               <div className="dash-modal-body">
                 {modalError && <p className="dash-modal-err">{modalError}</p>}
-                {modalLoading && <p className="dash-modal-muted">{pt ? 'a obter dados da base…' : 'fetching from database…'}</p>}
-                {!modalLoading && modalSim && (
+                {modalLoading && !modalSim && (
+                  <p className="dash-modal-muted">{pt ? 'a obter dados da base…' : 'fetching from database…'}</p>
+                )}
+                {modalSim && (
                   <>
                     <div className="dash-modal-hero">
                       <div className={getStatusClass(modalSim.status)}>

@@ -113,6 +113,41 @@ class SimulationUpdate(BaseModel):
         return v
 
 
+class SimulationDetailResponse(BaseModel):
+    """leitura por id — sem validadores estritos de SimulationBase (dados legados na bd)"""
+    id: int
+    user_id: int = 1
+    bed_id: int
+    name: str
+    description: Optional[str] = None
+    regime: str
+    inlet_velocity: float
+    fluid_density: float
+    fluid_viscosity: float
+    solver: str = "simpleFoam"
+    max_iterations: int = 1000
+    convergence_criteria: float = 1e-4
+    status: str
+    progress: Optional[int] = 0
+    mesh_cells_count: Optional[int] = None
+    mesh_quality: Optional[str] = None
+    case_directory: Optional[str] = None
+    log_file_path: Optional[str] = None
+    pressure_drop: Optional[float] = None
+    average_velocity: Optional[float] = None
+    reynolds_number: Optional[float] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    execution_time: Optional[float] = None
+    parameters_json: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class SimulationResponse(SimulationBase):
     """schema de resposta para simulacao"""
     id: int

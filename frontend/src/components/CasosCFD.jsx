@@ -1,9 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import '../styles/CasosCFD.css';
+import '../styles/MeshViewer3DPage.css';
 import ThemeIcon from './ThemeIcon';
 import BackendConnectionError from './BackendConnectionError';
 import PaginationControls from './PaginationControls';
 import { getCasosList, getCasoDetalhes, deleteCaso } from '../services/api';
+
+/** instruções wsl genéricas (sem caminho absoluto do utilizador) */
+function buildComandoWsl(caso) {
+  const rel = (caso.caminho_relativo || `local_data/simulations/${caso.nome}`).replace(/\\/g, '/');
+  return `# abrir wsl
+wsl
+
+# navegar até o caso (substitua unidade, utilizador e pasta do projeto)
+cd /mnt/<unidade>/Users/<utilizador>/<pasta-do-projeto>/${rel}
+
+# carregar openfoam
+source /opt/openfoam11/etc/bashrc
+
+# executar
+./Allrun`;
+}
 
 function IconRefresh({ className }) {
   return (
@@ -29,6 +46,7 @@ function IconRefresh({ className }) {
 const CasosCFD = () => {
   const [casos, setCasos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [casoSelecionado, setCasoSelecionado] = useState(null);
   const [page, setPage] = useState(1);
@@ -39,7 +57,9 @@ const CasosCFD = () => {
   }, []);
 
   const carregarCasos = async () => {
-    setLoading(true);
+    const fullScreenLoad = casos.length === 0;
+    if (fullScreenLoad) setLoading(true);
+    else setRefreshing(true);
     setError(null);
 
     try {
@@ -51,6 +71,7 @@ const CasosCFD = () => {
       console.error('erro:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -126,29 +147,39 @@ const CasosCFD = () => {
       <div className="casos-header">
         <div className="casos-title-row">
           <ThemeIcon
-            light="triangle_white_outline.png"
-            dark="triangle_black_outline.png"
+            light="folderLight.png"
+            dark="folderLight.png"
             alt=""
             className="casos-title-icon"
             location="page"
           />
           <h2>Casos CFD</h2>
         </div>
-        <button type="button" className="casos-refresh-btn" onClick={carregarCasos}>
-          <IconRefresh className="casos-refresh-btn__icon" />
-          atualizar
-        </button>
       </div>
 
       {error && <BackendConnectionError message={error} />}
 
-      {casos.length === 0 ? (
-        <div className="sem-casos">
-          <p>nenhum caso cfd encontrado</p>
-          <p className="hint">use o wizard para criar leitos e gerar casos cfd</p>
+      <section className="casos-panel ui-raised-surface" aria-label="lista de casos cfd">
+        <div className="casos-panel-toolbar">
+          <button
+            type="button"
+            className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+            onClick={() => void carregarCasos()}
+            disabled={refreshing}
+            title="atualizar lista de casos"
+          >
+            <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+            {refreshing ? '…' : 'atualizar'}
+          </button>
         </div>
-      ) : (
-        <section className="casos-panel ui-raised-surface" aria-label="lista de casos cfd">
+
+        {casos.length === 0 ? (
+          <div className="sem-casos sem-casos--in-panel">
+            <p>nenhum caso cfd encontrado</p>
+            <p className="hint">use o wizard para criar leitos e gerar casos cfd</p>
+          </div>
+        ) : (
+          <>
           <div className="casos-grid">
             {paginatedCasos.map((caso) => (
               <div key={caso.nome} className="caso-card">
@@ -200,17 +231,28 @@ const CasosCFD = () => {
                 )}
 
                 <div className="caso-acoes">
-                  <button type="button" className="btn btn-small btn-details" onClick={() => obterDetalhes(caso.nome)}>
+                  <button
+                    type="button"
+                    className="btn-mode-option"
+                    onClick={() => obterDetalhes(caso.nome)}
+                  >
+                    <ThemeIcon light="docsLight.png" dark="docsLight.png" alt="" className="btn-icon" />
                     ver detalhes
                   </button>
 
                   {caso.status === 'configured' && (
-                    <button type="button" className="btn btn-small btn-execute">
+                    <button type="button" className="btn-mode-option">
+                      <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="btn-icon" />
                       executar no wsl
                     </button>
                   )}
 
-                  <button type="button" className="btn btn-small btn-delete" onClick={() => deletarCaso(caso.nome)}>
+                  <button
+                    type="button"
+                    className="btn-mode-option"
+                    onClick={() => deletarCaso(caso.nome)}
+                  >
+                    <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="btn-icon" />
                     deletar
                   </button>
                 </div>
@@ -233,26 +275,42 @@ const CasosCFD = () => {
             limitOptions={[4, 8, 12, 20]}
             pt
           />
-        </section>
-      )}
+          </>
+        )}
+      </section>
 
       {casoSelecionado && (
-        <div className="modal-overlay" onClick={() => setCasoSelecionado(null)}>
-          <div className="modal-detalhes" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>detalhes do caso: {casoSelecionado.nome}</h3>
-              <button type="button" className="modal-close" onClick={() => setCasoSelecionado(null)}>
+        <div
+          className="casos-modal-overlay"
+          role="presentation"
+          onClick={() => setCasoSelecionado(null)}
+        >
+          <div
+            className="casos-modal ui-raised-surface"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="casos-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="casos-modal-header modal-header--footer-modals">
+              <h2 id="casos-modal-title">detalhes do caso: {casoSelecionado.nome}</h2>
+              <button
+                type="button"
+                className="casos-modal-close"
+                onClick={() => setCasoSelecionado(null)}
+                aria-label="fechar"
+              >
                 ×
               </button>
             </div>
 
-            <div className="modal-body">
-              <div className="detalhe-secao">
+            <div className="casos-modal-body">
+              <div className="casos-detalhe-block">
                 <h4>status</h4>
                 {getStatusBadge(casoSelecionado.status)}
               </div>
 
-              <div className="detalhe-secao">
+              <div className="casos-detalhe-block">
                 <h4>informações</h4>
                 <p>
                   <strong>criado:</strong> {new Date(casoSelecionado.created_at).toLocaleString()}
@@ -265,7 +323,7 @@ const CasosCFD = () => {
                 </p>
               </div>
 
-              <div className="detalhe-secao">
+              <div className="casos-detalhe-block">
                 <h4>arquivos</h4>
                 <p>allrun: {casoSelecionado.tem_allrun ? 'sim' : 'não'}</p>
                 <p>geometria stl: {casoSelecionado.tem_stl ? 'sim' : 'não'}</p>
@@ -273,7 +331,7 @@ const CasosCFD = () => {
               </div>
 
               {casoSelecionado.tempos_disponiveis && (
-                <div className="detalhe-secao">
+                <div className="casos-detalhe-block">
                   <h4>tempos disponíveis ({casoSelecionado.tempos_disponiveis.length})</h4>
                   <div className="tempos-list">
                     {casoSelecionado.tempos_disponiveis.slice(0, 10).map((t) => (
@@ -289,7 +347,7 @@ const CasosCFD = () => {
               )}
 
               {casoSelecionado.configuracao && (
-                <div className="detalhe-secao">
+                <div className="casos-detalhe-block">
                   <h4>configuração temporal</h4>
                   <p>
                     <strong>tempo inicial:</strong> {casoSelecionado.configuracao.startTime}
@@ -303,21 +361,22 @@ const CasosCFD = () => {
                 </div>
               )}
 
-              <div className="detalhe-secao">
+              <div className="casos-detalhe-block">
                 <h4>como executar</h4>
-                <pre className="comando-wsl">
-                  {`# abrir wsl
-wsl
-
-# navegar até o caso
-cd ${casoSelecionado.caminho.replace(/\\/g, '/').replace('C:', '/mnt/c')}
-
-# carregar openfoam
-source /opt/openfoam11/etc/bashrc
-
-# executar
-./Allrun`}
-                </pre>
+                <p className="casos-comando-hint">
+                  substitua os marcadores &lt;unidade&gt;, &lt;utilizador&gt; e &lt;pasta-do-projeto&gt; pelo seu
+                  ambiente windows.
+                </p>
+                <pre className="casos-comando-wsl">{buildComandoWsl(casoSelecionado)}</pre>
+                <button
+                  type="button"
+                  className="btn-mode-option casos-comando-copy"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(buildComandoWsl(casoSelecionado));
+                  }}
+                >
+                  copiar comandos
+                </button>
               </div>
             </div>
           </div>

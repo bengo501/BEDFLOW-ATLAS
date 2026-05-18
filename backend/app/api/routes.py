@@ -179,6 +179,47 @@ async def list_jobs(status: str = None, job_type: str = None):
     
     return all_jobs
 
+
+def _all_job_stores():
+    from backend.app.api.routes_integrated import jobs_store_integrated
+    return jobs_store, jobs_store_integrated
+
+
+@router.post("/jobs/cancel", tags=["jobs"])
+async def cancel_jobs():
+    """
+    encerra jobs em fila ou em execução (marca como falhou).
+    """
+    now = datetime.now()
+    count = 0
+    for store in _all_job_stores():
+        for job in store.values():
+            if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+                job.status = JobStatus.FAILED
+                job.error_message = "encerrado pelo utilizador"
+                job.updated_at = now
+                count += 1
+    return {"cancelled": count, "message": f"{count} job(s) encerrado(s)"}
+
+
+@router.post("/jobs/restart", tags=["jobs"])
+async def restart_jobs():
+    """
+    reinicia jobs falhos, voltando à fila com progresso zerado.
+    """
+    now = datetime.now()
+    count = 0
+    for store in _all_job_stores():
+        for job in store.values():
+            if job.status == JobStatus.FAILED:
+                job.status = JobStatus.QUEUED
+                job.progress = 0
+                job.error_message = None
+                job.updated_at = now
+                count += 1
+    return {"restarted": count, "message": f"{count} job(s) reiniciado(s)"}
+
+
 @router.get("/files/{file_type}", response_model=FileListResponse, tags=["files"])
 async def list_files(file_type: str):
     """

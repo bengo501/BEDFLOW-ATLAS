@@ -58,6 +58,10 @@ syncAxiosUserHeader();
 
 export function parseApiError(err) {
   if (err == null) return 'erro desconhecido';
+  const status = err.response?.status;
+  if (status === 405) {
+    return 'metodo nao permitido (405): o backend precisa ser reiniciado para expor GET /api/simulations/{id}';
+  }
   const data = err.response?.data;
   if (data == null) return err.message || 'erro de rede';
   const d = data.detail;
@@ -124,6 +128,16 @@ export const listJobs = async (status = null, jobType = null) => {
   if (jobType) params.job_type = jobType;
   
   const response = await api.get('/api/jobs', { params });
+  return response.data;
+};
+
+export const cancelJobs = async () => {
+  const response = await api.post('/api/jobs/cancel');
+  return response.data;
+};
+
+export const restartJobs = async () => {
+  const response = await api.post('/api/jobs/restart');
   return response.data;
 };
 
@@ -261,6 +275,34 @@ export const listModels3D = async ({
   return response.data;
 };
 
+const normalizeModelPath = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
+
+/** une modelos da base com malhas geradas no projeto (scan do viewer) */
+export function mergeDbModelsWithProjectMeshes(dbItems, meshResponse) {
+  const dbList = Array.isArray(dbItems) ? dbItems : [];
+  const meshes = Array.isArray(meshResponse?.meshes) ? meshResponse.meshes : [];
+  const knownPaths = new Set();
+  for (const m of dbList) {
+    if (m.blend_file_path) knownPaths.add(normalizeModelPath(m.blend_file_path));
+    if (m.stl_file_path) knownPaths.add(normalizeModelPath(m.stl_file_path));
+  }
+  const extras = meshes
+    .filter((mesh) => !knownPaths.has(normalizeModelPath(mesh.relative_path)))
+    .map((mesh) => ({
+      id: `scan-${mesh.mesh_id}`,
+      name: mesh.filename || mesh.mesh_id,
+      description: mesh.relative_path,
+      created_at: mesh.mtime_iso,
+      blend_file_path: mesh.format === 'blend' ? mesh.relative_path : null,
+      stl_file_path: ['stl', 'obj', 'ply', 'gltf', 'glb'].includes(mesh.format) ? mesh.relative_path : null,
+      packing_method: mesh.source_hint || mesh.format,
+      mesh_id: mesh.mesh_id,
+      size_bytes: mesh.size_bytes,
+      from_project_scan: true,
+    }));
+  return [...dbList, ...extras];
+}
+
 // feed agregado para a pagina de historico
 export const getHistoryFeed = async ({
   page = 1,
@@ -289,8 +331,20 @@ export const getHistoryFeed = async ({
 
 // detalhes completos de uma simulacao pelo id
 export const getSimulation = async (simulationId) => {
-  const response = await api.get(`/api/simulations/${simulationId}`);
-  return response.data;
+  const id = Number(simulationId);
+  try {
+    const response = await api.get(`/api/simulations/${simulationId}`);
+    return response.data;
+  } catch (err) {
+    // backend antigo sem GET por id devolve 405; recuperar da lista paginada
+    if (err?.response?.status === 405) {
+      const list = await listSimulations({ page: 1, limit: 100 });
+      const items = Array.isArray(list?.items) ? list.items : [];
+      const found = items.find((row) => Number(row.id) === id);
+      if (found) return found;
+    }
+    throw err;
+  }
 };
 
 // remover simulacao do banco
