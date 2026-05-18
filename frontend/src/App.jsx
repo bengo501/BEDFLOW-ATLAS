@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Dashboard from './components/Dashboard'
-import SimulationHistory from './components/SimulationHistory'
 import ComparisonPage from './components/ComparisonPage'
 import BedWizard from './components/BedWizard'
 import CasosCFD from './components/CasosCFD'
 import JobStatus from './components/JobStatus'
-import ResultsList from './components/ResultsList'
+import ResultsSimulationsPage from './components/results/ResultsSimulationsPage'
+import ResultsModels3DPage from './components/results/ResultsModels3DPage'
 import TemplateEditor from './components/TemplateEditor'
 import ProfilePage from './components/ProfilePage'
 import ReportsPage from './components/ReportsPage'
@@ -30,13 +30,16 @@ const SIMPLE_MODE_TABS = new Set([
   'mesh-viewer',
   'casos',
   'jobs',
-  'results',
-  'history',
+  'results-simulations',
+  'results-models',
   'settings',
 ])
 
 /** secções da sidebar que ainda têm submenu (dropdown) */
-const COLLAPSIBLE_NAV_SECTIONS = new Set(['templates', 'simulation', 'analysis', 'results'])
+const COLLAPSIBLE_NAV_SECTIONS = new Set(['templates', 'analysis', 'history', 'history-results'])
+
+/** abas dentro de histórico → resultados */
+const HISTORY_RESULTS_TABS = new Set(['casos', 'results-simulations', 'results-models'])
 
 function App() {
   const { language, toggleLanguage, t, setLanguage } = useLanguage();
@@ -221,20 +224,23 @@ function App() {
   }, [setDevMode, setLanguage, setSimpleMode, setThemeMode]);
 
   const navigateToTab = (tab) => {
-    const tabNorm = tab === 'cfd' ? 'casos' : tab
+    let tabNorm = tab === 'cfd' ? 'casos' : tab
+    if (tabNorm === 'results' || tabNorm === 'history') {
+      tabNorm = 'results-simulations'
+    }
     const sectionByTab = {
       dashboard: 'dashboard',
       wizard: 'create',
       'mesh-viewer': 'dashboard',
       templates: 'templates',
       'templates-saved': 'templates',
-      casos: 'simulation',
+      casos: 'history',
       database: 'database',
       comparisons: 'analysis',
       reports: 'analysis',
-      jobs: 'results',
-      results: 'results',
-      history: 'results',
+      jobs: 'history',
+      'results-simulations': 'history',
+      'results-models': 'history',
       profile: 'profile',
       settings: 'settings',
     }
@@ -246,6 +252,10 @@ function App() {
       })
       if (sec && COLLAPSIBLE_NAV_SECTIONS.has(sec)) {
         next[sec] = true
+      }
+      if (HISTORY_RESULTS_TABS.has(tabNorm)) {
+        next.history = true
+        next['history-results'] = true
       }
       return next
     })
@@ -274,24 +284,27 @@ function App() {
   };
 
   const toggleSection = (section) => {
-    setExpandedSections(prev => {
-      // se a seção já está aberta, fecha ela
+    setExpandedSections((prev) => {
       if (prev[section]) {
-        return {
-          ...prev,
-          [section]: false
-        };
+        const next = { ...prev, [section]: false }
+        if (section === 'history') {
+          next['history-results'] = false
+        }
+        return next
       }
-      
-      // se não está aberta, fecha todas as outras e abre apenas esta
-      const newState = {};
-      Object.keys(prev).forEach(key => {
-        newState[key] = false;
-      });
-      newState[section] = true;
-      
-      return newState;
-    });
+      if (section === 'history-results') {
+        return { ...prev, history: true, 'history-results': true }
+      }
+      const newState = {}
+      Object.keys(prev).forEach((key) => {
+        newState[key] = false
+      })
+      newState[section] = true
+      if (section === 'history' && prev['history-results']) {
+        newState['history-results'] = true
+      }
+      return newState
+    })
   }
 
   return (
@@ -512,34 +525,80 @@ function App() {
             <div className="nav-section">
               <div
                 className="nav-section-header"
-                onClick={() => toggleSection('simulation')}
+                onClick={() => toggleSection('history')}
                 role="button"
                 tabIndex={0}
-                aria-expanded={!!expandedSections.simulation}
+                aria-expanded={!!expandedSections.history}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    toggleSection('simulation');
+                    toggleSection('history');
                   }
                 }}
               >
                 <h3 className="nav-section-title">
-                  <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="simulation" className="section-icon" location="sidebar" />
-                  {t('simulation')}
+                  <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="histórico" className="section-icon" location="sidebar" />
+                  {language === 'pt' ? 'histórico' : 'history'}
                 </h3>
                 <span className="nav-folder-toggle" aria-hidden="true">
-                  {expandedSections.simulation ? '−' : '+'}
+                  {expandedSections.history ? '−' : '+'}
                 </span>
               </div>
-              {expandedSections.simulation && (
+              {expandedSections.history && (
                 <div className="nav-subsection">
                   <button
-                    className={`nav-item ${activeTab === 'casos' ? 'active' : ''}`}
-                    onClick={() => navigateToTab('casos')}
+                    className={`nav-item ${activeTab === 'jobs' ? 'active' : ''}`}
+                    onClick={() => navigateToTab('jobs')}
                   >
-                    <ThemeIcon light="folderLight.png" dark="folderLight.png" alt="casos cfd" className="nav-icon" />
-                    <span className="nav-label">{t('casosCfd')}</span>
+                    <ThemeIcon light="jobLight.png" dark="jobLight.png" alt="jobs" className="nav-icon" />
+                    <span className="nav-label">{t('jobs')} ({systemStatus?.jobs?.total || 0})</span>
                   </button>
+
+                  <div className="nav-subsection-nested">
+                    <div
+                      className="nav-section-header nav-subsection-header"
+                      onClick={() => toggleSection('history-results')}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={!!expandedSections['history-results']}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleSection('history-results');
+                        }
+                      }}
+                    >
+                      <h4 className="nav-subsection-title">{t('results')}</h4>
+                      <span className="nav-folder-toggle" aria-hidden="true">
+                        {expandedSections['history-results'] ? '−' : '+'}
+                      </span>
+                    </div>
+                    {expandedSections['history-results'] && (
+                      <div className="nav-nested-subsection">
+                        <button
+                          className={`nav-item ${activeTab === 'casos' ? 'active' : ''}`}
+                          onClick={() => navigateToTab('casos')}
+                        >
+                          <ThemeIcon light="folderLight.png" dark="folderLight.png" alt="casos cfd" className="nav-icon" />
+                          <span className="nav-label">{t('casosCfd')}</span>
+                        </button>
+                        <button
+                          className={`nav-item ${activeTab === 'results-simulations' ? 'active' : ''}`}
+                          onClick={() => navigateToTab('results-simulations')}
+                        >
+                          <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="simulações" className="nav-icon" />
+                          <span className="nav-label">{language === 'pt' ? 'simulações' : 'simulations'}</span>
+                        </button>
+                        <button
+                          className={`nav-item ${activeTab === 'results-models' ? 'active' : ''}`}
+                          onClick={() => navigateToTab('results-models')}
+                        >
+                          <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="modelos 3d" className="nav-icon" />
+                          <span className="nav-label">{language === 'pt' ? 'modelos 3D' : '3D models'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -601,55 +660,6 @@ function App() {
             </div>
             )}
 
-            <div className="nav-section">
-              <div
-                className="nav-section-header"
-                onClick={() => toggleSection('results')}
-                role="button"
-                tabIndex={0}
-                aria-expanded={!!expandedSections.results}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleSection('results');
-                  }
-                }}
-              >
-                <h3 className="nav-section-title">
-                  <ThemeIcon light="cfd_gear_white.png" dark="cfd_gear_white.png" alt="results" className="section-icon" location="sidebar" />
-                  {t('results')}
-                </h3>
-                <span className="nav-folder-toggle" aria-hidden="true">
-                  {expandedSections.results ? '−' : '+'}
-                </span>
-              </div>
-              {expandedSections.results && (
-                <div className="nav-subsection">
-                  <button
-                    className={`nav-item ${activeTab === 'jobs' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('jobs')}
-                  >
-                    <ThemeIcon light="jobLight.png" dark="jobLight.png" alt="jobs" className="nav-icon" />
-                    <span className="nav-label">{t('jobs')} ({systemStatus?.jobs?.total || 0})</span>
-                  </button>
-                  <button
-                    className={`nav-item ${activeTab === 'results' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('results')}
-                  >
-                    <ThemeIcon light="folderLight.png" dark="folderLight.png" alt="results" className="nav-icon" />
-                    <span className="nav-label">{t('results')}</span>
-                  </button>
-                  <button
-                    className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('history')}
-                  >
-                    <ThemeIcon light="folderLight.png" dark="folderLight.png" alt="histórico" className="nav-icon" />
-                    <span className="nav-label">{language === 'pt' ? 'histórico' : 'history'}</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
             {!simpleMode && (
             <div className="nav-section">
               <button
@@ -707,15 +717,15 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'results' && (
+          {activeTab === 'results-simulations' && (
             <div className="tab-content">
-              <ResultsList />
+              <ResultsSimulationsPage />
             </div>
           )}
 
-          {activeTab === 'history' && (
+          {activeTab === 'results-models' && (
             <div className="tab-content">
-              <SimulationHistory />
+              <ResultsModels3DPage />
             </div>
           )}
 

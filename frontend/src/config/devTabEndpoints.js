@@ -48,19 +48,23 @@ export const TAB_DEV_INFO = {
     api: ['GET /api/jobs', 'GET /api/job/{job_id}'],
     persistence: ['tabela jobs (memória/serviço de filas conforme implementação)'],
   },
-  results: {
+  'results-simulations': {
     api: [
+      'GET /api/simulations',
+      'GET /api/simulations/{id}',
       'GET /api/results/simulation/{simulation_id}',
+      'POST /api/simulations',
+      'DELETE /api/simulations/{id}',
+    ],
+    persistence: ['simulations', 'results'],
+  },
+  'results-models': {
+    api: [
+      'GET /api/models-3d',
+      'GET /api/viewer/meshes',
       'GET /api/files/{file_type}',
     ],
-    persistence: ['results', 'simulations', 'ficheiros em generated/'],
-  },
-  history: {
-    api: [
-      'GET /api/simulations/recent',
-      'GET /api/simulations',
-    ],
-    persistence: ['simulations', 'beds', 'results'],
+    persistence: ['beds', 'modelos 3d em disco', 'ficheiros em generated/'],
   },
   comparisons: {
     api: ['GET /api/simulations', 'GET /api/results/simulation/{id}'],
