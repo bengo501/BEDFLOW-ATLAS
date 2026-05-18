@@ -22,6 +22,14 @@
   object-fit: contain;
 }
 
+[data-theme='light'] .dashboard-title-icon {
+  filter: brightness(0);
+}
+
+[data-theme='dark'] .dashboard-title-icon {
+  filter: brightness(0) invert(1);
+}
+
 .dashboard-header h1 {
   font-size: 32px;
   line-height: 1.15;
@@ -593,9 +601,22 @@
   margin: 0.25rem 0;
 }
 
+.simulations-list--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.simulations-list--compact .pagination-controls {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--subcard-border-color, var(--border));
+}
+
 .simulation-card {
-  background: var(--surface-subtle);
-  border: 1px solid var(--subcard-border-color, var(--border));
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--subcard-border-color, rgba(0, 0, 0, 0.88));
   border-radius: var(--radius-card, 5px);
   padding: 0.4rem 0.5rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -899,7 +920,7 @@
 
 /* modo escuro: cartões de simulação mais escuros, títulos em preto e ícones em branco */
 [data-theme="dark"] .simulation-card {
-  background: #1f1f1f;
+  background: var(--card-bg, #1f1f1f);
 }
 
 [data-theme="dark"] .simulation-status .status-icon {

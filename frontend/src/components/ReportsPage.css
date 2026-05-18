@@ -232,17 +232,18 @@
 .reports-actions-mock {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
 }
 
 .reports-actions-mock button {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 500;
+  padding: 0.38rem 0.75rem;
+  border-radius: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--subcard-border-color, var(--border));
-  background: var(--card-bg);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -301,49 +302,53 @@
   color: var(--primary);
 }
 
-/* modal */
+/* modal — área útil: abaixo do header, à direita da sidebar */
 .reports-modal-overlay {
   position: fixed;
-  inset: 0;
-  z-index: 1200;
+  top: var(--app-sidebar-top-pad, 76px);
+  left: var(--app-sidebar-width, 232px);
+  right: 0;
+  bottom: 0;
+  z-index: 1010;
   background: rgba(0, 0, 0, 0.45);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 1.5rem 1rem;
+  padding: 1rem;
+  box-sizing: border-box;
   overflow-y: auto;
 }
 
 .reports-modal {
-  width: 100%;
-  max-width: 720px;
-  max-height: calc(100vh - 3rem);
-  overflow-y: auto;
+  width: min(520px, calc(100vw - var(--app-sidebar-width, 232px) - 2.5rem));
+  max-height: min(78vh, calc(100vh - var(--app-sidebar-top-pad, 76px) - 2.5rem));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--card-bg);
   border: 1px solid var(--subcard-border-color, var(--border));
-  border-radius: 6px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  margin-top: 0.5rem;
+  border-radius: var(--radius-card, 5px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+  margin: 0;
 }
 
 .reports-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   background: var(--card-bg);
-  z-index: 1;
 }
 
 .reports-modal-header h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-family: var(--font-ui);
   color: var(--text);
+  line-height: 1.3;
 }
 
 .reports-modal-close {
@@ -363,12 +368,16 @@
 }
 
 .reports-modal-loading {
-  padding: 2rem 1.25rem;
+  padding: 1.25rem 1rem;
   color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .reports-modal-body {
-  padding: 1rem 1.25rem 1.5rem;
+  padding: 0.75rem 1rem 1rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .reports-field {
@@ -383,36 +392,36 @@
 .reports-field input,
 .reports-field select,
 .reports-field textarea {
-  padding: 0.5rem 0.65rem;
-  border-radius: 8px;
+  padding: 0.38rem 0.55rem;
+  border-radius: 5px;
   border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--bg);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-family: var(--font-ui);
 }
 
 .reports-field-grow textarea {
-  min-height: 200px;
+  min-height: 120px;
   resize: vertical;
 }
 
 .reports-modal-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem;
-  margin: 0.5rem 0 1.25rem;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0.65rem;
 }
 
 .reports-modal-actions button {
-  padding: 0.45rem 0.9rem;
-  border-radius: 8px;
+  padding: 0.38rem 0.75rem;
+  border-radius: 5px;
   border: 1px solid var(--subcard-border-color, var(--border));
   background: var(--primary);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-family: var(--font-ui);
 }
 
@@ -585,4 +594,18 @@
 .reports-attach-row button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .reports-modal-overlay {
+    left: 0;
+    top: var(--app-sidebar-top-pad, 70px);
+    bottom: 5.75rem;
+    padding: 0.65rem;
+  }
+
+  .reports-modal {
+    width: min(100%, calc(100vw - 1.3rem));
+    max-height: min(82vh, calc(100vh - var(--app-sidebar-top-pad, 70px) - 6.5rem));
+  }
 }

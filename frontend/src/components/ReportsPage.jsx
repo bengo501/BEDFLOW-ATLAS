@@ -805,7 +805,7 @@ export default function ReportsPage() {
                     <textarea
                       value={localBody}
                       onChange={(e) => setLocalBody(e.target.value)}
-                      rows={12}
+                      rows={8}
                       placeholder={
                         pt
                           ? 'sumário, método, conclusões, referências…'

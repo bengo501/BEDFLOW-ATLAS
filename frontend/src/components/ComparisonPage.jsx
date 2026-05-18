@@ -1,9 +1,32 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '../context/LanguageContext';
 import ThemeIcon from './ThemeIcon';
 import BackendConnectionError from './BackendConnectionError';
+import PaginationControls from './PaginationControls';
 import { listSimulations } from '../services/api';
 import './ComparisonPage.css';
+
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
+}
 
 function isConnectionError(err) {
   if (!err) return false;
@@ -95,6 +118,8 @@ function ComparisonPage() {
   const [loadError, setLoadError] = useState(null);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [compareItems, setCompareItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(4);
 
   const loadSimulations = useCallback(async () => {
     setLoading(true);
@@ -153,6 +178,7 @@ function ComparisonPage() {
   }, [showCompareModal]);
 
   const handleSearchChange = (event) => {
+    setPage(1);
     setSearchTerm(event.target.value);
   };
 
@@ -176,6 +202,17 @@ function ComparisonPage() {
     const matchesFilter = activeFilter === 'all' || sim.status === activeFilter;
     return matchesSearch && matchesFilter;
   });
+
+  const totalFiltered = filteredSimulations.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit) || 1);
+  const paginatedSimulations = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredSimulations.slice(start, start + limit);
+  }, [filteredSimulations, page, limit]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const getStatusText = (status) => {
     switch (status) {
@@ -239,13 +276,13 @@ function ComparisonPage() {
       </div>
 
       <div className="comparison-page-toolbar">
-        <button type="button" className="comparison-refresh-btn" onClick={loadSimulations} disabled={loading}>
-          <ThemeIcon light="refreshLight.png" dark="refreshDark.png" alt="" className="comparison-refresh-icon" />
+        <button type="button" className="comparison-toolbar-btn" onClick={loadSimulations} disabled={loading}>
+          <IconRefresh className="comparison-toolbar-btn__icon" />
           {language === 'pt' ? 'Atualizar' : 'Refresh'}
         </button>
         <button
           type="button"
-          className="comparison-compare-btn"
+          className="comparison-toolbar-btn comparison-toolbar-btn--primary"
           onClick={openCompareModal}
           disabled={selectedSimulations.length !== 2}
           title={
@@ -256,7 +293,6 @@ function ComparisonPage() {
               : ''
           }
         >
-          <ThemeIcon light="compareLight.png" dark="compareDark.png" alt="" className="comparison-refresh-icon" />
           {language === 'pt' ? 'Comparar' : 'Compare'}
           {selectedSimulations.length > 0 && (
             <span className="compare-count">({selectedSimulations.length}/2)</span>
@@ -299,7 +335,10 @@ function ComparisonPage() {
                     key={opt.key}
                     type="button"
                     className={`filter-chip ${activeFilter === opt.key ? 'active' : ''}`}
-                    onClick={() => setActiveFilter(opt.key)}
+                    onClick={() => {
+                      setPage(1);
+                      setActiveFilter(opt.key);
+                    }}
                   >
                     {language === 'pt' ? opt.labelPt : opt.labelEn} ({getFilterCount(opt.key)})
                   </button>
@@ -325,8 +364,9 @@ function ComparisonPage() {
             )}
 
             {!emptyNoData && filteredSimulations.length > 0 && (
+              <>
               <div className="simulation-cards-grid">
-                {filteredSimulations.map((sim) => (
+                {paginatedSimulations.map((sim) => (
                   <div
                     key={sim.id}
                     className={`simulation-card ${selectedSimulations.includes(sim.id) ? 'selected' : ''} ${
@@ -360,7 +400,7 @@ function ComparisonPage() {
                           light="job_monitor_clock_white.png"
                           dark="job_monitor_clock_white.png"
                           alt=""
-                          className="meta-icon"
+                          className="comparison-date-icon"
                         />
                         <span>{sim.date}</span>
                       </div>
@@ -379,21 +419,40 @@ function ComparisonPage() {
                   </div>
                 ))}
               </div>
+              <PaginationControls
+                page={page}
+                totalPages={totalPages}
+                total={totalFiltered}
+                limit={limit}
+                loading={loading}
+                onPageChange={setPage}
+                onLimitChange={(value) => {
+                  setPage(1);
+                  setLimit(value);
+                }}
+                label={language === 'pt' ? 'Comparações' : 'Comparisons'}
+                limitOptions={[4, 8, 12, 20]}
+                pt={language === 'pt'}
+              />
+              </>
             )}
           </>
         )}
       </div>
 
-      {showCompareModal && compareItems.length === 2 && (
-        <CompareModal
-          leftItem={compareItems[0]}
-          rightItem={compareItems[1]}
-          onClose={closeCompareModal}
-          language={language}
-          getStatusText={getStatusText}
-          getStatusClass={getStatusClass}
-        />
-      )}
+      {showCompareModal &&
+        compareItems.length === 2 &&
+        createPortal(
+          <CompareModal
+            leftItem={compareItems[0]}
+            rightItem={compareItems[1]}
+            onClose={closeCompareModal}
+            language={language}
+            getStatusText={getStatusText}
+            getStatusClass={getStatusClass}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

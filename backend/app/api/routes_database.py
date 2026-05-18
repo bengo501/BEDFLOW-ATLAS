@@ -412,6 +412,13 @@ async def get_artifacts_storage(
         percent_of_cap=raw["percent_of_cap"],
         breakdown=[schemas.ArtifactDirBreakdown(**row) for row in raw["breakdown"]],
     )
+
+
+@router.get(
+    "/simulations/{simulation_id}",
+    response_model=schemas.SimulationResponse,
+    tags=["database", "simulations"],
+)
 async def get_simulation(
     simulation_id: int,
     db: Session = Depends(get_db),

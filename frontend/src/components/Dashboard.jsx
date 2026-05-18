@@ -350,7 +350,6 @@ function Dashboard() {
           <ThemeIcon light="analiseLight.png" dark="analiseLight.png" alt="" className="dashboard-title-icon" location="sidebar" />
           <h1>{pt ? 'Dashboard' : 'Dashboard'}</h1>
         </div>
-        <p>{pt ? 'Dados reais vindos do FastAPI e persistidos no SQLite' : 'Real data from FastAPI persisted in SQLite'}</p>
       </div>
 
       {connectionError && <BackendConnectionError message={connectionError} />}

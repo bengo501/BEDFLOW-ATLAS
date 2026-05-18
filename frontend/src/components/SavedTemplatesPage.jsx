@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import {
   listTemplates,
   saveTemplate,
+  getTemplate,
   deleteTemplate,
   duplicateTemplate,
 } from '../services/api';
@@ -105,7 +106,7 @@ function formatUpdatedLine(iso, pt) {
 /**
  * biblioteca de templates .bed persistidos no banco (api /api/templates/*).
  */
-export default function SavedTemplatesPage() {
+export default function SavedTemplatesPage({ onEditTemplate }) {
   const { language, t } = useLanguage();
   const pt = language === 'pt';
   const fileRef = useRef(null);
@@ -183,6 +184,28 @@ export default function SavedTemplatesPage() {
         setOpError(
           err.response?.data?.detail ||
             (pt ? 'Falha ao duplicar.' : 'Duplicate failed.')
+        );
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!selectedId || !onEditTemplate) return;
+    setOpError(null);
+    setConnectionError(null);
+    try {
+      const data = await getTemplate(selectedId);
+      onEditTemplate({
+        id: data.id,
+        name: data.name,
+        content: data.content,
+      });
+    } catch (err) {
+      console.error(err);
+      if (isConnectionError(err)) setConnectionError(t('backendConnectionError'));
+      else
+        setOpError(
+          err.response?.data?.detail ||
+            (pt ? 'Não foi possível abrir o editor.' : 'Could not open editor.')
         );
     }
   };
@@ -407,6 +430,9 @@ export default function SavedTemplatesPage() {
             />
 
             <div className="saved-templates-actions">
+              <button type="button" disabled={!selectedId || !onEditTemplate} onClick={() => void handleEdit()}>
+                {pt ? 'Editar template' : 'Edit template'}
+              </button>
               <button type="button" className="saved-templates-btn-with-icon" onClick={handleImportClick}>
                 <IconImportFile className="saved-templates-btn-svg" />
                 {pt ? 'Importar ficheiro' : 'Import file'}

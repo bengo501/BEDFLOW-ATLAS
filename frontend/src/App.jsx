@@ -56,6 +56,7 @@ function App() {
   const [showUserSwitcher, setShowUserSwitcher] = useState(false)
   const [expandedSections, setExpandedSections] = useState({})
   const [bootMeshViewerId, setBootMeshViewerId] = useState(null)
+  const [templateEditPayload, setTemplateEditPayload] = useState(null)
   const mainContentRef = useRef(null)
   const settingsAppliedRef = useRef(false)
 
@@ -726,11 +727,21 @@ function App() {
 
           {activeTab === 'templates' && (
             <div className="tab-content">
-              <TemplateEditor />
+              <TemplateEditor
+                initialEdit={templateEditPayload}
+                onEditConsumed={() => setTemplateEditPayload(null)}
+              />
             </div>
           )}
 
-          {activeTab === 'templates-saved' && <SavedTemplatesPage />}
+          {activeTab === 'templates-saved' && (
+            <SavedTemplatesPage
+              onEditTemplate={(payload) => {
+                setTemplateEditPayload(payload)
+                navigateToTab('templates')
+              }}
+            />
+          )}
 
           {activeTab === 'database' && <DatabasePage />}
 
@@ -753,7 +764,7 @@ function App() {
       {/* footer */}
       <footer className="footer">
         <div className="footer-content">
-          <div className="footer-section footer-info">
+          <div className="footer-section footer-brand">
             <div className="footer-logo">
               <ThemeIcon 
                 light="cfdPipelineLight.png" 
@@ -773,51 +784,37 @@ function App() {
               <span className="version-badge">v0.1.0</span>
               <span className="version-status">beta</span>
             </div>
-            
-            <div className="footer-section footer-academic">
+          </div>
+
+          <div className="footer-section footer-academic">
               <h4>{language === 'pt' ? 'Acadêmico' : 'Academic'}</h4>
-              <div className="academic-logos">
-                <a 
-                  href="https://vhlab.com.br/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                >
-                  <img 
-                    src="/image/logo-light.png" 
-                    alt="pucrs logo" 
-                    className="academic-logo"
-                  />
-                </a>
-                <a 
-                  href="https://portal.pucrs.br/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                >
-                  <img 
-                    src="/image/escola-politecnica.png" 
-                    alt="escola politecnica / vhlab" 
-                    className="academic-logo"
-                  />
-                </a>
-                <a 
-                  href="https://www.politecnica.pucrs.br/laboratorios/lope/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                >
-                  <img 
-                    src="/image/logo_lope.png" 
-                    alt="lope laboratorio" 
-                    className="academic-logo"
-                  />
-                </a>
-              </div>
-              <p className="academic-info">
-                <strong>{language === 'pt' ? 'Trabalho de conclusão de curso' : 'Final project'}</strong>
-                <br />
-                {language === 'pt' ? 'Ciência da computação' : 'Computer science'}
-              </p>
-              <p className="academic-year">2024/2026</p>
+            <div className="academic-logos">
+              <a href="https://portal.pucrs.br/" target="_blank" rel="noopener noreferrer">
+                <img src="/image/logo-light.png" alt="pucrs logo" className="academic-logo" />
+              </a>
+              <a href="https://vhlab.com.br/" target="_blank" rel="noopener noreferrer">
+                <img
+                  src="/image/escola-politecnica.png"
+                  alt="escola politecnica / vhlab"
+                  className="academic-logo"
+                />
+              </a>
+              <a
+                href="https://www.politecnica.pucrs.br/laboratorios/lope/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img src="/image/logo_lope.png" alt="lope laboratorio" className="academic-logo" />
+              </a>
             </div>
+          </div>
+
+          <div className="footer-section footer-tcc">
+            <h4>{language === 'pt' ? 'Trabalho de conclusão de curso' : 'Final project'}</h4>
+            <p className="footer-tcc-course">
+              {language === 'pt' ? 'Ciência da computação' : 'Computer science'}
+            </p>
+            <p className="academic-year">2024/2026</p>
           </div>
 
           <div className="footer-section footer-actions-column">

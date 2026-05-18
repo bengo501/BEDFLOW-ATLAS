@@ -109,7 +109,32 @@ async function parseToObject3D(ext, buffer) {
   throw new Error(`formato nao suportado no viewer: ${e}`);
 }
 
-function fitCameraToObject(camera, controls, root, margin = 1.35) {
+function orientBedVertical(root) {
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new THREE.Vector3());
+  const longest =
+    size.x >= size.y && size.x >= size.z ? 'x' : size.y >= size.x && size.y >= size.z ? 'y' : 'z';
+  if (longest === 'y') return;
+  if (longest === 'x') {
+    root.rotation.z = Math.PI / 2;
+  } else {
+    root.rotation.x = -Math.PI / 2;
+  }
+  root.updateMatrixWorld(true);
+}
+
+function centerOnFloor(root) {
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3());
+  const minY = box.min.y;
+  root.position.x -= center.x;
+  root.position.z -= center.z;
+  root.position.y -= minY;
+}
+
+function fitCameraToObject(camera, controls, root, margin = 1.05) {
   const box = new THREE.Box3().setFromObject(root);
   if (box.isEmpty()) return;
   const size = box.getSize(new THREE.Vector3());
@@ -134,6 +159,8 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const rootRef = useRef(null);
   const frameRef = useRef(null);
   const axesRef = useRef(null);
+  const gridRef = useRef(null);
+  const boxHelperRef = useRef(null);
 
   const [meshes, setMeshes] = useState([]);
   const [meshesForBlender, setMeshesForBlender] = useState([]);
@@ -150,6 +177,9 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
   const [err, setErr] = useState(null);
   const [wireframe, setWireframe] = useState(false);
   const [showAxes, setShowAxes] = useState(true);
+  const [viewerLightBg, setViewerLightBg] = useState(false);
+  const [showFloor, setShowFloor] = useState(true);
+  const [showBoundingBox, setShowBoundingBox] = useState(false);
   const [meta, setMeta] = useState(null);
   const [toolNotice, setToolNotice] = useState(null);
   const [toolModal, setToolModal] = useState(null);
@@ -208,9 +238,20 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     });
   }, []);
 
+  const clearBoundingBox = useCallback(() => {
+    const scene = sceneRef.current;
+    const helper = boxHelperRef.current;
+    if (scene && helper) {
+      scene.remove(helper);
+      if (helper.dispose) helper.dispose();
+      boxHelperRef.current = null;
+    }
+  }, []);
+
   const clearRoot = useCallback(() => {
     const scene = sceneRef.current;
     const old = rootRef.current;
+    clearBoundingBox();
     if (scene && old) {
       scene.remove(old);
       old.traverse((ch) => {
@@ -224,7 +265,20 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       });
       rootRef.current = null;
     }
-  }, []);
+  }, [clearBoundingBox]);
+
+  const syncBoundingBox = useCallback(
+    (root) => {
+      const scene = sceneRef.current;
+      if (!scene || !root) return;
+      clearBoundingBox();
+      if (!showBoundingBox) return;
+      const helper = new THREE.BoxHelper(root, 0x111111);
+      scene.add(helper);
+      boxHelperRef.current = helper;
+    },
+    [clearBoundingBox, showBoundingBox],
+  );
 
   const loadSelectedMesh = useCallback(async () => {
     const id = selectedId.trim();
@@ -251,11 +305,14 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       const buffer = await res.arrayBuffer();
       const obj = await parseToObject3D(ext || 'stl', buffer);
       applyWireframe(obj, wireframe);
+      orientBedVertical(obj);
+      centerOnFloor(obj);
 
       const scene = sceneRef.current;
       if (scene) {
         scene.add(obj);
         rootRef.current = obj;
+        syncBoundingBox(obj);
         const cam = cameraRef.current;
         const ctr = controlsRef.current;
         if (cam && ctr) fitCameraToObject(cam, ctr, obj);
@@ -282,7 +339,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     } finally {
       setLoadingMesh(false);
     }
-  }, [selectedId, meshes, wireframe, clearRoot, applyWireframe, pt]);
+  }, [selectedId, meshes, wireframe, clearRoot, applyWireframe, syncBoundingBox, pt]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -322,6 +379,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
 
     const grid = new THREE.GridHelper(2, 20, 0x444a55, 0x2f343d);
     scene.add(grid);
+    gridRef.current = grid;
 
     const axes = new THREE.AxesHelper(0.15);
     axes.visible = true;
@@ -359,13 +417,28 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       rendererRef.current = null;
       controlsRef.current = null;
       axesRef.current = null;
+      gridRef.current = null;
     };
   }, [clearRoot]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    scene.background = new THREE.Color(viewerLightBg ? 0xf4f4f4 : 0x1a1d24);
+    const grid = gridRef.current;
+    if (grid) grid.visible = showFloor;
+  }, [viewerLightBg, showFloor]);
 
   useEffect(() => {
     const ax = axesRef.current;
     if (ax) ax.visible = showAxes;
   }, [showAxes]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root) syncBoundingBox(root);
+    else clearBoundingBox();
+  }, [showBoundingBox, syncBoundingBox, clearBoundingBox]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -471,17 +544,13 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           className="mesh-viewer-page-title-icon"
         />
         <h1 className="mesh-viewer-page-title">
-          {pt ? 'Visualização 3d' : '3d visualization'}
+          {pt ? 'Visualização 3D' : '3D visualization'}
         </h1>
       </header>
       <div className="mesh-viewer-layout">
-        <aside className="mesh-viewer-sidebar ui-raised-surface">
-          <p className="mesh-viewer-lead">
-            {pt
-              ? 'malhas servidas pela api a partir de local_data e pastas geradas.'
-              : 'meshes served by the api from local_data and generated folders.'}
-          </p>
-
+        <aside
+          className={`mesh-viewer-sidebar ui-raised-surface${meta ? ' mesh-viewer-sidebar--has-meta' : ''}`}
+        >
           <section className="mesh-viewer-subpanel">
           <label className="mesh-viewer-label">{pt ? 'pesquisar' : 'search'}</label>
           <div className="mesh-viewer-search-row">
@@ -493,11 +562,11 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
             />
             <button
               type="button"
-              className="mesh-viewer-btn mesh-viewer-btn-refresh"
+              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
               onClick={() => void refreshList()}
               disabled={loadingList}
             >
-              <IconRefresh className="mesh-viewer-refresh-icon" />
+              <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
               {loadingList ? '…' : pt ? 'atualizar' : 'refresh'}
             </button>
           </div>
@@ -537,42 +606,76 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
 
           {err ? <div className="mesh-viewer-error">{err}</div> : null}
 
-          <section className="mesh-viewer-subpanel">
-          <div className="mesh-viewer-actions">
-            <button
-              type="button"
-              className="mesh-viewer-btn primary"
-              disabled={loadingMesh || !selectedId}
-              onClick={loadSelectedMesh}
-            >
-              {loadingMesh
-                ? pt
-                  ? 'a carregar…'
-                  : 'loading…'
-                : pt
-                  ? 'carregar modelo'
-                  : 'load model'}
-            </button>
-            <label className="mesh-viewer-check">
-              <input
-                type="checkbox"
-                checked={wireframe}
-                onChange={(e) => setWireframe(e.target.checked)}
-              />
-              {pt ? 'wireframe' : 'wireframe'}
-            </label>
-            <button type="button" className="mesh-viewer-btn" onClick={resetCamera}>
-              {pt ? 'repor câmara' : 'reset camera'}
-            </button>
-            <label className="mesh-viewer-check">
-              <input
-                type="checkbox"
-                checked={showAxes}
-                onChange={(e) => setShowAxes(e.target.checked)}
-              />
-              {t('meshAxes')}
-            </label>
-          </div>
+          <section className="mesh-viewer-subpanel mesh-viewer-subpanel--controls">
+            <div className="mesh-viewer-actions-primary">
+              <button
+                type="button"
+                className="mesh-viewer-hub-btn"
+                disabled={loadingMesh || !selectedId}
+                onClick={loadSelectedMesh}
+              >
+                <ThemeIcon
+                  light="modelLight-removebg-preview.png"
+                  dark="modelDark-removebg-preview.png"
+                  alt=""
+                  className="mesh-viewer-hub-btn__icon mesh-viewer-hub-btn__icon--img"
+                  location="page"
+                />
+                {loadingMesh
+                  ? pt
+                    ? 'a carregar…'
+                    : 'loading…'
+                  : pt
+                    ? 'carregar modelo'
+                    : 'load model'}
+              </button>
+              <button type="button" className="mesh-viewer-hub-btn" onClick={resetCamera}>
+                <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+                {pt ? 'repor câmara' : 'reset camera'}
+              </button>
+            </div>
+            <div className="mesh-viewer-actions-checks" role="group" aria-label={pt ? 'opcoes do visualizador' : 'viewer options'}>
+              <label className="mesh-viewer-check">
+                <input
+                  type="checkbox"
+                  checked={wireframe}
+                  onChange={(e) => setWireframe(e.target.checked)}
+                />
+                {pt ? 'wireframe' : 'wireframe'}
+              </label>
+              <label className="mesh-viewer-check">
+                <input
+                  type="checkbox"
+                  checked={showAxes}
+                  onChange={(e) => setShowAxes(e.target.checked)}
+                />
+                {t('meshAxes')}
+              </label>
+              <label className="mesh-viewer-check">
+                <input
+                  type="checkbox"
+                  checked={viewerLightBg}
+                  onChange={(e) => setViewerLightBg(e.target.checked)}
+                />
+                {pt ? 'fundo claro' : 'light background'}
+              </label>
+              <label className="mesh-viewer-check">
+                <input
+                  type="checkbox"
+                  checked={showFloor}
+                  onChange={(e) => setShowFloor(e.target.checked)}
+                />
+                {pt ? 'chão (grelha)' : 'floor (grid)'}
+              </label>
+              <label className="mesh-viewer-check">
+                <input
+                  type="checkbox"
+                  checked={showBoundingBox}
+                  onChange={(e) => setShowBoundingBox(e.target.checked)}
+                />
+                {pt ? 'bounding box' : 'bounding box'}
+              </label>
+            </div>
           </section>
 
           <section className="mesh-viewer-subpanel mesh-viewer-subpanel--tools">
@@ -606,7 +709,8 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           </section>
 
           {meta ? (
-            <section className="mesh-viewer-subpanel mesh-viewer-subpanel--meta">
+            <section className="mesh-viewer-subpanel mesh-viewer-subpanel--meta" aria-live="polite">
+            <h3 className="mesh-viewer-meta-title">{pt ? 'dados do modelo' : 'model data'}</h3>
             <dl className="mesh-viewer-dl">
               <dt>{pt ? 'ficheiro' : 'file'}</dt>
               <dd>{meta.filename}</dd>

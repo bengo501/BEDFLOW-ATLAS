@@ -363,6 +363,16 @@ export const saveTemplate = async (payload) => {
   return response.data;
 };
 
+export const updateTemplate = async (templateId, payload) => {
+  const response = await api.put(`/api/templates/${templateId}`, {
+    name: payload.name,
+    content: payload.content,
+    tag: payload.tag ?? 'bed',
+    source: payload.source ?? 'editor',
+  });
+  return response.data;
+};
+
 // apaga template sem corpo de resposta util
 export const deleteTemplate = async (templateId) => {
   await api.delete(`/api/templates/${templateId}`);
@@ -585,16 +595,6 @@ export const getCasoDetalhes = async (nomeCaso) => {
 
 export const deleteCaso = async (nomeCaso) => {
   const r = await api.delete(`/api/casos/${encodeURIComponent(nomeCaso)}`);
-  return r.data;
-};
-
-export const updateTemplate = async (templateId, payload) => {
-  const r = await api.put(`/api/templates/${templateId}`, {
-    name: payload.name,
-    content: payload.content,
-    tag: payload.tag ?? 'bed',
-    source: payload.source ?? 'editor',
-  });
   return r.data;
 };
 
