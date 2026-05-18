@@ -1512,6 +1512,20 @@ legend {
   align-items: start;
 }
 
+.modal-body--footer-saiba-single {
+  grid-template-columns: 1fr;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+
+.footer-saiba-section--solo {
+  max-height: none;
+}
+
+.footer-saiba-section--solo .footer-saiba-section h3 {
+  display: none;
+}
+
 @media (max-width: 780px) {
   .modal-body--footer-saiba {
     grid-template-columns: 1fr;
@@ -2301,12 +2315,13 @@ legend {
   font-weight: 700;
 }
 
-/* coluna de ações do footer: créditos + saiba mais */
+/* coluna de ações do footer: créditos + projeto / tecnologias / banco de dados */
 .footer-actions-column {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 0.45rem;
-  min-width: 118px;
+  min-width: 140px;
   justify-self: end;
   align-self: start;
 }
@@ -2405,6 +2420,15 @@ legend {
 .modal-footer-saiba-mais {
   max-width: min(96vw, 920px);
   width: 100%;
+}
+
+.modal-footer-saiba-mais.modal-footer-saiba-mais--project {
+  max-width: min(92vw, 380px);
+}
+
+.modal-footer-saiba-mais.modal-footer-saiba-mais--tech,
+.modal-footer-saiba-mais.modal-footer-saiba-mais--database {
+  max-width: min(92vw, 420px);
 }
 
 .modal-credits-simple {
@@ -2573,10 +2597,11 @@ legend {
 
   .footer-actions-column {
     grid-column: 1 / -1;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-self: stretch;
-    justify-content: flex-end;
+    flex-direction: column;
+    justify-self: end;
+    align-items: stretch;
+    max-width: 220px;
+    margin-left: auto;
   }
 }
 
@@ -2587,15 +2612,16 @@ legend {
   }
 
   .footer-actions-column {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
     min-width: 0;
-    justify-content: flex-start;
+    max-width: none;
+    margin-left: 0;
+    align-items: stretch;
   }
 
   .footer-hub-btn {
-    flex: 1;
-    min-width: 120px;
+    width: 100%;
+    min-width: 0;
   }
 }
 

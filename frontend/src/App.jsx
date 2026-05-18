@@ -15,7 +15,7 @@ import SettingsPage from './components/SettingsPage'
 import MeshViewer3DPage from './components/MeshViewer3DPage'
 import DevModePanel from './components/DevModePanel'
 import ThemeIcon from './components/ThemeIcon'
-import { HelpModal, DocsModal, CreditsModal, FooterSaibaMaisModal } from './components/WizardHelpers'
+import { HelpModal, DocsModal, CreditsModal, FooterInfoModal } from './components/WizardHelpers'
 import UserSwitcherModal from './components/UserSwitcherModal'
 import { getSystemStatus, getSettings } from './services/api'
 import api from './services/api'
@@ -52,7 +52,7 @@ function App() {
   const [showHelp, setShowHelp] = useState(false)
   const [showDocs, setShowDocs] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
-  const [showFooterSaibaMais, setShowFooterSaibaMais] = useState(false)
+  const [footerInfoModal, setFooterInfoModal] = useState(null)
   const [showUserSwitcher, setShowUserSwitcher] = useState(false)
   const [expandedSections, setExpandedSections] = useState({})
   const [bootMeshViewerId, setBootMeshViewerId] = useState(null)
@@ -182,7 +182,7 @@ function App() {
         if (showHelp) setShowHelp(false)
         if (showDocs) setShowDocs(false)
         if (showCredits) setShowCredits(false)
-        if (showFooterSaibaMais) setShowFooterSaibaMais(false)
+        if (footerInfoModal) setFooterInfoModal(null)
       }
     }
 
@@ -192,7 +192,7 @@ function App() {
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showHelp, showDocs, showCredits, showFooterSaibaMais])
+  }, [showHelp, showDocs, showCredits, footerInfoModal])
 
   const handleLogout = useCallback(() => {
     sessionStorage.clear();
@@ -821,8 +821,14 @@ function App() {
             <button type="button" className="footer-hub-btn" onClick={() => setShowCredits(true)}>
               {language === 'pt' ? 'Créditos' : 'Credits'}
             </button>
-            <button type="button" className="footer-hub-btn" onClick={() => setShowFooterSaibaMais(true)}>
-              {language === 'pt' ? 'Saiba mais' : 'Learn more'}
+            <button type="button" className="footer-hub-btn" onClick={() => setFooterInfoModal('project')}>
+              {language === 'pt' ? 'Projeto' : 'Project'}
+            </button>
+            <button type="button" className="footer-hub-btn" onClick={() => setFooterInfoModal('tech')}>
+              {language === 'pt' ? 'Tecnologias' : 'Technologies'}
+            </button>
+            <button type="button" className="footer-hub-btn" onClick={() => setFooterInfoModal('database')}>
+              {language === 'pt' ? 'Banco de dados' : 'Database'}
             </button>
           </div>
 
@@ -888,9 +894,10 @@ function App() {
         show={showCredits} 
         onClose={() => setShowCredits(false)} 
       />
-      <FooterSaibaMaisModal
-        show={showFooterSaibaMais}
-        onClose={() => setShowFooterSaibaMais(false)}
+      <FooterInfoModal
+        variant={footerInfoModal}
+        show={Boolean(footerInfoModal)}
+        onClose={() => setFooterInfoModal(null)}
         onOpenCredits={() => setShowCredits(true)}
         onOpenHelp={() => setShowHelp(true)}
         onOpenDocs={() => setShowDocs(true)}

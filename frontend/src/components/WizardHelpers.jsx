@@ -205,14 +205,7 @@ export const CreditsModal = ({ show, onClose }) => {
   );
 };
 
-/** modal «saiba mais»: projeto (links), tecnologias e bases de dados com urls oficiais */
-export const FooterSaibaMaisModal = ({ show, onClose, onOpenHelp, onOpenDocs, onOpenCredits }) => {
-  const { language } = useLanguage();
-  if (!show) return null;
-
-  const pt = language === 'pt';
-
-  const projectLinks = [
+const FOOTER_PROJECT_LINKS = [
     {
       key: 'github',
       labelPt: 'GitHub',
@@ -282,9 +275,9 @@ export const FooterSaibaMaisModal = ({ show, onClose, onOpenHelp, onOpenDocs, on
       iconDark: 'docsLight.png',
       kind: 'docs',
     },
-  ];
+];
 
-  const techRows = [
+const FOOTER_TECH_ROWS = [
     { key: 'openfoam', label: 'OpenFOAM', ver: '11', href: 'https://www.openfoam.org/', iconLight: 'triangle_white_outline.png', iconDark: 'triangle_black_outline.png' },
     { key: 'blender', label: 'Blender', ver: '4.x', href: 'https://www.blender.org/', iconLight: 'blenderLight.png', iconDark: 'blenderLight.png' },
     { key: 'react', label: 'React', ver: '18', href: 'https://react.dev/', iconLight: 'reactLight.png', iconDark: 'reactLight.png' },
@@ -305,24 +298,18 @@ export const FooterSaibaMaisModal = ({ show, onClose, onOpenHelp, onOpenDocs, on
     { key: 'pydantic', label: 'Pydantic', ver: '2.x', href: 'https://docs.pydantic.dev/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
     { key: 'numpy', label: 'NumPy', ver: '1.x', href: 'https://numpy.org/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
     { key: 'openmpi', label: 'Open MPI', ver: '', href: 'https://www.open-mpi.org/', iconLight: 'triangle_white_outline.png', iconDark: 'triangle_black_outline.png' },
-  ];
+];
 
-  const dbRows = [
+const FOOTER_DB_ROWS = [
     { key: 'pg', label: 'PostgreSQL', ver: '15', href: 'https://www.postgresql.org/', iconLight: '2106624.png', iconDark: 'postgresqlDark.png' },
     { key: 'redis', label: 'Redis', ver: '7', href: 'https://redis.io/', iconLight: 'redis.png', iconDark: 'redisDark.png' },
     { key: 'minio', label: 'MinIO', ver: 'S3', href: 'https://min.io/', iconLight: 'minio.png', iconDark: 'minioDark.png' },
     { key: 'sqlite', label: 'SQLite', ver: '3', href: 'https://www.sqlite.org/', iconLight: 'docsLight.png', iconDark: 'docsLight.png' },
     { key: 'celery', label: 'Celery', ver: '', href: 'https://docs.celeryq.dev/', iconLight: 'pythonLogoLight.png', iconDark: 'pythonLogoLight.png' },
-  ];
+];
 
-  const runAction = (fn) => {
-    onClose();
-    if (typeof fn === 'function') {
-      window.setTimeout(() => fn(), 0);
-    }
-  };
-
-  const rowIcon = (light, dark, invert = false) => (
+function footerSaibaRowIcon(light, dark, invert = false) {
+  return (
     <ThemeIcon
       light={light}
       dark={dark}
@@ -331,79 +318,137 @@ export const FooterSaibaMaisModal = ({ show, onClose, onOpenHelp, onOpenDocs, on
       location="footer"
     />
   );
+}
+
+/** modal do footer por secção: project | tech | database */
+export const FooterInfoModal = ({
+  variant,
+  show,
+  onClose,
+  onOpenHelp,
+  onOpenDocs,
+  onOpenCredits,
+}) => {
+  const { language } = useLanguage();
+  if (!show || !variant) return null;
+
+  const pt = language === 'pt';
+
+  const titles = {
+    project: pt ? 'Projeto' : 'Project',
+    tech: pt ? 'Tecnologias' : 'Technologies',
+    database: pt ? 'Banco de dados' : 'Database',
+  };
+
+  const runAction = (fn) => {
+    onClose();
+    if (typeof fn === 'function') {
+      window.setTimeout(() => fn(), 0);
+    }
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-footer-saiba-mais" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`modal-content modal-footer-saiba-mais modal-footer-saiba-mais--${variant}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header modal-header--footer-modals">
-          <h2>{pt ? 'Saiba mais' : 'Learn more'}</h2>
-          <button type="button" className="modal-close" onClick={onClose}>×</button>
+          <h2>{titles[variant]}</h2>
+          <button type="button" className="modal-close" onClick={onClose} aria-label={pt ? 'fechar' : 'close'}>
+            ×
+          </button>
         </div>
 
-        <div className="modal-body modal-body--footer-saiba">
-          <section className="footer-saiba-section">
-            <h3>{pt ? 'Projeto' : 'Project'}</h3>
-            <ul className="footer-saiba-linklist">
-              {projectLinks.map((row) => (
-                <li key={row.key}>
-                  {row.kind === 'a' && (
-                    <a href={row.href} target="_blank" rel="noopener noreferrer" className="footer-saiba-row">
-                      {rowIcon(row.iconLight, row.iconDark)}
-                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+        <div className="modal-body modal-body--footer-saiba modal-body--footer-saiba-single">
+          {variant === 'project' && (
+            <section className="footer-saiba-section footer-saiba-section--solo">
+              <ul className="footer-saiba-linklist">
+                {FOOTER_PROJECT_LINKS.map((row) => (
+                  <li key={row.key}>
+                    {row.kind === 'a' && (
+                      <a href={row.href} target="_blank" rel="noopener noreferrer" className="footer-saiba-row">
+                        {footerSaibaRowIcon(row.iconLight, row.iconDark)}
+                        <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                      </a>
+                    )}
+                    {row.kind === 'credits' && (
+                      <button
+                        type="button"
+                        className="footer-saiba-row footer-saiba-row--btn"
+                        onClick={() => runAction(onOpenCredits)}
+                      >
+                        {footerSaibaRowIcon(row.iconLight, row.iconDark)}
+                        <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                      </button>
+                    )}
+                    {row.kind === 'help' && (
+                      <button
+                        type="button"
+                        className="footer-saiba-row footer-saiba-row--btn"
+                        onClick={() => runAction(onOpenHelp)}
+                      >
+                        {footerSaibaRowIcon(row.iconLight, row.iconDark)}
+                        <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                      </button>
+                    )}
+                    {row.kind === 'docs' && (
+                      <button
+                        type="button"
+                        className="footer-saiba-row footer-saiba-row--btn"
+                        onClick={() => runAction(onOpenDocs)}
+                      >
+                        {footerSaibaRowIcon(row.iconLight, row.iconDark)}
+                        <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {variant === 'tech' && (
+            <section className="footer-saiba-section footer-saiba-section--solo">
+              <ul className="footer-saiba-techlist">
+                {FOOTER_TECH_ROWS.map((row) => (
+                  <li key={row.key}>
+                    <a
+                      href={row.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="footer-saiba-row footer-saiba-row--spread"
+                    >
+                      {footerSaibaRowIcon(row.iconLight, row.iconDark)}
+                      <span className="footer-saiba-name">{row.label}</span>
+                      {row.ver ? <span className="footer-saiba-ver">{row.ver}</span> : null}
                     </a>
-                  )}
-                  {row.kind === 'credits' && (
-                    <button type="button" className="footer-saiba-row footer-saiba-row--btn" onClick={() => runAction(onOpenCredits)}>
-                      {rowIcon(row.iconLight, row.iconDark)}
-                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
-                    </button>
-                  )}
-                  {row.kind === 'help' && (
-                    <button type="button" className="footer-saiba-row footer-saiba-row--btn" onClick={() => runAction(onOpenHelp)}>
-                      {rowIcon(row.iconLight, row.iconDark)}
-                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
-                    </button>
-                  )}
-                  {row.kind === 'docs' && (
-                    <button type="button" className="footer-saiba-row footer-saiba-row--btn" onClick={() => runAction(onOpenDocs)}>
-                      {rowIcon(row.iconLight, row.iconDark)}
-                      <span className="footer-saiba-row-label">{pt ? row.labelPt : row.labelEn}</span>
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-          <section className="footer-saiba-section">
-            <h3>{pt ? 'Tecnologias' : 'Technologies'}</h3>
-            <ul className="footer-saiba-techlist">
-              {techRows.map((row) => (
-                <li key={row.key}>
-                  <a href={row.href} target="_blank" rel="noopener noreferrer" className="footer-saiba-row footer-saiba-row--spread">
-                    {rowIcon(row.iconLight, row.iconDark)}
-                    <span className="footer-saiba-name">{row.label}</span>
-                    {row.ver ? <span className="footer-saiba-ver">{row.ver}</span> : null}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="footer-saiba-section">
-            <h3>{pt ? 'Banco de dados' : 'Database'}</h3>
-            <ul className="footer-saiba-techlist">
-              {dbRows.map((row) => (
-                <li key={row.key}>
-                  <a href={row.href} target="_blank" rel="noopener noreferrer" className="footer-saiba-row footer-saiba-row--spread">
-                    {rowIcon(row.iconLight, row.iconDark, true)}
-                    <span className="footer-saiba-name">{row.label}</span>
-                    {row.ver ? <span className="footer-saiba-ver">{row.ver}</span> : null}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
+          {variant === 'database' && (
+            <section className="footer-saiba-section footer-saiba-section--solo">
+              <ul className="footer-saiba-techlist">
+                {FOOTER_DB_ROWS.map((row) => (
+                  <li key={row.key}>
+                    <a
+                      href={row.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="footer-saiba-row footer-saiba-row--spread"
+                    >
+                      {footerSaibaRowIcon(row.iconLight, row.iconDark, true)}
+                      <span className="footer-saiba-name">{row.label}</span>
+                      {row.ver ? <span className="footer-saiba-ver">{row.ver}</span> : null}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       </div>
     </div>
