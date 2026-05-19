@@ -1,11 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-// get profile e patch usam o cabecalho x user id atual
 import { getProfile, patchProfile } from '../services/api';
 import { useActiveUser } from '../context/UserContext';
 import BackendConnectionError from './BackendConnectionError';
 import ThemeIcon from './ThemeIcon';
+import '../styles/CasosCFD.css';
+import '../styles/MeshViewer3DPage.css';
+import './SimulationHistory.css';
 import './ProfilePage.css';
+
+function IconRefresh({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
+}
 
 function isConnectionError(err) {
   if (!err) return false;
@@ -34,15 +57,13 @@ function roleLabel(role, pt) {
   return m[role] || role;
 }
 
-// pagina de perfil mostra dados do utilizador ativo e permite trocar de utilizador
 export default function ProfilePage() {
   const { language, t, setLanguage } = useLanguage();
   const pt = language === 'pt';
-  // active user id vem do contexto e repete no axios;
-  // a troca e feita pelo botao redondo no header (UserSwitcherModal)
   const { activeUserId } = useActiveUser();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const [opError, setOpError] = useState(null);
@@ -55,9 +76,9 @@ export default function ProfilePage() {
   const [preferredLanguage, setPreferredLanguage] = useState('pt');
   const [updatedAt, setUpdatedAt] = useState('');
 
-  // recarrega perfil quando muda o utilizador ativo ou o idioma de traducao
-  const loadProfile = useCallback(async () => {
-    setLoading(true);
+  const loadProfile = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
     setConnectionError(null);
     setOpError(null);
     try {
@@ -82,11 +103,12 @@ export default function ProfilePage() {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [pt, t, activeUserId]);
 
   useEffect(() => {
-    loadProfile();
+    void loadProfile();
   }, [loadProfile]);
 
   const avatarLetter = useMemo(() => initialsFromName(displayName), [displayName]);
@@ -137,134 +159,153 @@ export default function ProfilePage() {
 
         <header className="profile-page-header">
           <div className="profile-page-title">
-            <ThemeIcon light="profileLight.png" dark="profileLight.png" alt="" className="profile-page-title-icon" />
+            <ThemeIcon
+              light="profileLight.png"
+              dark="profileLight.png"
+              alt=""
+              className="profile-page-title-icon"
+              location="page"
+            />
             <h1 className="profile-page-heading">{pt ? 'Perfil' : 'Profile'}</h1>
           </div>
         </header>
 
-        <div className="profile-page-layout">
-          <section className="profile-mockup-card" aria-label={pt ? 'Perfil' : 'Profile'}>
-            <p className="profile-mockup-sub">
-              {pt
-                ? 'Dados salvos em sqlite (tabela user_profiles). Para trocar o utilizador ativo use o botão redondo no canto superior direito do cabeçalho.'
-                : 'Data stored in sqlite (user_profiles table). Use the round button on the top-right of the header to switch the active user.'}
-            </p>
+        <section className="casos-panel ui-raised-surface" aria-label={pt ? 'Perfil' : 'Profile'}>
+          <div className="casos-panel-toolbar">
+            <button
+              type="button"
+              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
+              onClick={() => void loadProfile({ silent: true })}
+              disabled={loading || refreshing}
+              title={pt ? 'atualizar dados do perfil' : 'refresh profile data'}
+            >
+              <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
+              {refreshing ? '…' : pt ? 'atualizar' : 'refresh'}
+            </button>
+          </div>
 
-            {loading ? (
-              <p className="profile-status">{pt ? 'A carregar…' : 'Loading…'}</p>
-            ) : (
-              <>
-                <div className="profile-avatar-row">
-                  <div className="profile-avatar-placeholder" aria-hidden="true">
-                    {avatarLetter}
-                  </div>
-                  <div className="profile-avatar-meta">
-                    <strong>{displayName || (pt ? 'Sem nome' : 'No name')}</strong>
-                    <span>
-                      {pt ? 'Papel:' : 'Role:'} {roleLabel(role, pt)}
+          {loading ? (
+            <p className="profile-status">{pt ? 'A carregar…' : 'Loading…'}</p>
+          ) : (
+            <>
+              <div className="profile-avatar-row">
+                <div className="profile-avatar-placeholder" aria-hidden="true">
+                  {avatarLetter}
+                </div>
+                <div className="profile-avatar-meta">
+                  <strong>{displayName || (pt ? 'Sem nome' : 'No name')}</strong>
+                  <span>
+                    {pt ? 'Papel:' : 'Role:'} {roleLabel(role, pt)}
+                  </span>
+                  {updatedAt && (
+                    <span className="profile-updated">
+                      {pt ? 'Última atualização:' : 'Last updated:'}{' '}
+                      {new Date(updatedAt).toLocaleString(pt ? 'pt-PT' : 'en-GB')}
                     </span>
-                    {updatedAt && (
-                      <span className="profile-updated">
-                        {pt ? 'Última atualização:' : 'Last updated:'}{' '}
-                        {new Date(updatedAt).toLocaleString(pt ? 'pt-PT' : 'en-GB')}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
+              </div>
 
-                <div className="profile-field-grid">
-                  <div className="profile-field">
-                    <label htmlFor="profile-name">{pt ? 'Nome' : 'Name'}</label>
-                    <input
-                      id="profile-name"
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      maxLength={200}
-                      autoComplete="name"
-                    />
-                  </div>
-                  <div className="profile-field">
-                    <label htmlFor="profile-email">{pt ? 'E-mail' : 'Email'}</label>
-                    <input
-                      id="profile-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      maxLength={255}
-                      autoComplete="email"
-                    />
-                  </div>
-                  <div className="profile-field">
-                    <label htmlFor="profile-org">{pt ? 'Instituição' : 'Organization'}</label>
-                    <input
-                      id="profile-org"
-                      type="text"
-                      value={organization}
-                      onChange={(e) => setOrganization(e.target.value)}
-                      maxLength={300}
-                    />
-                  </div>
-                  <div className="profile-field">
-                    <label htmlFor="profile-role">{pt ? 'Papel' : 'Role'}</label>
-                    <select
-                      id="profile-role"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                    >
-                      <option value="researcher">{roleLabel('researcher', pt)}</option>
-                      <option value="engineer">{roleLabel('engineer', pt)}</option>
-                      <option value="student">{roleLabel('student', pt)}</option>
-                      <option value="other">{roleLabel('other', pt)}</option>
-                    </select>
-                  </div>
-                  <div className="profile-field">
-                    <label htmlFor="profile-lang">{pt ? 'Idioma preferido (ui)' : 'Preferred language (ui)'}</label>
-                    <select
-                      id="profile-lang"
-                      value={preferredLanguage}
-                      onChange={(e) => setPreferredLanguage(e.target.value)}
-                    >
-                      <option value="pt">Português</option>
-                      <option value="en">English</option>
-                    </select>
-                  </div>
-                  <div className="profile-field profile-field-bio">
-                    <label htmlFor="profile-bio">{pt ? 'Biografia / notas' : 'Bio / notes'}</label>
-                    <textarea
-                      id="profile-bio"
-                      rows={5}
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      placeholder={
-                        pt
-                          ? 'Área de pesquisa, contatos, observações…'
-                          : 'Research area, contacts, notes…'
-                      }
-                    />
-                  </div>
+              <div className="history-filter-grid profile-field-grid">
+                <div className="profile-field">
+                  <label htmlFor="profile-name">{pt ? 'Nome' : 'Name'}</label>
+                  <input
+                    id="profile-name"
+                    type="text"
+                    className="history-select"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    maxLength={200}
+                    autoComplete="name"
+                  />
                 </div>
-
-                <div className="profile-actions-mock">
-                  <button type="button" className="profile-btn-save" onClick={handleSave} disabled={saving}>
-                    {saving ? (pt ? 'Salvando…' : 'Saving…') : pt ? 'Salvar alterações' : 'Save changes'}
-                  </button>
-                  <button
-                    type="button"
-                    className="profile-btn-muted"
-                    disabled
-                    title={pt ? 'Não há autenticação nesta versão do aplicativo' : 'No authentication in this app version'}
+                <div className="profile-field">
+                  <label htmlFor="profile-email">{pt ? 'E-mail' : 'Email'}</label>
+                  <input
+                    id="profile-email"
+                    type="email"
+                    className="history-select"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    maxLength={255}
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="profile-field">
+                  <label htmlFor="profile-org">{pt ? 'Instituição' : 'Organization'}</label>
+                  <input
+                    id="profile-org"
+                    type="text"
+                    className="history-select"
+                    value={organization}
+                    onChange={(e) => setOrganization(e.target.value)}
+                    maxLength={300}
+                  />
+                </div>
+                <div className="profile-field">
+                  <label htmlFor="profile-role">{pt ? 'Papel' : 'Role'}</label>
+                  <select
+                    id="profile-role"
+                    className="history-select"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
                   >
-                    {pt ? 'Alterar senha' : 'Change password'}
-                  </button>
-                  <button type="button" className="profile-btn-secondary" onClick={() => loadProfile()} disabled={loading}>
-                    {pt ? 'Atualizar' : 'Update'}
-                  </button>
+                    <option value="researcher">{roleLabel('researcher', pt)}</option>
+                    <option value="engineer">{roleLabel('engineer', pt)}</option>
+                    <option value="student">{roleLabel('student', pt)}</option>
+                    <option value="other">{roleLabel('other', pt)}</option>
+                  </select>
                 </div>
-              </>
-            )}
-          </section>
-        </div>
+                <div className="profile-field">
+                  <label htmlFor="profile-lang">{pt ? 'Idioma preferido (ui)' : 'Preferred language (ui)'}</label>
+                  <select
+                    id="profile-lang"
+                    className="history-select"
+                    value={preferredLanguage}
+                    onChange={(e) => setPreferredLanguage(e.target.value)}
+                  >
+                    <option value="pt">Português</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+                <div className="profile-field profile-field-bio">
+                  <label htmlFor="profile-bio">{pt ? 'Biografia / notas' : 'Bio / notes'}</label>
+                  <textarea
+                    id="profile-bio"
+                    className="history-select profile-bio-input"
+                    rows={5}
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder={
+                      pt
+                        ? 'Área de pesquisa, contatos, observações…'
+                        : 'Research area, contacts, notes…'
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="caso-acoes profile-acoes">
+                <button
+                  type="button"
+                  className="btn-mode-option"
+                  onClick={() => void handleSave()}
+                  disabled={saving}
+                >
+                  {saving ? (pt ? 'Salvando…' : 'Saving…') : pt ? 'Salvar alterações' : 'Save changes'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-mode-option"
+                  disabled
+                  title={pt ? 'Não há autenticação nesta versão do aplicativo' : 'No authentication in this app version'}
+                >
+                  {pt ? 'Alterar senha' : 'Change password'}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
       </div>
     </div>
   );

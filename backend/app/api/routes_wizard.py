@@ -59,6 +59,11 @@ class PackingParams(BaseModel):
     rest_velocity: str = "0.01"
     max_time: str = "5.0"
     collision_margin: str = "0.001"
+    gap: Optional[str] = None
+    random_seed: Optional[str] = None
+    max_placement_attempts: Optional[str] = None
+    strict_validation: Optional[bool] = True
+    step_x: Optional[str] = None
 
 class ExportParams(BaseModel):
     formats: List[str]
@@ -127,6 +132,8 @@ async def create_bed_from_wizard(request: WizardRequest):
                 status_code=400,
                 detail=f"erro na compilação: {result.stderr}"
             )
+
+        _patch_compiled_wizard_json(json_file_path, dsl_dir, request.params)
         
         return {
             "success": True,
@@ -137,6 +144,38 @@ async def create_bed_from_wizard(request: WizardRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _wizard_params_for_json_patch(params: WizardParams) -> Dict[str, Any]:
+    """dict no formato esperado por patch_compiled_json_packing (dsl)."""
+    data = params.model_dump()
+    pack = dict(data.get("packing") or {})
+    if pack.get("random_seed") not in (None, ""):
+        pack["random_seed"] = int(pack["random_seed"])
+    if pack.get("max_placement_attempts") not in (None, ""):
+        pack["max_placement_attempts"] = int(pack["max_placement_attempts"])
+    if pack.get("gap") not in (None, ""):
+        pack["gap"] = float(pack["gap"])
+    if pack.get("step_x") in (None, ""):
+        pack.pop("step_x", None)
+    else:
+        pack["step_x"] = float(pack["step_x"])
+    data["packing"] = pack
+    return data
+
+
+def _patch_compiled_wizard_json(json_path: Path, dsl_dir: Path, params: WizardParams) -> None:
+    if str(dsl_dir) not in sys.path:
+        sys.path.insert(0, str(dsl_dir))
+    from wizard_json_loader import (  # noqa: WPS433
+        patch_compiled_json_export,
+        patch_compiled_json_packing,
+    )
+
+    wizard_dict = _wizard_params_for_json_patch(params)
+    patch_compiled_json_packing(json_path, wizard_dict)
+    patch_compiled_json_export(json_path, wizard_dict)
+
 
 def generate_bed_content(params: WizardParams, mode: str) -> str:
     """

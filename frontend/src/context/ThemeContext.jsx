@@ -47,9 +47,16 @@ export function ThemeProvider({ children }) {
 
   // persiste escolha e aplica atributo data theme usado pelas folhas de estilo
   useEffect(() => {
+    document.documentElement.classList.add('disable-theme-transition');
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
     localStorage.setItem('themeMode', themeMode);
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.documentElement.classList.remove('disable-theme-transition');
+      });
+    });
+    return () => cancelAnimationFrame(id);
   }, [theme, themeMode]);
 
   const setThemeMode = useCallback((mode) => {

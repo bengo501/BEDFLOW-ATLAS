@@ -8,6 +8,7 @@ import {
 } from '../../services/api'
 import { useLanguage } from '../../context/LanguageContext'
 import { useActiveUser } from '../../context/UserContext'
+import ThemeIcon from '../ThemeIcon'
 import '../../styles/CasosCFD.css'
 import '../../styles/MeshViewer3DPage.css'
 import '../SimulationHistory.css'
@@ -587,6 +588,7 @@ export default function ResultsSimulationsPage() {
                         onClick={() => handleViewSimulation(simulation.id)}
                         disabled={actionBusyId === simulation.id}
                       >
+                        <ThemeIcon light="docsLight.png" dark="docsLight.png" alt="" className="btn-icon" />
                         {pt ? 'visualizar' : 'view'}
                       </button>
                       <button
@@ -599,6 +601,7 @@ export default function ResultsSimulationsPage() {
                         }}
                         disabled={actionBusyId === simulation.id}
                       >
+                        <ThemeIcon light="folderLight.png" dark="folderLight.png" alt="" className="btn-icon" />
                         {pt ? 'resultados' : 'results'}
                       </button>
                       <button
@@ -607,6 +610,7 @@ export default function ResultsSimulationsPage() {
                         onClick={() => handleDownloadResults(simulation.id)}
                         disabled={actionBusyId === simulation.id}
                       >
+                        <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="btn-icon" />
                         json
                       </button>
                       <button
@@ -615,6 +619,7 @@ export default function ResultsSimulationsPage() {
                         onClick={() => handleDeleteSimulation(simulation.id)}
                         disabled={actionBusyId === simulation.id}
                       >
+                        <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="btn-icon" />
                         {pt ? 'deletar' : 'delete'}
                       </button>
                       <button
@@ -623,6 +628,7 @@ export default function ResultsSimulationsPage() {
                         onClick={() => handleRerunSimulation(simulation.id)}
                         disabled={actionBusyId === simulation.id}
                       >
+                        <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="btn-icon" />
                         {pt ? 'reexecutar' : 'rerun'}
                       </button>
                     </div>

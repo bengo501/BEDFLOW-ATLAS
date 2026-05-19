@@ -4,6 +4,9 @@ import ThemeIcon from './ThemeIcon'
 import BackendConnectionError from './BackendConnectionError'
 import { useLanguage } from '../context/LanguageContext'
 import '../styles/MeshViewer3DPage.css'
+import '../styles/CasosCFD.css'
+
+const ACTIVE_JOB_STATUSES = new Set(['queued', 'running'])
 
 function IconRefresh({ className }) {
   return (
@@ -154,6 +157,8 @@ function JobStatus({ currentJob }) {
   }
 
   const dateLocale = pt ? 'pt-BR' : 'en-US'
+  const activeJobs = jobs.filter((j) => ACTIVE_JOB_STATUSES.has(j.status))
+  const historyJobs = jobs.filter((j) => !ACTIVE_JOB_STATUSES.has(j.status))
 
   return (
     <div className="job-status-container">
@@ -162,34 +167,6 @@ function JobStatus({ currentJob }) {
           <div className="jobs-page-title">
             <ThemeIcon light="job_monitor_clock_white.png" dark="job_monitor_clock_white.png" alt="" className="jobs-page-title-icon" />
             <h1 className="jobs-page-heading">{pt ? 'Monitoramento de jobs' : 'Job monitoring'}</h1>
-          </div>
-          <div className="jobs-page-actions">
-            <button
-              type="button"
-              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
-              onClick={() => void loadJobs()}
-              disabled={refreshing || jobsActionBusy}
-              aria-busy={refreshing || undefined}
-            >
-              <IconRefresh className="mesh-viewer-hub-btn__icon" aria-hidden />
-              {refreshing ? '…' : pt ? 'atualizar' : 'refresh'}
-            </button>
-            <button
-              type="button"
-              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
-              onClick={() => void handleRestartJobs()}
-              disabled={refreshing || jobsActionBusy}
-            >
-              {pt ? 'reiniciar jobs' : 'restart jobs'}
-            </button>
-            <button
-              type="button"
-              className="mesh-viewer-hub-btn mesh-viewer-hub-btn--compact"
-              onClick={() => void handleCancelJobs()}
-              disabled={refreshing || jobsActionBusy}
-            >
-              {pt ? 'encerrar jobs' : 'terminate jobs'}
-            </button>
           </div>
         </div>
       </header>
@@ -200,15 +177,48 @@ function JobStatus({ currentJob }) {
 
       {connectionError && <BackendConnectionError message={connectionError} />}
 
-      <div className="jobs-layout">
-        <div className="jobs-list">
-          <h3>{pt ? `Todos os jobs (${jobs.length})` : `All jobs (${jobs.length})`}</h3>
+      <section className="jobs-panel ui-raised-surface" aria-label={pt ? 'jobs ativos' : 'active jobs'}>
+        <div className="jobs-panel-head">
+          <h3 className="jobs-panel-title">
+            {pt ? `fila e execução (${activeJobs.length})` : `queue and running (${activeJobs.length})`}
+          </h3>
+          <div className="jobs-panel-toolbar caso-acoes">
+            <button
+              type="button"
+              className="btn-mode-option"
+              onClick={() => void loadJobs()}
+              disabled={refreshing || jobsActionBusy}
+              aria-busy={refreshing || undefined}
+            >
+              <IconRefresh className="btn-icon" aria-hidden />
+              {refreshing ? '…' : pt ? 'atualizar' : 'refresh'}
+            </button>
+            <button
+              type="button"
+              className="btn-mode-option"
+              onClick={() => void handleRestartJobs()}
+              disabled={refreshing || jobsActionBusy}
+            >
+              {pt ? 'reiniciar jobs' : 'restart jobs'}
+            </button>
+            <button
+              type="button"
+              className="btn-mode-option"
+              onClick={() => void handleCancelJobs()}
+              disabled={refreshing || jobsActionBusy}
+            >
+              {pt ? 'encerrar jobs' : 'terminate jobs'}
+            </button>
+          </div>
+        </div>
 
-          {jobs.length === 0 ? (
-            <p className="empty-state">{pt ? 'Nenhum job encontrado' : 'No jobs found'}</p>
-          ) : (
-            <div className="jobs-items">
-              {jobs.map((job) => (
+        <div className="jobs-layout">
+          <div className="jobs-list jobs-subpanel">
+            {activeJobs.length === 0 ? (
+              <p className="empty-state">{pt ? 'Nenhum job na fila ou em execução' : 'No queued or running jobs'}</p>
+            ) : (
+              <div className="jobs-items">
+                {activeJobs.map((job) => (
                 <div
                   key={job.job_id}
                   className={`job-item ${selectedJob?.job_id === job.job_id ? 'selected' : ''}`}
@@ -240,12 +250,12 @@ function JobStatus({ currentJob }) {
                     {new Date(job.created_at).toLocaleString(dateLocale)}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        <div className="job-details">
+          <div className="job-details jobs-subpanel">
           {selectedJob ? (
             <>
               <h3>{pt ? 'Detalhes do job' : 'Job details'}</h3>
@@ -322,8 +332,45 @@ function JobStatus({ currentJob }) {
           ) : (
             <p className="empty-state">{pt ? 'Selecione um job para ver detalhes' : 'Select a job to see details'}</p>
           )}
+          </div>
         </div>
-      </div>
+      </section>
+
+      <section className="jobs-panel jobs-panel--history ui-raised-surface" aria-label={pt ? 'histórico de jobs' : 'job history'}>
+        <h3 className="jobs-panel-title">
+          {pt ? `jobs executados (${historyJobs.length})` : `finished jobs (${historyJobs.length})`}
+        </h3>
+        <p className="jobs-panel-hint">
+          {pt
+            ? 'concluídos, falhados, cancelados e outros estados finais.'
+            : 'completed, failed, cancelled and other terminal states.'}
+        </p>
+        {historyJobs.length === 0 ? (
+          <p className="empty-state">{pt ? 'Nenhum job finalizado ainda' : 'No finished jobs yet'}</p>
+        ) : (
+          <div className="jobs-history-items">
+            {historyJobs.map((job) => (
+              <div
+                key={job.job_id}
+                className={`job-item job-item--compact ${selectedJob?.job_id === job.job_id ? 'selected' : ''}`}
+                onClick={() => setSelectedJob(job)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setSelectedJob(job)
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="job-header">
+                  <span className="job-icon">{getStatusIcon(job.status)}</span>
+                  <span className="job-type">{getJobTypeLabel(job.job_type)}</span>
+                </div>
+                <div className={`job-status ${getStatusColor(job.status)}`}>{job.status}</div>
+                <div className="job-time">{new Date(job.created_at).toLocaleString(dateLocale)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

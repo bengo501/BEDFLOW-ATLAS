@@ -632,7 +632,7 @@ class PlainWizardUi:
                 continue
             if not value:
                 if allow_empty_default:
-                    return default
+                return default
                 print("  aviso: digite s ou n (ou c para cancelar).")
                 continue
             value = value.lower()
@@ -665,7 +665,7 @@ class PlainWizardUi:
             f"documentacao — pagina {page_index + 1}/{total_pages}"
         )
         print(f"  --- {head} ---")
-        print()
+            print()
         for ln in body.splitlines():
             print(f"  {ln}")
         print()
@@ -923,13 +923,13 @@ class RichWizardUi:
                 review=False,
                 require_explicit=not allow_empty_default,
             )
-            self.console.print()
+        self.console.print()
             raw = self.ask_line(f"(s/n) [{default_str}]: ", default="").strip()
             low = raw.lower()
             if low == "h":
                 for ln in global_keys_hint(self._ui_lang).splitlines():
                     self.console.print(Text(ln, style="setup.hint"))
-                self.console.print()
+        self.console.print()
                 continue
             if cancel_callback and low in (
                 "c",

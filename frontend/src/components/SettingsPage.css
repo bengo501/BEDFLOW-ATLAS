@@ -18,6 +18,15 @@
   width: 26px;
   height: 26px;
   object-fit: contain;
+  flex-shrink: 0;
+}
+
+[data-theme='light'] .settings-page-title-icon {
+  filter: brightness(0);
+}
+
+[data-theme='dark'] .settings-page-title-icon {
+  filter: brightness(0) invert(1);
 }
 
 .settings-page-heading {
@@ -56,17 +65,10 @@
 
 .settings-main {
   background: var(--card-bg);
-  border: 1px solid var(--subcard-border-color, var(--border));
-  border-radius: 6px;
+  border: 1px solid var(--subcard-border-color, rgba(0, 0, 0, 0.12));
+  border-radius: 3px;
   padding: 0.9rem 1rem;
   box-shadow: var(--card-shadow);
-}
-
-.settings-lead {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin: 0 0 0.45rem 0;
-  line-height: 1.45;
 }
 
 .settings-meta {
@@ -88,10 +90,11 @@
 }
 
 .setting-card {
-  border: 1px solid var(--subcard-border-color, var(--border));
-  border-radius: 6px;
+  border: 1px solid var(--subcard-border-color, rgba(0, 0, 0, 0.12));
+  border-radius: 3px;
   padding: 0.65rem 0.75rem;
   background: var(--bg);
+  box-shadow: none;
 }
 
 .setting-card-wide {

@@ -65,8 +65,9 @@ from backend.app.api import routes_integrated
 app.include_router(routes_integrated.router, prefix="/api")
 
 # routers auxiliares wizard cfd casos templates relatorios perfil settings admin
-from backend.app.api import routes_wizard, routes_cfd, routes_casos, routes_templates
+from backend.app.api import routes_wizard, routes_cfd, routes_casos, routes_templates, routes_bed_files
 app.include_router(routes_wizard.router, prefix="/api")
+app.include_router(routes_bed_files.router, prefix="/api")
 app.include_router(routes_cfd.router, prefix="/api")
 app.include_router(routes_casos.router, prefix="/api")
 app.include_router(routes_templates.router, prefix="/api")

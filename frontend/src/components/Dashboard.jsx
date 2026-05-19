@@ -5,8 +5,10 @@ import ThemeIcon from './ThemeIcon';
 import BackendConnectionError from './BackendConnectionError';
 import PaginationControls from './PaginationControls';
 import './Dashboard.css';
+import '../styles/CasosCFD.css';
 import '../styles/MeshViewer3DPage.css';
-import { getDashboardSummary, listSimulations, getSimulation, parseApiError, getArtifactsStorage } from '../services/api';
+import { getDashboardSummary, listSimulations, getSimulation, deleteSimulation, parseApiError, getArtifactsStorage } from '../services/api';
+import { getSimStatusBadgeClass, slugify } from './results/resultsShared';
 import { useActiveUser } from '../context/UserContext';
 
 function formatDurationSeconds(sec) {
@@ -215,6 +217,7 @@ function Dashboard() {
   const [modalSim, setModalSim] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState(null);
+  const [actionBusyId, setActionBusyId] = useState(null);
 
   const getStatusIcon = (status) => {
     const s = normalizeSimulationStatus(status);
@@ -278,6 +281,45 @@ function Dashboard() {
     setModalSim(null);
     setModalError(null);
   }, []);
+
+  const handleDownloadSimulation = async (id) => {
+    setActionBusyId(id);
+    try {
+      const data = await getSimulation(id);
+      const filename = `simulacao_${data.id}_${slugify(data.name)}.json`;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  const handleDeleteSimulation = async (id) => {
+    const ok = window.confirm(
+      pt
+        ? `eliminar a simulação #${id}? esta ação é irreversível.`
+        : `delete simulation #${id}? this cannot be undone.`,
+    );
+    if (!ok) return;
+    setActionBusyId(id);
+    try {
+      await deleteSimulation(id);
+      await loadData({ silent: true });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionBusyId(null);
+    }
+  };
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -379,7 +421,7 @@ function Dashboard() {
 
         <div className="metric-card">
           <div className="metric-icon success">
-            <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="" className="card-icon card-icon--sm" />
+            <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="" className="card-icon card-icon--sm dash-metric-icon-themed" />
           </div>
           <div className="metric-content">
             <div className="metric-value metric-value--sm">{dashboardData.totalModels3D}</div>
@@ -434,7 +476,7 @@ function Dashboard() {
       <div className="resources-grid resources-grid--compact">
         <div className="resource-card">
           <div className="resource-icon">
-            <ThemeIcon light="job_monitor_clock_white.png" dark="job_monitor_clock_white.png" alt="" className="card-icon card-icon--sm" />
+            <ThemeIcon light="job_monitor_clock_white.png" dark="job_monitor_clock_white.png" alt="" className="card-icon card-icon--sm dash-metric-icon-themed" />
           </div>
           <div className="resource-content">
             <div className="resource-value resource-value--sm">{formatDurationSeconds(dashboardData.averageExecutionTime)}</div>
@@ -620,7 +662,7 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="simulations-grid simulations-grid--two-cols">
+          <div className="casos-grid">
           {loading && <p className="simulations-loading">{pt ? 'A carregar…' : 'Loading…'}</p>}
           {!loading && simulations.length === 0 && (
             <p className="simulations-empty">{pt ? 'Nenhuma simulação encontrada' : 'No simulations found'}</p>
@@ -628,50 +670,73 @@ function Dashboard() {
           {simulations.map((simulation) => {
             const simStatus = normalizeSimulationStatus(simulation.status);
             return (
-            <button
-              key={simulation.id}
-              type="button"
-              className="simulation-card simulation-card--clickable"
-              onClick={() => void openSimulationModal(simulation)}
-            >
-              <div className="simulation-header">
-                <div className="simulation-name" title={simulation.name}>
-                  {simulation.name}
-                </div>
-                <div className={getStatusClass(simStatus)}>
-                  {getStatusIcon(simStatus)}
+            <div key={simulation.id} className="caso-card">
+              <div className="caso-header">
+                <h3 title={simulation.name}>{simulation.name}</h3>
+                <span className={`status-badge ${getSimStatusBadgeClass(simStatus)}`}>
                   {getStatusText(simStatus)}
-                </div>
+                </span>
               </div>
-              <div className="simulation-card-chart-row">
+              <div className="caso-info">
+                <div className="info-row">
+                  <span className="info-label">id:</span>
+                  <span>{simulation.id}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">{pt ? 'leito:' : 'bed:'}</span>
+                  <span>#{simulation.bedId ?? '—'}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">{pt ? 'criado:' : 'created:'}</span>
+                  <span>{simulation.date}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">{pt ? 'duração:' : 'duration:'}</span>
+                  <span>{simulation.duration}</span>
+                </div>
                 {(simStatus === 'running' || simStatus === 'pending') && (
-                  <div className="simulation-mini-progress">
-                    <DonutChart percent={simulation.progress} size={28} stroke={3} />
+                  <div className="info-row">
+                    <span className="info-label">{pt ? 'progresso:' : 'progress:'}</span>
                     <span>{simulation.progress}%</span>
                   </div>
                 )}
+                {simulation.regime ? (
+                  <div className="info-row">
+                    <span className="info-label">{pt ? 'regime:' : 'regime:'}</span>
+                    <span>{simulation.regime}</span>
+                  </div>
+                ) : null}
               </div>
-              <div className="simulation-meta">
-                <span>id {simulation.id}</span>
-                <span>
-                  {pt ? 'Leito' : 'Bed'} #{simulation.bedId}
-                </span>
+              <div className="caso-acoes">
+                <button
+                  type="button"
+                  className="btn-mode-option"
+                  onClick={() => void openSimulationModal(simulation)}
+                  disabled={actionBusyId === simulation.id}
+                >
+                  <ThemeIcon light="docsLight.png" dark="docsLight.png" alt="" className="btn-icon" />
+                  {pt ? 'detalhes' : 'details'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-mode-option"
+                  onClick={() => void handleDownloadSimulation(simulation.id)}
+                  disabled={actionBusyId === simulation.id}
+                >
+                  <ThemeIcon light="downloadLight-removebg-preview.png" dark="donwloadDark-removebg-preview.png" alt="" className="btn-icon" />
+                  json
+                </button>
+                <button
+                  type="button"
+                  className="btn-mode-option"
+                  onClick={() => void handleDeleteSimulation(simulation.id)}
+                  disabled={actionBusyId === simulation.id}
+                >
+                  <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="btn-icon" />
+                  {pt ? 'deletar' : 'delete'}
+                </button>
               </div>
-              <div className="simulation-meta simulation-meta--muted">{simulation.date}</div>
-              <div className="simulation-meta simulation-meta--muted">
-                {simulation.regime != null ? `${simulation.regime} · ` : ''}
-                u = {simulation.inletVelocity != null ? `${simulation.inletVelocity} m/s` : '—'}
-              </div>
-              <div className="simulation-meta simulation-meta--muted">
-                {pt ? 'Duração' : 'Duration'}: {simulation.duration}
-                {simulation.pressureDrop != null && (
-                  <span className="simulation-meta-extra">
-                    {' · Δp '}
-                    {Number(simulation.pressureDrop).toFixed(1)} Pa
-                  </span>
-                )}
-              </div>
-            </button>
+            </div>
             );
           })}
           </div>

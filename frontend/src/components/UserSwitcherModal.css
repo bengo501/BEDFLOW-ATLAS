@@ -11,8 +11,8 @@
 }
 
 .user-switcher-modal {
-  background: var(--bg-primary, #fff);
-  color: var(--text-primary);
+  background: var(--card-bg, #fff);
+  color: var(--text);
   border-radius: 12px;
   max-width: 460px;
   width: 100%;
@@ -199,19 +199,35 @@
   transform: translateY(-1px);
 }
 
-/* modo escuro */
-[data-theme="dark"] .user-switcher-modal,
-.dark-mode .user-switcher-modal {
-  background: var(--bg-primary);
-  border-color: var(--border-color);
+/* modo escuro — fundo sólido (igual legibilidade do modo claro) */
+[data-theme='dark'] .user-switcher-modal {
+  background: var(--card-bg, #2c2c2c);
+  color: var(--text, #fff);
+  border-color: var(--subcard-border-color, rgba(255, 255, 255, 0.16));
 }
 
-[data-theme="dark"] .user-switcher-item,
-.dark-mode .user-switcher-item {
-  background: var(--bg-primary);
+[data-theme='dark'] .user-switcher-item {
+  background: var(--bg-secondary, #252525);
+  color: var(--text, #fff);
+  border-color: var(--subcard-border-color, rgba(255, 255, 255, 0.16));
 }
 
-[data-theme="dark"] .user-switcher-item.active,
-.dark-mode .user-switcher-item.active {
-  background: rgba(100, 255, 218, 0.08);
+[data-theme='dark'] .user-switcher-item.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+}
+
+[data-theme='dark'] .user-switcher-header,
+[data-theme='dark'] .user-switcher-footer {
+  border-color: var(--subcard-border-color, rgba(255, 255, 255, 0.16));
+}
+
+[data-theme='dark'] .user-switcher-name {
+  color: var(--text, #fff);
+}
+
+[data-theme='dark'] .user-switcher-subtitle,
+[data-theme='dark'] .user-switcher-role,
+[data-theme='dark'] .user-switcher-status {
+  color: var(--text-muted, rgba(255, 255, 255, 0.75));
 }

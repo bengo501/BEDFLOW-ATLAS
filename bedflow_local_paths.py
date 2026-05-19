@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
-import os
 
 _REPO_ROOT = Path(__file__).resolve().parent
 
@@ -140,6 +140,112 @@ def resolve_existing_artifact(rel: str) -> Optional[Path]:
 def iter_search_roots_for_beds() -> List[Path]:
     roots: List[Path] = [beds_dir(), legacy_generated_root() / "configs", legacy_output_root()]
     return [p for p in roots if p.exists()]
+
+
+def _bed_search_bases() -> List[Tuple[str, Path]]:
+    """pastas onde terminal e web costumam gravar ficheiros .bed (sem cwd do servidor)."""
+    bases: List[Tuple[str, Path]] = []
+    for base in iter_search_roots_for_beds():
+        try:
+            rel = str(base.resolve().relative_to(project_root().resolve())).replace("\\", "/")
+        except ValueError:
+            rel = base.name
+        bases.append((rel, base))
+    dsl = project_root() / "dsl"
+    if dsl.is_dir():
+        bases.append(("dsl", dsl))
+    bases.append(("repo_root", project_root()))
+    return bases
+
+
+def resolve_validated_bed_path(rel: str) -> Optional[Path]:
+    """resolve caminho relativo ao repo se for um .bed conhecido nas pastas de pesquisa."""
+    r = (rel or "").replace("\\", "/").lstrip("/")
+    if not r or ".." in r or not r.lower().endswith(".bed"):
+        return None
+    direct = (project_root() / r).resolve()
+    root_res = project_root().resolve()
+    try:
+        direct.relative_to(root_res)
+    except ValueError:
+        return None
+    if direct.is_file():
+        return direct
+    return None
+
+
+def _detect_bed_origin(preview: str) -> str:
+    low = (preview or "")[:800].lower()
+    if "wizard web" in low:
+        return "web"
+    if "wizard" in low or "gerado pelo" in low or "gerado automaticamente" in low:
+        return "wizard"
+    return "terminal"
+
+
+def scan_bed_files(*, max_files: int = 2000) -> List[Dict[str, Any]]:
+    """
+    lista ficheiros .bed em local_data/beds, generated/configs, output, dsl e raiz do repo.
+    alinhado a _discover_bed_files do bed_wizard (terminal).
+    """
+    root_res = project_root().resolve()
+    seen: Dict[str, Path] = {}
+    for _label, base in _bed_search_bases():
+        if not base.is_dir():
+            continue
+        try:
+            if base.resolve() == root_res:
+                candidates = list(base.glob("*.bed"))
+            else:
+                candidates = list(base.glob("*.bed"))
+        except OSError:
+            continue
+        for fp in candidates:
+            if not fp.is_file():
+                continue
+            try:
+                seen[str(fp.resolve())] = fp.resolve()
+            except OSError:
+                continue
+
+    items: List[Dict[str, Any]] = []
+    for fp in seen.values():
+        try:
+            rel = str(fp.relative_to(root_res)).replace("\\", "/")
+        except ValueError:
+            continue
+        st = fp.stat()
+        json_path = Path(f"{fp}.json")
+        if not json_path.is_file():
+            alt_json = fp.with_suffix(".bed.json")
+            json_path = alt_json if alt_json.is_file() else json_path
+        preview = ""
+        try:
+            preview = fp.read_text(encoding="utf-8", errors="replace")[:1200]
+        except OSError:
+            pass
+        json_rel = None
+        if json_path.is_file():
+            try:
+                json_rel = str(json_path.relative_to(root_res)).replace("\\", "/")
+            except ValueError:
+                json_rel = json_path.name
+        items.append(
+            {
+                "relative_path": rel,
+                "filename": fp.name,
+                "size_bytes": st.st_size,
+                "mtime": st.st_mtime,
+                "mtime_iso": datetime.fromtimestamp(
+                    st.st_mtime, tz=timezone.utc
+                ).isoformat(),
+                "has_json": json_path.is_file(),
+                "json_relative_path": json_rel,
+                "origin": _detect_bed_origin(preview),
+            }
+        )
+    items.sort(key=lambda x: (-float(x["mtime"]), x["filename"].lower()))
+    return items[:max_files]
 
 
 def iter_search_roots_for_models_3d() -> List[Path]:

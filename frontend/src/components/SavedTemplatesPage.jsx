@@ -300,12 +300,6 @@ export default function SavedTemplatesPage({ onEditTemplate }) {
             className="saved-templates-mockup-card"
             aria-label={pt ? 'Biblioteca de templates' : 'Template library'}
           >
-            <p className="saved-templates-lead">
-              {pt
-                ? 'Presets .bed guardados na base de dados do backend. Criar ou editar conteúdo continua disponível no separador editor de templates.'
-                : '.bed presets stored in the backend database. Create or edit content in the template editor tab.'}
-            </p>
-
             <div className="saved-templates-toolbar">
               <input
                 type="search"

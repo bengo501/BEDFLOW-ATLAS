@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import BedPreview3D from './BedPreview3D';
 import { HelpModal, DocsModal } from './WizardHelpers';
 import ThemeIcon from './ThemeIcon';
@@ -18,9 +18,102 @@ import {
   parseApiError,
 } from '../services/api';
 import '../styles/BedWizard.css';
+import '../styles/CasosCFD.css';
+import '../styles/TemplateEditor.css';
+
+const REPO_PLACEHOLDER = '<raiz-do-repositorio>';
+
+const MODES_WITH_OPTIONAL_CFD = ['interactive', 'pipeline_completo'];
+
+const DEFAULT_CFD_PARAMS = {
+  regime: 'laminar',
+  inlet_velocity: '0.1',
+  fluid_density: '1.225',
+  fluid_viscosity: '1.8e-5',
+  max_iterations: '1000',
+  convergence_criteria: '1e-6',
+  write_fields: false,
+};
+
+function buildCliPreset(kind) {
+  if (kind === 'quick-tests') {
+    return {
+      windows_cmd: `cd /d "${REPO_PLACEHOLDER}" && python dsl\\wizard_quick_tests.py`,
+      unix_sh: `cd "${REPO_PLACEHOLDER}" && python3 dsl/wizard_quick_tests.py`,
+      hintKey: 'quickTestsCliHint',
+      script_exists: true,
+      offline: false,
+    };
+  }
+  if (kind === 'setup-install') {
+    return {
+      windows_cmd: `cd /d "${REPO_PLACEHOLDER}"\r\npython -m pip install -r dsl\\requirements-terminal.txt`,
+      unix_sh: `cd "${REPO_PLACEHOLDER}"\npython3 -m pip install -r dsl/requirements-terminal.txt`,
+      hintKey: 'terminalSetupHint',
+      script_exists: true,
+      offline: false,
+    };
+  }
+  if (kind === 'wizard-run') {
+    return {
+      windows_cmd: `cd /d "${REPO_PLACEHOLDER}" && python bed_wizard.py`,
+      unix_sh: `cd "${REPO_PLACEHOLDER}" && python3 bed_wizard.py`,
+      hintKey: 'terminalSetupRunHint',
+      script_exists: true,
+      offline: false,
+    };
+  }
+  return {
+    windows_cmd: `cd /d "${REPO_PLACEHOLDER}" && python bed_wizard.py`,
+    unix_sh: `cd "${REPO_PLACEHOLDER}" && python3 bed_wizard.py`,
+    hintKey: 'terminalSetupRunHint',
+    script_exists: true,
+    offline: false,
+  };
+}
+
+function IconCopy({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function IconArrowRight({ className }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
 
 const BedWizard = ({ onNavigateTab } = {}) => {
   const { language, t } = useLanguage();
+  const pt = language === 'pt';
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState(null);
   const [params, setParams] = useState({
@@ -61,7 +154,12 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       damping: '0.1',
       rest_velocity: '0.01',
       max_time: '5.0',
-      collision_margin: '0.001'
+      collision_margin: '0.001',
+      gap: '0.0001',
+      random_seed: '42',
+      max_placement_attempts: '500000',
+      strict_validation: true,
+      step_x: '',
     },
     export: {
       formats: ['stl_binary', 'blend'],
@@ -72,9 +170,11 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       manifold_check: true,
       merge_distance: '0.001'
     },
-    cfd: null
+    cfd: { ...DEFAULT_CFD_PARAMS },
   });
   const [includeCFD, setIncludeCFD] = useState(false);
+
+  const showCfdSteps = MODES_WITH_OPTIONAL_CFD.includes(mode);
   const [fileName, setFileName] = useState('meu_leito.bed');
 
   // informações de ajuda para cada parâmetro
@@ -114,54 +214,91 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   const [bedFileName, setBedFileName] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [wizardConnectionError, setWizardConnectionError] = useState(null);
-  const [showWizardCliModal, setShowWizardCliModal] = useState(false);
-  const [wizardCliInfo, setWizardCliInfo] = useState(null);
+  const [criarDock, setCriarDock] = useState(null);
+  const [wizardCliBackend, setWizardCliBackend] = useState({ script_exists: true, offline: true });
   const [wizardCliError, setWizardCliError] = useState(null);
   const [wizardCliBusy, setWizardCliBusy] = useState(false);
   const [wizardCliLaunchMsg, setWizardCliLaunchMsg] = useState('');
 
-  const steps = useMemo(
-    () => [
+  const steps = useMemo(() => {
+    const list = [
       { title: t('selectMode'), section: 'mode' },
       { title: t('bedGeometry'), section: 'bed' },
       { title: t('lids'), section: 'lids' },
       { title: t('particles'), section: 'particles' },
       { title: t('packing'), section: 'packing' },
       { title: t('export'), section: 'export' },
-      { title: t('cfdParams'), section: 'cfd' },
-      { title: t('confirmation'), section: 'confirm' },
-    ],
-    [language]
-  );
+    ];
+    if (showCfdSteps) {
+      list.push({ title: t('cfdParams'), section: 'cfd-toggle' });
+      if (includeCFD) {
+        list.push({ title: t('cfdParamsConfigure'), section: 'cfd-form' });
+      }
+    }
+    list.push({ title: t('confirmation'), section: 'confirm' });
+    return list;
+  }, [language, showCfdSteps, includeCFD, t]);
+
+  const currentSection = steps[step]?.section;
+
+  useEffect(() => {
+    if (step > 0 && step >= steps.length) {
+      setStep(steps.length - 1);
+    }
+  }, [step, steps.length]);
 
   const handleModeSelect = (selectedMode) => {
     setMode(selectedMode);
+    setIncludeCFD(false);
     setStep(1);
   };
 
-  const buildWizardCliFallback = () => ({
-    project_root: t('wizardCliFallbackRoot'),
-    windows_cmd: 'python bed_wizard.py',
-    unix_sh: 'python3 bed_wizard.py',
-    script_exists: true,
-    hint: t('wizardCliFallbackHint'),
-    offline: true,
-  });
+  const handleIncludeCfdChange = (checked) => {
+    setIncludeCFD(checked);
+    if (checked) {
+      setParams((prev) => ({
+        ...prev,
+        cfd: prev.cfd || { ...DEFAULT_CFD_PARAMS },
+      }));
+    }
+  };
 
-  const openWizardCliModal = async () => {
-    setShowWizardCliModal(true);
+  useEffect(() => {
+    if (step !== 0) return undefined;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await getWizardCliInstructions();
+        if (!cancelled) {
+          setWizardCliBackend({ script_exists: data.script_exists, offline: false });
+          if (!data.script_exists) setWizardCliError(t('wizardCliLoadError'));
+        }
+      } catch {
+        if (!cancelled) {
+          setWizardCliBackend({ script_exists: true, offline: true });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, t]);
+
+  const openQuickTestsDock = () => {
+    setCriarDock('quick-tests');
     setWizardCliError(null);
     setWizardCliLaunchMsg('');
-    setWizardCliInfo(null);
-    try {
-      const data = await getWizardCliInstructions();
-      setWizardCliInfo({ ...data, offline: false });
-      if (!data.script_exists) {
-        setWizardCliError(t('wizardCliLoadError'));
-      }
-    } catch {
-      setWizardCliInfo(buildWizardCliFallback());
-    }
+  };
+
+  const openTerminalSetupDock = () => {
+    setCriarDock('terminal-setup');
+    setWizardCliError(null);
+    setWizardCliLaunchMsg('');
+  };
+
+  const closeCriarDock = () => {
+    setCriarDock(null);
+    setWizardCliLaunchMsg('');
   };
 
   const handleLaunchWizardCli = async () => {
@@ -208,7 +345,10 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       const bedData = {
         mode: mode,
         fileName: fileName,
-        params: params
+        params: {
+          ...params,
+          cfd: showCfdSteps && includeCFD ? params.cfd : null,
+        },
       };
 
       const result = await postBedWizard(bedData);
@@ -229,12 +369,17 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             particles: params.particles,
             packing: params.packing,
             export: params.export,
-            cfd: includeCFD ? {
-              solver: 'simpleFoam',
-              turbulence: 'kEpsilon',
-              convergence: 1e-6,
-              max_iterations: 1000
-            } : null
+            cfd: includeCFD && params.cfd
+              ? {
+                  regime: params.cfd.regime,
+                  inlet_velocity: params.cfd.inlet_velocity,
+                  fluid_density: params.cfd.fluid_density,
+                  fluid_viscosity: params.cfd.fluid_viscosity,
+                  max_iterations: params.cfd.max_iterations,
+                  convergence_criteria: params.cfd.convergence_criteria,
+                  write_fields: params.cfd.write_fields,
+                }
+              : null,
           });
           alert(`pipeline completo iniciado!\njob_id: ${pipelineResult.job_id}\nmonitore o progresso na seção 'jobs'`);
         }
@@ -252,6 +397,105 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   const goHubTab = (tab) => {
     if (typeof onNavigateTab === 'function') onNavigateTab(tab);
   };
+
+  const renderCliCommandsBlock = (preset, { showLaunch = false, templateCopyButtons = false } = {}) => (
+    <div className="wizard-cli-commands">
+      <p className="wizard-cli-hint">{t(preset.hintKey)}</p>
+      <label>windows (cmd)</label>
+      <pre>{preset.windows_cmd}</pre>
+      <button
+        type="button"
+        className={templateCopyButtons ? 'btn-copy' : 'btn-secondary btn-mode-option'}
+        onClick={() => navigator.clipboard.writeText(preset.windows_cmd)}
+      >
+        {templateCopyButtons ? (
+          <>
+            <IconCopy className="template-toolbar-svg" />
+            {pt ? 'copiar' : 'copy'}
+          </>
+        ) : (
+          t('wizardCliCopyWin')
+        )}
+      </button>
+      <label>linux / mac / wsl (bash)</label>
+      <pre>{preset.unix_sh}</pre>
+      <button
+        type="button"
+        className={templateCopyButtons ? 'btn-copy' : 'btn-secondary btn-mode-option'}
+        onClick={() => navigator.clipboard.writeText(preset.unix_sh)}
+      >
+        {templateCopyButtons ? (
+          <>
+            <IconCopy className="template-toolbar-svg" />
+            {pt ? 'copiar' : 'copy'}
+          </>
+        ) : (
+          t('wizardCliCopyUnix')
+        )}
+      </button>
+      {showLaunch && (
+        <div className="wizard-cli-actions">
+          <button
+            type="button"
+            className="btn-primary btn-mode-option"
+            title={wizardCliBackend.offline ? t('wizardCliLaunchNeedsBackend') : undefined}
+            disabled={
+              wizardCliBusy || !wizardCliBackend.script_exists || wizardCliBackend.offline
+            }
+            onClick={() => {
+              void handleLaunchWizardCli();
+            }}
+          >
+            {t('wizardCliOpenTerminal')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderCliPanel = ({
+    title,
+    intro,
+    presets,
+    showLaunch = false,
+    compact = false,
+    onClose,
+    titleIcon,
+    templateCopyButtons = false,
+  }) => (
+    <div className={`criar-cli-panel${compact ? ' criar-cli-panel--compact' : ''}`}>
+      <div className="criar-cli-panel-head">
+        <div className="criar-cli-panel-title-row">
+          {titleIcon && (
+            <ThemeIcon
+              light={titleIcon.light}
+              dark={titleIcon.dark}
+              alt=""
+              className="criar-cli-panel-title-icon"
+            />
+          )}
+          <h3 id="criar-dock-title" className="criar-cli-panel-title">{title}</h3>
+        </div>
+        {onClose && (
+          <button type="button" className="criar-cli-panel-close" onClick={onClose} aria-label={t('close')}>
+            ×
+          </button>
+        )}
+      </div>
+      {intro && <p className="wizard-cli-intro">{intro}</p>}
+      {wizardCliError && <p className="wizard-cli-err">{wizardCliError}</p>}
+      {presets.map((preset) => (
+        <div key={preset.hintKey} className="criar-cli-preset-block">
+          {renderCliCommandsBlock(preset, {
+            showLaunch: preset.showLaunch ?? showLaunch,
+            templateCopyButtons,
+          })}
+        </div>
+      ))}
+      {wizardCliLaunchMsg && <p className="wizard-cli-launch-msg">{wizardCliLaunchMsg}</p>}
+      {!compact && <p className="wizard-cli-foot">{t('wizardCliFootnote')}</p>}
+    </div>
+  );
 
   const bedProcessActionLabel = () => {
     if (mode === 'interactive') return t('bedProcessBtnInteractive');
@@ -372,26 +616,43 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             className="mode-card"
             role="button"
             tabIndex={0}
-            onClick={() => goHubTab('casos')}
-            onKeyDown={cardKey(() => goHubTab('casos'))}
+            onClick={() => goHubTab('templates')}
+            onKeyDown={cardKey(() => goHubTab('templates'))}
           >
-            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
-            <h3>{t('hubSolverOnlyTitle')}</h3>
-            <p className="mode-card-desc">{t('hubSolverOnlyDesc')}</p>
+            <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCardTemplatesTitle')}</h3>
+            <p className="mode-card-desc">{t('hubCardTemplatesDesc')}</p>
           </div>
           <div
             className="mode-card"
             role="button"
             tabIndex={0}
-            onClick={() => {
-              void openWizardCliModal();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                void openWizardCliModal();
-              }
-            }}
+            onClick={() => goHubTab('casos')}
+            onKeyDown={cardKey(() => goHubTab('casos'))}
+          >
+            <ThemeIcon light="cfd_gear_white.png" dark="image-removebg-preview(12).png" alt="" className="mode-icon-small" />
+            <h3>{t('hubCardCfdTitle')}</h3>
+            <p className="mode-card-desc">{t('hubCardCfdDesc')}</p>
+          </div>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={openTerminalSetupDock}
+            onKeyDown={cardKey(openTerminalSetupDock)}
+          >
+            <div className="mode-card-title-row">
+              <ThemeIcon light="docsLight.png" dark="docsLight.png" alt="" className="mode-icon-small mode-icon-terminal-setup" />
+              <h3>{t('terminalSetupTitle')}</h3>
+            </div>
+            <p className="mode-card-desc">{t('hubCardTerminalSetupDesc')}</p>
+          </div>
+          <div
+            className="mode-card"
+            role="button"
+            tabIndex={0}
+            onClick={openQuickTestsDock}
+            onKeyDown={cardKey(openQuickTestsDock)}
           >
             <ThemeIcon light="runLight.png" dark="runDark.png" alt="" className="mode-icon-small" />
             <h3>{t('hubCardQuickTitle')}</h3>
@@ -525,6 +786,17 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           />
           <small>ex: 0.003m = 3mm</small>
         </div>
+
+        <div className="form-group">
+          <label>folga do selo (m)</label>
+          <input
+            type="number"
+            step="0.0001"
+            value={params.lids.seal_clearance}
+            onChange={(e) => handleInputChange('lids', 'seal_clearance', e.target.value)}
+          />
+          <small>espaço entre tampa e parede</small>
+        </div>
       </div>
     </div>
   );
@@ -566,6 +838,19 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           />
           <small>100 = rápido, 1000 = detalhado</small>
         </div>
+
+        <div className="form-group">
+          <label>porosidade alvo</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            max="1"
+            value={params.particles.target_porosity}
+            onChange={(e) => handleInputChange('particles', 'target_porosity', e.target.value)}
+          />
+          <small>ex: 0.4 = 40% vazio</small>
+        </div>
         
         <div className="form-group">
           <label>densidade (kg/m³)</label>
@@ -576,6 +861,18 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             onChange={(e) => handleInputChange('particles', 'density', e.target.value)}
           />
           <small>vidro = 2500, aço = 7850</small>
+        </div>
+
+        <div className="form-group">
+          <label>massa (g) — opcional</label>
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            value={params.particles.mass}
+            onChange={(e) => handleInputChange('particles', 'mass', e.target.value)}
+          />
+          <small>0 = calcular automaticamente</small>
         </div>
         
         <div className="form-group">
@@ -617,6 +914,42 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             />
             <small>0.5 = atrito moderado</small>
           </div>
+
+          <div className="form-group">
+            <label>atrito de rolamento</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="1"
+              value={params.particles.rolling_friction}
+              onChange={(e) => handleInputChange('particles', 'rolling_friction', e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>amortecimento linear</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="1"
+              value={params.particles.linear_damping}
+              onChange={(e) => handleInputChange('particles', 'linear_damping', e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>amortecimento angular</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="1"
+              value={params.particles.angular_damping}
+              onChange={(e) => handleInputChange('particles', 'angular_damping', e.target.value)}
+            />
+          </div>
         </div>
       </details>
     </div>
@@ -634,40 +967,133 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             onChange={(e) => handleInputChange('packing', 'method', e.target.value)}
           >
             <option value="rigid_body">corpo rígido (física)</option>
+              <option value="spherical_packing">empacotamento esférico</option>
+              <option value="hexagonal_3d">grade hexagonal 3d</option>
           </select>
         </div>
-        
-        <div className="form-group">
-          <label>gravidade (m/s²)</label>
-          <input
-            type="number"
-            step="0.1"
-            value={params.packing.gravity}
-            onChange={(e) => handleInputChange('packing', 'gravity', e.target.value)}
-          />
-          <small>terra = -9.81, lua = -1.62</small>
-        </div>
-        
-        <div className="form-group">
-          <label>sub-passos</label>
-          <input
-            type="number"
-            value={params.packing.substeps}
-            onChange={(e) => handleInputChange('packing', 'substeps', e.target.value)}
-          />
-          <small>10 = boa precisão</small>
-        </div>
-        
-        <div className="form-group">
-          <label>tempo máximo (s)</label>
-          <input
-            type="number"
-            step="0.5"
-            value={params.packing.max_time}
-            onChange={(e) => handleInputChange('packing', 'max_time', e.target.value)}
-          />
-          <small>5s = suficiente para empacotamento</small>
-        </div>
+
+        {params.packing.method === 'rigid_body' && (
+          <>
+            <div className="form-group">
+              <label>gravidade (m/s²)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={params.packing.gravity}
+                onChange={(e) => handleInputChange('packing', 'gravity', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>sub-passos</label>
+              <input
+                type="number"
+                value={params.packing.substeps}
+                onChange={(e) => handleInputChange('packing', 'substeps', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>iterações</label>
+              <input
+                type="number"
+                value={params.packing.iterations}
+                onChange={(e) => handleInputChange('packing', 'iterations', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>amortecimento</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="1"
+                value={params.packing.damping}
+                onChange={(e) => handleInputChange('packing', 'damping', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>velocidade de repouso (m/s)</label>
+              <input
+                type="number"
+                step="0.001"
+                value={params.packing.rest_velocity}
+                onChange={(e) => handleInputChange('packing', 'rest_velocity', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>tempo máximo (s)</label>
+              <input
+                type="number"
+                step="0.5"
+                value={params.packing.max_time}
+                onChange={(e) => handleInputChange('packing', 'max_time', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>margem de colisão (m)</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={params.packing.collision_margin}
+                onChange={(e) => handleInputChange('packing', 'collision_margin', e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
+        {(params.packing.method === 'spherical_packing' || params.packing.method === 'hexagonal_3d') && (
+          <>
+            <div className="form-group">
+              <label>gap entre superfícies (m)</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={params.packing.gap}
+                onChange={(e) => handleInputChange('packing', 'gap', e.target.value)}
+              />
+            </div>
+            {params.packing.method === 'spherical_packing' && (
+              <>
+                <div className="form-group">
+                  <label>random seed</label>
+                  <input
+                    type="number"
+                    value={params.packing.random_seed}
+                    onChange={(e) => handleInputChange('packing', 'random_seed', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>máx. tentativas de colocação</label>
+                  <input
+                    type="number"
+                    value={params.packing.max_placement_attempts}
+                    onChange={(e) => handleInputChange('packing', 'max_placement_attempts', e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+            {params.packing.method === 'hexagonal_3d' && (
+              <div className="form-group">
+                <label>passo horizontal step_x (m)</label>
+                <input
+                  type="text"
+                  value={params.packing.step_x}
+                  onChange={(e) => handleInputChange('packing', 'step_x', e.target.value)}
+                  placeholder="vazio = automático"
+                />
+              </div>
+            )}
+            <div className="form-group checkbox-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={Boolean(params.packing.strict_validation)}
+                  onChange={(e) => handleInputChange('packing', 'strict_validation', e.target.checked)}
+                />
+                validação estrita (strict_validation)
+              </label>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -739,6 +1165,38 @@ const BedWizard = ({ onNavigateTab } = {}) => {
               <option value="cavity">cavidade</option>
             </select>
           </div>
+
+          <div className="form-group">
+            <label>unidades</label>
+            <select
+              value={params.export.units}
+              onChange={(e) => handleInputChange('export', 'units', e.target.value)}
+            >
+              <option value="m">metros (m)</option>
+              <option value="mm">milímetros (mm)</option>
+              <option value="cm">centímetros (cm)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>escala</label>
+            <input
+              type="text"
+              value={params.export.scale}
+              onChange={(e) => handleInputChange('export', 'scale', e.target.value)}
+            />
+            <small>fator aplicado na exportação (ex.: 1.0)</small>
+          </div>
+
+          <div className="form-group">
+            <label>distância de merge (m)</label>
+            <input
+              type="number"
+              step="0.0001"
+              value={params.export.merge_distance}
+              onChange={(e) => handleInputChange('export', 'merge_distance', e.target.value)}
+            />
+          </div>
           
           <div className="form-group checkbox-group">
             <label>
@@ -750,6 +1208,110 @@ const BedWizard = ({ onNavigateTab } = {}) => {
               verificar manifold (recomendado)
             </label>
             <small>garante integridade da malha</small>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCfdToggleSection = () => (
+    <div className="form-section">
+      <h2>{t('cfdParams')}</h2>
+      <div className="checkbox-group">
+        <label>
+          <input
+            type="checkbox"
+            checked={includeCFD}
+            onChange={(e) => handleIncludeCfdChange(e.target.checked)}
+          />
+          {t('cfdIncludeLabel')}
+        </label>
+      </div>
+      <p className="wizard-hint-muted">
+        {pt
+          ? 'se marcar, na próxima página poderá configurar regime, fluido e convergência.'
+          : 'if checked, the next page lets you configure regime, fluid and convergence.'}
+      </p>
+    </div>
+  );
+
+  const renderCfdSection = () => {
+    const cfd = params.cfd || DEFAULT_CFD_PARAMS;
+    return (
+      <div className="form-section">
+        <h2>{t('cfdParamsConfigure')}</h2>
+        <div className="form-grid">
+          <div className="form-group">
+            <label>regime</label>
+            <select
+              value={cfd.regime}
+              onChange={(e) => handleInputChange('cfd', 'regime', e.target.value)}
+            >
+              <option value="laminar">laminar</option>
+              <option value="turbulent_rans">turbulento (rans)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>velocidade de entrada (m/s)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={cfd.inlet_velocity}
+              onChange={(e) => handleInputChange('cfd', 'inlet_velocity', e.target.value)}
+            />
+            <small>ex: 0.1 m/s = escoamento lento</small>
+          </div>
+
+          <div className="form-group">
+            <label>densidade do fluido (kg/m³)</label>
+            <input
+              type="number"
+              step="0.001"
+              value={cfd.fluid_density}
+              onChange={(e) => handleInputChange('cfd', 'fluid_density', e.target.value)}
+            />
+            <small>ar ≈ 1.225, água ≈ 1000</small>
+          </div>
+
+          <div className="form-group">
+            <label>viscosidade do fluido (pa·s)</label>
+            <input
+              type="text"
+              value={cfd.fluid_viscosity}
+              onChange={(e) => handleInputChange('cfd', 'fluid_viscosity', e.target.value)}
+            />
+            <small>ar ≈ 1.8e-5, água ≈ 1e-3</small>
+          </div>
+
+          <div className="form-group">
+            <label>iterações máximas</label>
+            <input
+              type="number"
+              value={cfd.max_iterations}
+              onChange={(e) => handleInputChange('cfd', 'max_iterations', e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>critério de convergência</label>
+            <input
+              type="text"
+              value={cfd.convergence_criteria}
+              onChange={(e) => handleInputChange('cfd', 'convergence_criteria', e.target.value)}
+            />
+            <small>ex: 1e-6</small>
+          </div>
+
+          <div className="form-group checkbox-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={Boolean(cfd.write_fields)}
+                onChange={(e) => handleInputChange('cfd', 'write_fields', e.target.checked)}
+              />
+              escrever campos (velocidade/pressão)
+            </label>
           </div>
         </div>
       </div>
@@ -780,15 +1342,35 @@ const BedWizard = ({ onNavigateTab } = {}) => {
         
         <div className="summary-card">
           <h3>empacotamento</h3>
-          <p>{params.packing.method}</p>
-          <p>gravidade: {params.packing.gravity} m/s²</p>
+          <p>método: {params.packing.method}</p>
+          {params.packing.method === 'rigid_body' && (
+            <p>gravidade: {params.packing.gravity} m/s²</p>
+          )}
+          {(params.packing.method === 'spherical_packing' || params.packing.method === 'hexagonal_3d') && (
+            <>
+              <p>gap: {params.packing.gap} m</p>
+              {params.packing.strict_validation && <p>validação estrita: sim</p>}
+            </>
+          )}
         </div>
         
         <div className="summary-card">
           <h3>exportação</h3>
           <p>formatos: {params.export.formats.join(', ')}</p>
-          <p>modo: {params.export.wall_mode}</p>
+          <p>unidades: {params.export.units}, escala: {params.export.scale}</p>
+          <p>modo parede: {params.export.wall_mode}</p>
+          <p>merge: {params.export.merge_distance} m</p>
         </div>
+
+        {showCfdSteps && includeCFD && params.cfd && (
+          <div className="summary-card">
+            <h3>cfd</h3>
+            <p>regime: {params.cfd.regime}</p>
+            <p>entrada: {params.cfd.inlet_velocity} m/s</p>
+            <p>ρ: {params.cfd.fluid_density} kg/m³, μ: {params.cfd.fluid_viscosity} pa·s</p>
+            <p>iterações: {params.cfd.max_iterations}, convergência: {params.cfd.convergence_criteria}</p>
+          </div>
+        )}
       </div>
       
       <div className="form-group">
@@ -929,100 +1511,39 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       
 
       {/* modal de opções de arquivo .bed */}
-      {showWizardCliModal && (
+      {criarDock && (
         <div
-          className="modal-overlay"
+          className="criar-dock-backdrop"
           role="presentation"
-          onClick={() => {
-            setShowWizardCliModal(false);
-            setWizardCliInfo(null);
-            setWizardCliError(null);
-            setWizardCliLaunchMsg('');
-          }}
+          onClick={closeCriarDock}
         >
           <div
-            className="modal-content bed-file-options wizard-cli-modal"
+            className="criar-dock-shell"
             role="dialog"
-            aria-labelledby="wizard-cli-title"
+            aria-labelledby="criar-dock-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-header">
-              <h2 id="wizard-cli-title">{t('wizardCliModalTitle')}</h2>
-              <button
-                type="button"
-                className="btn-close"
-                onClick={() => {
-                  setShowWizardCliModal(false);
-                  setWizardCliInfo(null);
-                  setWizardCliError(null);
-                  setWizardCliLaunchMsg('');
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <div className="wizard-cli-body">
-              <p className="wizard-cli-intro">{t('wizardCliModalIntro')}</p>
-              {wizardCliError && <p className="wizard-cli-err">{wizardCliError}</p>}
-              {wizardCliInfo && (
-                <div className="wizard-cli-commands">
-                  <p className="wizard-cli-hint">{wizardCliInfo.hint}</p>
-                  <label>windows (cmd)</label>
-                  <pre>{wizardCliInfo.windows_cmd}</pre>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => navigator.clipboard.writeText(wizardCliInfo.windows_cmd)}
-                  >
-                    {t('wizardCliCopyWin')}
-                  </button>
-                  <label>linux / mac / wsl (bash)</label>
-                  <pre>{wizardCliInfo.unix_sh}</pre>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => navigator.clipboard.writeText(wizardCliInfo.unix_sh)}
-                  >
-                    {t('wizardCliCopyUnix')}
-                  </button>
-                  <p className="wizard-cli-root">
-                    <span>project_root: </span>
-                    {wizardCliInfo.project_root}
-                  </p>
-                </div>
-              )}
-              {wizardCliLaunchMsg && <p className="wizard-cli-launch-msg">{wizardCliLaunchMsg}</p>}
-              <p className="wizard-cli-foot">{t('wizardCliFootnote')}</p>
-              <div className="wizard-cli-actions">
-                <button
-                  type="button"
-                  className="btn-primary"
-                  title={wizardCliInfo?.offline ? t('wizardCliLaunchNeedsBackend') : undefined}
-                  disabled={
-                    wizardCliBusy ||
-                    !wizardCliInfo?.script_exists ||
-                    wizardCliInfo?.offline
-                  }
-                  onClick={() => {
-                    void handleLaunchWizardCli();
-                  }}
-                >
-                  {t('wizardCliOpenTerminal')}
-                </button>
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={() => {
-                    setShowWizardCliModal(false);
-                    setWizardCliInfo(null);
-                    setWizardCliError(null);
-                    setWizardCliLaunchMsg('');
-                  }}
-                >
-                  {t('close')}
-                </button>
-              </div>
-            </div>
+            {criarDock === 'quick-tests' &&
+              renderCliPanel({
+                title: t('quickTestsDockTitle'),
+                intro: t('quickTestsDockIntro'),
+                presets: [buildCliPreset('quick-tests')],
+                compact: true,
+                onClose: closeCriarDock,
+              })}
+            {criarDock === 'terminal-setup' &&
+              renderCliPanel({
+                title: t('terminalSetupTitle'),
+                intro: t('terminalSetupIntro'),
+                presets: [
+                  buildCliPreset('setup-install'),
+                  { ...buildCliPreset('wizard-run'), showLaunch: true },
+                ],
+                compact: true,
+                onClose: closeCriarDock,
+                titleIcon: { light: 'docsLight.png', dark: 'docsLight.png' },
+                templateCopyButtons: true,
+              })}
           </div>
         </div>
       )}
@@ -1132,51 +1653,32 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             <div className="criar-hub-cards-panel">{renderModeSelection()}</div>
           </>
         )}
-        {step === 1 && renderBedSection()}
-        {step === 2 && renderLidsSection()}
-        {step === 3 && renderParticlesSection()}
-        {step === 4 && renderPackingSection()}
-        {step === 5 && renderExportSection()}
-        {step === 6 && (
-          <div className="form-section">
-            <h2>parâmetros CFD (opcional)</h2>
-            <div className="checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={includeCFD}
-                  onChange={(e) => setIncludeCFD(e.target.checked)}
-                />
-                incluir parâmetros de simulação CFD
-              </label>
-            </div>
-            {includeCFD && (
-              <p className="info-message">
-                parâmetros CFD serão configurados na próxima etapa
-              </p>
-            )}
-          </div>
-        )}
-        {step === 7 && renderConfirmation()}
+        {currentSection === 'bed' && renderBedSection()}
+        {currentSection === 'lids' && renderLidsSection()}
+        {currentSection === 'particles' && renderParticlesSection()}
+        {currentSection === 'packing' && renderPackingSection()}
+        {currentSection === 'export' && renderExportSection()}
+        {currentSection === 'cfd-toggle' && renderCfdToggleSection()}
+        {currentSection === 'cfd-form' && renderCfdSection()}
+        {currentSection === 'confirm' && renderConfirmation()}
       </div>
 
       {/* botões de navegação */}
       {step > 0 && (
-        <div className="wizard-footer">
-          <button 
-            className="btn btn-secondary" 
-            onClick={handlePrev}
-          >
-            ← voltar
+        <div className="wizard-footer wizard-footer-nav caso-acoes">
+          <button type="button" className="btn-mode-option wizard-nav-btn" onClick={handlePrev}>
+            <ThemeIcon light="cancelLight.png" dark="cancelDark.png" alt="" className="btn-icon" />
+            {pt ? 'voltar' : 'back'}
           </button>
-          
           {step < steps.length - 1 ? (
-            <button className="btn btn-primary" onClick={handleNext}>
-              próximo →
+            <button type="button" className="btn-mode-option wizard-nav-btn wizard-nav-btn--next" onClick={handleNext}>
+              <IconArrowRight className="btn-icon wizard-nav-arrow" />
+              {pt ? 'próximo' : 'next'}
             </button>
           ) : (
-            <button className="btn btn-success" onClick={handleSubmit}>
-              gerar arquivo .bed
+            <button type="button" className="btn-mode-option wizard-nav-btn" onClick={handleSubmit}>
+              <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="btn-icon" />
+              {pt ? 'gerar .bed' : 'generate .bed'}
             </button>
           )}
         </div>

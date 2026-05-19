@@ -114,7 +114,6 @@ export default function SettingsPage({ navigateTab, onLogout }) {
 
   const onThemeChange = (value) => {
     setThemeModeLocal(value);
-    setThemeMode(value);
   };
 
   const onLangChange = (value) => {
@@ -239,11 +238,6 @@ export default function SettingsPage({ navigateTab, onLogout }) {
 
         <div className="settings-page-layout">
           <div className="settings-main">
-            <p className="settings-lead">
-              {pt
-                ? 'Preferências na tabela app_settings (singleton). Idioma sincroniza com user_profiles. Opções extra ficam em options_json.'
-                : 'Preferences in app_settings (singleton). Language syncs to user_profiles. Extra options live in options_json.'}
-            </p>
             {updatedAt && (
               <p className="settings-meta">
                 {pt ? 'Última atualização na base:' : 'Last saved:'}{' '}

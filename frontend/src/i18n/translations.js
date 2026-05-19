@@ -112,6 +112,15 @@ export const translations = {
     wizardCliFallbackHint: 'backend indisponível: estes comandos assumem que o terminal está na raiz do clone (onde está bed_wizard.py).',
     wizardCliFallbackRoot: '(raiz do repositório no seu disco)',
     wizardCliLaunchNeedsBackend: 'só disponível com o backend em execução.',
+    wizardCliGenericHint: 'execute na raiz do repositório (pasta com bed_wizard.py).',
+    terminalSetupTitle: 'setup terminal',
+    hubCardTerminalSetupDesc: 'instalar dependências do menu terminal e comando para iniciar o wizard.',
+    terminalSetupIntro: 'dependências do menu interativo (rich). depois use python bed_wizard.py na mesma pasta.',
+    terminalSetupHint: 'instalar dependências (uma vez):',
+    terminalSetupRunHint: 'iniciar o wizard no terminal:',
+    quickTestsDockTitle: 'testes rápidos',
+    quickTestsDockIntro: 'equivalente à opção 3 do menu terminal — validação guiada sem misturar com templates.',
+    quickTestsCliHint: 'na raiz do repositório:',
     
     // botões
     back: 'voltar',
@@ -132,6 +141,8 @@ export const translations = {
     packing: 'empacotamento',
     export: 'exportação',
     cfdParams: 'parâmetros cfd (opcional)',
+    cfdParamsConfigure: 'configurar parâmetros cfd',
+    cfdIncludeLabel: 'incluir parâmetros de simulação cfd',
     confirmation: 'confirmação',
     
     // cfd
@@ -207,6 +218,7 @@ export const translations = {
     
     // results
     modelos3d: 'modelos 3d',
+    codigoBed: 'código .bed',
     simulacoesCfd: 'simulações cfd',
     baixar: 'baixar',
     visualizar: 'visualizar',
@@ -330,6 +342,15 @@ export const translations = {
     wizardCliFallbackHint: 'backend unavailable: these commands assume the shell cwd is the repo root (where bed_wizard.py lives).',
     wizardCliFallbackRoot: '(your local repo root)',
     wizardCliLaunchNeedsBackend: 'only available when the backend is running.',
+    wizardCliGenericHint: 'run at the repository root (folder containing bed_wizard.py).',
+    terminalSetupTitle: 'terminal setup',
+    hubCardTerminalSetupDesc: 'install terminal menu dependencies and the command to start the wizard.',
+    terminalSetupIntro: 'interactive menu dependencies (rich). then run python bed_wizard.py in the same folder.',
+    terminalSetupHint: 'install dependencies (once):',
+    terminalSetupRunHint: 'start the wizard in a terminal:',
+    quickTestsDockTitle: 'quick tests',
+    quickTestsDockIntro: 'same as terminal menu option 3 — guided validation without mixing with templates.',
+    quickTestsCliHint: 'at the repository root:',
     
     // buttons
     back: 'back',
@@ -350,6 +371,8 @@ export const translations = {
     packing: 'packing',
     export: 'export',
     cfdParams: 'cfd parameters (optional)',
+    cfdParamsConfigure: 'configure cfd parameters',
+    cfdIncludeLabel: 'include cfd simulation parameters',
     confirmation: 'confirmation',
     
     // cfd
@@ -425,6 +448,7 @@ export const translations = {
     
     // results
     modelos3d: '3d models',
+    codigoBed: '.bed code',
     simulacoesCfd: 'cfd simulations',
     baixar: 'download',
     visualizar: 'view',

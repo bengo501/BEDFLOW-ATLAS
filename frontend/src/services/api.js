@@ -275,6 +275,39 @@ export const listModels3D = async ({
   return response.data;
 };
 
+/** ficheiros .bed no disco (web, terminal, legado) */
+export const listBedFiles = async ({
+  page = 1,
+  limit = 12,
+  search = null,
+  has_json = null,
+  origin = null,
+} = {}) => {
+  const response = await api.get('/api/bed-files', {
+    params: {
+      page,
+      limit,
+      ...(search ? { search } : {}),
+      ...(has_json !== null && has_json !== '' ? { has_json } : {}),
+      ...(origin ? { origin } : {}),
+    },
+  });
+  return response.data;
+};
+
+export const getBedFileContent = async (relativePath) => {
+  const response = await api.get('/api/bed-files/content', {
+    params: { rel: relativePath },
+  });
+  return response.data;
+};
+
+export const buildBedFileDownloadUrl = (relativePath) => {
+  if (!relativePath) return null;
+  const rel = encodeURIComponent(String(relativePath).replace(/\\/g, '/'));
+  return `${getApiBase()}/api/bed-files/download?rel=${rel}`;
+};
+
 const normalizeModelPath = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
 
 /** une modelos da base com malhas geradas no projeto (scan do viewer) */

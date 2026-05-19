@@ -665,7 +665,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
                   checked={showFloor}
                   onChange={(e) => setShowFloor(e.target.checked)}
                 />
-                {pt ? 'chão (grelha)' : 'floor (grid)'}
+                {pt ? 'chão' : 'floor'}
               </label>
               <label className="mesh-viewer-check">
                 <input

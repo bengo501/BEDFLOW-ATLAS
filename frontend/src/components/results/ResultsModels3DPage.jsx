@@ -24,16 +24,11 @@ function getModelPreviewPath(model) {
     : buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
 }
 
-function getModelOpenUrl(model) {
-  if (model.mesh_id) return buildMeshStreamUrl(model.mesh_id)
-  return buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
-}
-
 function getModelDownloadPath(model) {
   return buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
 }
 
-function ResultsModels3DPage() {
+function ResultsModels3DPage({ onOpenInViewer }) {
   const { t, language } = useLanguage()
   const { activeUserId } = useActiveUser()
   const pt = language === 'pt'
@@ -279,8 +274,9 @@ function ResultsModels3DPage() {
             <div className="casos-grid">
               {models.map((model) => {
                 const previewPath = getModelPreviewPath(model)
-                const openUrl = getModelOpenUrl(model)
                 const downloadPath = getModelDownloadPath(model)
+                const canPreview = Boolean(previewPath)
+                const canOpenViewer = Boolean(model.mesh_id && typeof onOpenInViewer === 'function')
                 return (
                   <div key={`model-${model.id}`} className="caso-card">
                     <div className="caso-header">
@@ -327,7 +323,8 @@ function ResultsModels3DPage() {
                         type="button"
                         className="btn-mode-option"
                         onClick={() => setSelectedModel({ ...model, path: previewPath })}
-                        disabled={!previewPath}
+                        disabled={!canPreview}
+                        title={pt ? 'pré-visualização rápida' : 'quick preview'}
                       >
                         <ThemeIcon
                           light="viewLight-removebg-preview.png"
@@ -335,29 +332,36 @@ function ResultsModels3DPage() {
                           alt=""
                           className="btn-icon"
                         />
-                        {pt ? 'visualizar' : 'view'}
+                        {pt ? 'pré-visualizar' : 'preview'}
                       </button>
                       <button
                         type="button"
                         className="btn-mode-option"
-                        onClick={() => {
-                          if (openUrl) window.open(openUrl, '_blank')
-                        }}
-                        disabled={!openUrl}
+                        onClick={() => onOpenInViewer(model.mesh_id)}
+                        disabled={!canOpenViewer}
+                        title={
+                          canOpenViewer
+                            ? pt
+                              ? 'abrir na página visualização 3d'
+                              : 'open in 3d viewer page'
+                            : pt
+                              ? 'disponível apenas para malhas indexadas no viewer'
+                              : 'only for meshes indexed in the viewer'
+                        }
                       >
                         <ThemeIcon
-                          light="viewLight-removebg-preview.png"
-                          dark="viewDark-removebg-preview.png"
+                          light="cfd_gear_white.png"
+                          dark="cfd_gear_white.png"
                           alt=""
                           className="btn-icon"
                         />
-                        {pt ? 'abrir' : 'open'}
+                        {pt ? 'visualização 3d' : '3d viewer'}
                       </button>
                       <button
                         type="button"
                         className="btn-mode-option"
                         onClick={() => {
-                          if (downloadPath) window.open(downloadPath, '_blank')
+                          if (downloadPath) window.open(downloadPath, '_blank', 'noopener,noreferrer')
                         }}
                         disabled={!downloadPath}
                       >

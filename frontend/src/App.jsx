@@ -6,6 +6,7 @@ import CasosCFD from './components/CasosCFD'
 import JobStatus from './components/JobStatus'
 import ResultsSimulationsPage from './components/results/ResultsSimulationsPage'
 import ResultsModels3DPage from './components/results/ResultsModels3DPage'
+import ResultsBedCodePage from './components/results/ResultsBedCodePage'
 import TemplateEditor from './components/TemplateEditor'
 import ProfilePage from './components/ProfilePage'
 import ReportsPage from './components/ReportsPage'
@@ -32,6 +33,7 @@ const SIMPLE_MODE_TABS = new Set([
   'jobs',
   'results-simulations',
   'results-models',
+  'results-bed',
   'settings',
 ])
 
@@ -39,7 +41,7 @@ const SIMPLE_MODE_TABS = new Set([
 const COLLAPSIBLE_NAV_SECTIONS = new Set(['templates', 'analysis', 'history', 'history-results'])
 
 /** abas dentro de histórico → resultados */
-const HISTORY_RESULTS_TABS = new Set(['casos', 'results-simulations', 'results-models'])
+const HISTORY_RESULTS_TABS = new Set(['casos', 'results-simulations', 'results-models', 'results-bed'])
 
 function App() {
   const { language, toggleLanguage, t, setLanguage } = useLanguage();
@@ -127,6 +129,14 @@ function App() {
       .then((s) => {
         if (cancelled) return;
         applySettingsFromApi(s);
+        const tm = s.theme_mode;
+        if (tm === 'dark' || tm === 'light' || tm === 'system') {
+          setThemeMode(tm);
+        }
+        const lg = s.language;
+        if (lg === 'pt' || lg === 'en') {
+          setLanguage(lg);
+        }
         const j = Number(s.jobs_poll_interval_sec);
         if (Number.isFinite(j) && j >= 3 && j <= 120) {
           localStorage.setItem('jobsPollIntervalSec', String(j));
@@ -136,7 +146,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [applySettingsFromApi]);
+  }, [applySettingsFromApi, setLanguage, setThemeMode]);
 
   useEffect(() => {
     if (!simpleMode) return;
@@ -241,6 +251,7 @@ function App() {
       jobs: 'history',
       'results-simulations': 'history',
       'results-models': 'history',
+      'results-bed': 'history',
       profile: 'profile',
       settings: 'settings',
     }
@@ -266,6 +277,15 @@ function App() {
     setCurrentJob(job)
     navigateToTab('jobs')
   }
+
+  const openMeshInViewer = useCallback(
+    (meshId) => {
+      if (!meshId) return
+      setBootMeshViewerId(String(meshId))
+      navigateToTab('mesh-viewer')
+    },
+    [navigateToTab]
+  )
 
   const resetToCreationHome = () => {
     setExpandedSections((prev) => {
@@ -309,30 +329,30 @@ function App() {
 
   return (
     <div className="app">
-      {/* header */}
-      <header className={`header ${isScrolled ? 'header-scrolled' : ''}`}>
-        <div className="header-content">
-          <div className="header-left">
-            <button
-              type="button"
-              className="logo-container logo-container-btn"
-              onClick={resetToCreationHome}
-              title={language === 'pt' ? 'ir para criar' : 'go to create'}
-              aria-label={language === 'pt' ? 'ir para criar' : 'go to create'}
-            >
-              <img 
-                src="/image/cfdPipelineLight.png" 
-                alt="cfd pipeline logo" 
-                className={`logo-icon ${theme === 'dark' ? 'logo-dark' : 'logo-light'}`}
-              />
-              <div className="logo-text">
-                <h1>{t('appCreativeTitle')}</h1>
-                <span className="subtitle">{t('appTagline')}</span>
-              </div>
-            </button>
-          </div>
-          
-          <div className="header-right">
+      <div className={`app-shell-top ${isScrolled ? 'app-shell-top-scrolled' : ''}`}>
+        <div className="app-brand" aria-label={t('appCreativeTitle')}>
+          <button
+            type="button"
+            className="logo-container logo-container-btn app-brand-btn"
+            onClick={resetToCreationHome}
+            title={language === 'pt' ? 'ir para criar' : 'go to create'}
+            aria-label={language === 'pt' ? 'ir para criar' : 'go to create'}
+          >
+            <img
+              src="/image/cfdPipelineLight.png"
+              alt="cfd pipeline logo"
+              className={`logo-icon ${theme === 'dark' ? 'logo-dark' : 'logo-light'}`}
+            />
+            <div className="logo-text">
+              <h1>{t('appCreativeTitle')}</h1>
+              <span className="subtitle">{t('appTagline')}</span>
+            </div>
+          </button>
+        </div>
+
+        <header className={`header ${isScrolled ? 'header-scrolled' : ''}`}>
+          <div className="header-content">
+            <div className="header-right">
             <button
               type="button"
               className="new-simulation-btn"
@@ -435,11 +455,10 @@ function App() {
                 />
               </button>
             </div>
+            </div>
           </div>
-        </div>
-      </header>
-
-
+        </header>
+      </div>
 
       <div className="app-body">
         {/* sidebar (barra lateral) */}
@@ -556,7 +575,7 @@ function App() {
 
                   <div className="nav-subsection-nested">
                     <div
-                      className="nav-section-header nav-subsection-header"
+                      className="nav-section-header"
                       onClick={() => toggleSection('history-results')}
                       role="button"
                       tabIndex={0}
@@ -568,7 +587,10 @@ function App() {
                         }
                       }}
                     >
-                      <h4 className="nav-subsection-title">{t('results')}</h4>
+                      <h3 className="nav-section-title">
+                        <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="resultados" className="section-icon" location="sidebar" />
+                        {t('results')}
+                      </h3>
                       <span className="nav-folder-toggle" aria-hidden="true">
                         {expandedSections['history-results'] ? '−' : '+'}
                       </span>
@@ -595,6 +617,13 @@ function App() {
                         >
                           <ThemeIcon light="modelLight-removebg-preview.png" dark="modelDark-removebg-preview.png" alt="modelos 3d" className="nav-icon" />
                           <span className="nav-label">{language === 'pt' ? 'modelos 3D' : '3D models'}</span>
+                        </button>
+                        <button
+                          className={`nav-item ${activeTab === 'results-bed' ? 'active' : ''}`}
+                          onClick={() => navigateToTab('results-bed')}
+                        >
+                          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="código bed" className="nav-icon" />
+                          <span className="nav-label">{language === 'pt' ? 'código .bed' : '.bed code'}</span>
                         </button>
                       </div>
                     )}
@@ -725,7 +754,13 @@ function App() {
 
           {activeTab === 'results-models' && (
             <div className="tab-content">
-              <ResultsModels3DPage />
+              <ResultsModels3DPage onOpenInViewer={openMeshInViewer} />
+            </div>
+          )}
+
+          {activeTab === 'results-bed' && (
+            <div className="tab-content">
+              <ResultsBedCodePage />
             </div>
           )}
 
