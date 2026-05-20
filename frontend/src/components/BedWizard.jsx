@@ -14,6 +14,17 @@ import {
   parseApiError,
 } from '../services/api';
 import BedLoadModal from './bed/BedLoadModal';
+import {
+  ICM_HOLLOW,
+  ICM_VISIBLE,
+  ICM_SOLID,
+  modeIncludesInnerCore,
+  EXPORT_MAIN_VISIBILITY_KEYS,
+  syncVisibilityOnModeChange,
+  exportMainLabelKey,
+  internalCylinderModeHintKey,
+  internalCylinderExportNoteKey,
+} from '../lib/bedInternalCylinderUi';
 import '../styles/BedWizard.css';
 import '../styles/CasosCFD.css';
 import '../styles/TemplateEditor.css';
@@ -237,6 +248,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   const [showDocs, setShowDocs] = useState(false);
   const [bedLoadOpen, setBedLoadOpen] = useState(null);
   const [wizardConnectionError, setWizardConnectionError] = useState(null);
+  const [submitBusy, setSubmitBusy] = useState(false);
   const [criarDock, setCriarDock] = useState(null);
   const [wizardCliBackend, setWizardCliBackend] = useState({ script_exists: true, offline: true });
   const [wizardCliError, setWizardCliError] = useState(null);
@@ -471,7 +483,14 @@ const BedWizard = ({ onNavigateTab } = {}) => {
     }
   };
 
+  const wantsModel3dAfterWizard = () =>
+    mode === 'blender' ||
+    mode === 'blender_interactive' ||
+    mode === 'interactive';
+
   const handleSubmit = async () => {
+    if (submitBusy) return;
+    setSubmitBusy(true);
     try {
       setWizardConnectionError(null);
       const bedData = {
@@ -484,18 +503,30 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       };
 
       const result = await postBedWizard(bedData);
-      alert(`sucesso! arquivo ${fileName} criado\nJSON gerado: ${result.json_file}`);
+      const profile = modelingProfileFromBackend(params.generation_backend);
+      const icm = params.bed?.internal_cylinder_mode || ICM_HOLLOW;
+      let msg = `${pt ? 'sucesso' : 'success'}: ${fileName}\njson: ${result.json_file}`;
+      if (icm === ICM_SOLID) {
+        msg += `\n\n${t('bedSolidSlowHint')}`;
+      }
 
-      if (mode === 'blender' || mode === 'blender_interactive') {
-        if (confirm('deseja gerar o modelo 3D agora?')) {
-          await generateModel(
+      if (wantsModel3dAfterWizard()) {
+        const ask =
+          mode === 'blender_interactive'
+            ? t('bedWizardConfirmGenerate3dBlender')
+            : t('bedWizardConfirmGenerate3d');
+        if (window.confirm(ask)) {
+          const gen = await generateModel(
             result.json_file,
             mode === 'blender_interactive',
-            modelingProfileFromBackend(params.generation_backend),
+            profile,
           );
-          alert('geração do modelo 3D iniciada (acompanhe em jobs)');
+          msg += `\n\n${t('bedWizardJobStarted')}: ${gen.job_id}`;
+          msg += `\n${t('bedWizardMonitorJobs')}`;
         }
       }
+
+      alert(msg);
 
       if (mode === 'pipeline_completo') {
         if (confirm('deseja executar o pipeline completo agora? (modelo 3d + simulação cfd)')) {
@@ -532,8 +563,18 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       setMode(null);
     } catch (error) {
       console.error('erro:', error);
-      alert(parseApiError(error) || 'erro ao criar arquivo .bed');
-      setWizardConnectionError(t('backendConnectionError'));
+      const msg = parseApiError(error) || 'erro ao criar arquivo .bed';
+      alert(msg);
+      if (
+        error?.code === 'ERR_NETWORK' ||
+        (!error?.response && error?.request)
+      ) {
+        setWizardConnectionError(t('backendConnectionError'));
+      } else {
+        setWizardConnectionError(null);
+      }
+    } finally {
+      setSubmitBusy(false);
     }
   };
 
@@ -879,64 +920,132 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           <small>0.0 = superfície lisa</small>
         </div>
 
-        <div className="form-group form-group-full">
-          <label>modo do cilindro interno</label>
-          <select
-            value={params.bed.internal_cylinder_mode || 'hollow_boolean_applied'}
-            onChange={(e) => {
-              const mode = e.target.value;
-              handleInputChange('bed', 'internal_cylinder_mode', mode);
-              const vis = { ...(params.bed.visibility || {}) };
-              if (mode === 'internal_cylinder_visible_no_boolean') {
-                vis.show_internal_cylinder = true;
-              } else if (mode === 'solid_internal_cylinder_with_particle_holes') {
-                vis.show_internal_cylinder = true;
-              } else {
-                vis.show_internal_cylinder = false;
-              }
-              setParams((prev) => ({
-                ...prev,
-                bed: { ...prev.bed, visibility: vis },
-              }));
-            }}
-          >
-            <option value="hollow_boolean_applied">tubo oco (booleana aplicada, padrão)</option>
-            <option value="internal_cylinder_visible_no_boolean">cilindro interno visível sem booleana externa</option>
-            <option value="solid_internal_cylinder_with_particle_holes">núcleo sólido perfurado pelas partículas</option>
-          </select>
-          <small>
-            o empacotamento usa sempre o raio interno da cavidade (diâmetro/2 − espessura da parede)
-          </small>
-        </div>
+        {(() => {
+          const icmMode =
+            params.bed.internal_cylinder_mode || ICM_HOLLOW;
+          const exportNoteKey = internalCylinderExportNoteKey(icmMode);
+          const setVisibility = (patch) => {
+            setParams((prev) => ({
+              ...prev,
+              bed: {
+                ...prev.bed,
+                visibility: {
+                  ...(prev.bed.visibility || {}),
+                  ...patch,
+                },
+              },
+            }));
+          };
+          const advancedChecks = [
+            ...(modeIncludesInnerCore(icmMode)
+              ? [
+                  {
+                    key: 'omit_inner',
+                    checked: !params.bed.visibility?.show_internal_cylinder,
+                    onChange: (checked) =>
+                      setVisibility({ show_internal_cylinder: !checked }),
+                    label: t('bedExportOmitInner'),
+                  },
+                ]
+              : []),
+            {
+              key: 'show_boolean_tools',
+              checked: Boolean(params.bed.visibility?.show_boolean_tools),
+              onChange: (checked) =>
+                setVisibility({ show_boolean_tools: checked }),
+              label: t('bedExportBooleanViewport'),
+            },
+            {
+              key: 'export_boolean_tools',
+              checked: Boolean(params.bed.visibility?.export_boolean_tools),
+              onChange: (checked) =>
+                setVisibility({ export_boolean_tools: checked }),
+              label: t('bedExportBooleanFile'),
+            },
+          ];
 
-        <div className="form-group form-group-full bed-visibility-panel">
-          <label>visibilidade na exportação</label>
-          <div className="checkbox-row">
-            {[
-              ['show_outer_cylinder', 'parede externa'],
-              ['show_internal_cylinder', 'cilindro interno'],
-              ['show_particles', 'partículas'],
-              ['show_boolean_tools', 'ferramentas booleanas (viewport)'],
-              ['export_boolean_tools', 'exportar ferramentas booleanas'],
-            ].map(([key, label]) => (
-              <label key={key} className="checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={Boolean(params.bed.visibility?.[key])}
+          return (
+            <div className="bed-shell-export-block">
+              <div className="bed-icm-panel">
+                <label htmlFor="bed-icm-mode">{t('bedIcmLabel')}</label>
+                <select
+                  id="bed-icm-mode"
+                  className="bed-icm-select"
+                  value={icmMode}
                   onChange={(e) => {
-                    const vis = { ...(params.bed.visibility || {}) };
-                    vis[key] = e.target.checked;
+                    const mode = e.target.value;
                     setParams((prev) => ({
                       ...prev,
-                      bed: { ...prev.bed, visibility: vis },
+                      bed: {
+                        ...prev.bed,
+                        internal_cylinder_mode: mode,
+                        visibility: syncVisibilityOnModeChange(
+                          mode,
+                          prev.bed?.visibility,
+                        ),
+                      },
                     }));
                   }}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
+                >
+                  <optgroup label={t('bedIcmGroupRecommended')}>
+                    <option value={ICM_HOLLOW}>{t('bedIcmHollow')}</option>
+                  </optgroup>
+                  <optgroup label={t('bedIcmGroupAdvanced')}>
+                    <option value={ICM_VISIBLE}>{t('bedIcmVisible')}</option>
+                    <option value={ICM_SOLID}>{t('bedIcmSolid')}</option>
+                  </optgroup>
+                </select>
+                <p className="bed-icm-hint" role="note">
+                  {t(internalCylinderModeHintKey(icmMode))}
+                </p>
+                <small>{t('bedIcmPackingNote')}</small>
+              </div>
+
+              <div className="bed-export-panel">
+                <h3 className="bed-export-title">{t('bedExportTitle')}</h3>
+                <p className="bed-export-lead">{t('bedExportHint')}</p>
+                <div className="bed-export-checklist" role="group">
+                  {EXPORT_MAIN_VISIBILITY_KEYS.map((key) => (
+                    <label key={key} className="bed-export-check">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(params.bed.visibility?.[key])}
+                        onChange={(e) =>
+                          setVisibility({ [key]: e.target.checked })
+                        }
+                      />
+                      <span>{t(exportMainLabelKey(key))}</span>
+                    </label>
+                  ))}
+                </div>
+                {exportNoteKey ? (
+                  <p className="bed-export-derived" role="status">
+                    {t(exportNoteKey)}
+                  </p>
+                ) : null}
+
+                <details className="bed-export-advanced">
+                  <summary>{t('bedExportAdvancedSummary')}</summary>
+                  <div className="bed-export-checklist bed-export-checklist--nested">
+                    {advancedChecks.map((item) => (
+                      <label key={item.key} className="bed-export-check">
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(e) => item.onChange(e.target.checked)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="bed-export-advanced-hint">
+                    {t('bedExportBooleanHint')}
+                  </p>
+                </details>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -1779,8 +1888,11 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   const renderConfirmation = () => (
     <div className="form-section confirmation">
       <h2>confirmação dos parâmetros</h2>
-      
-      {/* preview 3D */}
+      {(params.bed?.internal_cylinder_mode || ICM_HOLLOW) === ICM_SOLID && (
+        <p className="bed-wizard-slow-hint" role="note">
+          {t('bedSolidSlowHint')}
+        </p>
+      )}
       <BedPreview3D params={params} />
       
       <div className="summary-grid">
@@ -1991,9 +2103,18 @@ const BedWizard = ({ onNavigateTab } = {}) => {
               {pt ? 'próximo' : 'next'}
             </button>
           ) : (
-            <button type="button" className="btn-mode-option wizard-nav-btn" onClick={handleSubmit}>
+            <button
+              type="button"
+              className="btn-mode-option wizard-nav-btn"
+              disabled={submitBusy}
+              onClick={() => void handleSubmit()}
+            >
               <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="btn-icon" />
-              {pt ? 'gerar .bed' : 'generate .bed'}
+              {submitBusy
+                ? t('bedWizardSubmitBusy')
+                : pt
+                  ? 'gerar .bed'
+                  : 'generate .bed'}
             </button>
           )}
         </div>

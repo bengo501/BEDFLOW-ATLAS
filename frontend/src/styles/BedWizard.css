@@ -315,6 +315,10 @@
   }
 }
 
+.form-section {
+  font-family: var(--font-ui);
+}
+
 .form-section h2 {
   color: var(--text);
   margin-bottom: 2rem;
@@ -322,6 +326,7 @@
   font-weight: 600;
   padding-bottom: 1rem;
   border-bottom: 2px solid var(--primary);
+  font-family: var(--font-ui);
 }
 
 /* grid de formulário */
@@ -340,17 +345,19 @@
 .form-group label {
   font-weight: 500;
   margin-bottom: 8px;
-  color: #333;
+  color: var(--text, #333);
   font-size: 14px;
+  font-family: var(--font-ui);
 }
 
 .form-group input[type="text"],
 .form-group input[type="number"],
 .form-group select {
   padding: 10px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border, #ddd);
   border-radius: 6px;
   font-size: 14px;
+  font-family: var(--font-ui);
   transition: border-color 0.2s;
 }
 
@@ -427,6 +434,195 @@
   border-color: var(--wine, #5F1923);
   font-weight: 500;
   box-shadow: 0 2px 8px rgba(95, 25, 35, 0.15);
+}
+
+/* construção do casco + exportação — largura total, fonte da app */
+.form-grid .bed-shell-export-block {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  font-family: var(--font-ui);
+  font-style: normal;
+}
+
+.bed-shell-export-block label,
+.bed-shell-export-block select,
+.bed-shell-export-block small,
+.bed-shell-export-block p,
+.bed-shell-export-block summary,
+.bed-shell-export-block h3 {
+  font-family: var(--font-ui);
+  font-style: normal;
+}
+
+.bed-icm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 36rem;
+}
+
+.bed-icm-panel > label {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text, #333);
+  margin-bottom: 0;
+}
+
+.bed-icm-select {
+  width: 100%;
+  max-width: 36rem;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-style: normal;
+  background: var(--card-bg, #fff);
+  color: var(--text, #333);
+}
+
+.bed-icm-select optgroup,
+.bed-icm-select option {
+  font-family: var(--font-ui);
+  font-style: normal;
+  font-weight: 400;
+}
+
+.bed-icm-panel .bed-icm-hint {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text, #333);
+  background: var(--card-bg-muted, rgba(95, 25, 35, 0.06));
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+}
+
+.bed-icm-panel small {
+  font-size: 12px;
+  color: var(--text-muted, #666);
+}
+
+.bed-export-panel {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border, #e0e0e0);
+  max-width: 36rem;
+}
+
+.bed-export-title {
+  margin: 0 0 0.35rem;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text, #333);
+}
+
+.bed-export-lead {
+  margin: 0 0 0.75rem;
+  font-size: 13px;
+  color: var(--text-muted, #666);
+  line-height: 1.4;
+}
+
+.bed-export-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+}
+
+.bed-export-checklist--nested {
+  margin-top: 0.5rem;
+}
+
+.bed-export-check {
+  display: grid;
+  grid-template-columns: 1.125rem 1fr;
+  align-items: start;
+  column-gap: 0.5rem;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--text, #333);
+}
+
+.bed-export-check input[type='checkbox'] {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0.1rem 0 0;
+  cursor: pointer;
+  accent-color: var(--primary, #5f1923);
+}
+
+.bed-export-check span {
+  display: block;
+  padding-top: 0.05rem;
+}
+
+.bed-export-derived {
+  margin: 0.65rem 0 0;
+  padding-left: 1.625rem;
+  font-size: 13px;
+  color: var(--text-muted, #666);
+  line-height: 1.35;
+}
+
+.bed-export-advanced {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px dashed var(--border, #ccc);
+  border-radius: 6px;
+  background: var(--card-bg, #fafafa);
+}
+
+.bed-export-advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted, #555);
+  list-style-position: outside;
+}
+
+.bed-export-advanced-hint {
+  margin: 0.5rem 0 0;
+  padding-left: 1.625rem;
+  font-size: 12px;
+  color: var(--text-muted, #777);
+  line-height: 1.35;
+}
+
+[data-theme='dark'] .bed-icm-panel .bed-icm-hint {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='dark'] .bed-export-advanced {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme='dark'] .bed-icm-select {
+  background: var(--card-bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .form-group label {
+  color: var(--text);
+}
+
+.bed-wizard-slow-hint {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.65rem;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text, #333);
+  background: var(--card-bg-muted, rgba(95, 25, 35, 0.08));
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
 }
 
 /* parâmetros avançados */

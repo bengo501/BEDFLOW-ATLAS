@@ -1,6 +1,6 @@
 // contexto react que guarda toggles de interface e aplica timeout do axios quando chegam settings
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import api from '../services/api';
+import api, { setApiClientTimeoutMs } from '../services/api';
 
 // valor null ate o provider montar evita uso fora da arvore correta
 const AppUiContext = createContext(null);
@@ -47,7 +47,7 @@ export function AppUiProvider({ children }) {
       const n = Number(sec);
       // so aceita janela razoavel para nao travar nem ser agressivo demais
       if (Number.isFinite(n) && n >= 5 && n <= 600) {
-        api.defaults.timeout = n * 1000;
+        setApiClientTimeoutMs(n * 1000);
       }
     }
   }, [setDevMode, setSimpleMode]);

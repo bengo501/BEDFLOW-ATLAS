@@ -1234,16 +1234,50 @@ class BedWizard:
             else:
                 self.ui.warn("campo obrigatorio!")
     
+    def _resolve_menu_default_index(
+        self,
+        options: List[str],
+        menu_default_index: Optional[object],
+        param_key: str,
+    ) -> Optional[int]:
+        """normaliza indice de menu (int) ou valor string legado para get_choice."""
+        if menu_default_index is None:
+            if param_key:
+                return self._default_choice_index(options, param_key, 0)
+            return None
+        if isinstance(menu_default_index, int):
+            if 0 <= menu_default_index < len(options):
+                return menu_default_index
+            return None
+        if isinstance(menu_default_index, str):
+            raw = menu_default_index.strip()
+            for i, opt in enumerate(options):
+                if opt == raw or opt.lower() == raw.lower():
+                    return i
+            if param_key:
+                return self._default_choice_index(options, param_key, 0)
+            return None
+        try:
+            i = int(menu_default_index)
+            if 0 <= i < len(options):
+                return i
+        except (TypeError, ValueError):
+            pass
+        return None
+
     def get_choice(
         self,
         prompt: str,
         options: List[str],
-        menu_default_index: Optional[int] = None,
+        menu_default_index: Optional[object] = None,
         param_key: str = "",
         *,
         with_param_review: bool = True,
     ) -> str:
         """obter escolha do usuario (? ajuda, * revisao quando activo no contexto)."""
+        menu_default_index = self._resolve_menu_default_index(
+            options, menu_default_index, param_key
+        )
 
         def _help() -> None:
             if param_key and param_key in self.param_help:
@@ -2289,8 +2323,8 @@ class BedWizard:
         bd["internal_cylinder_mode"] = self.get_choice(
             "modo cilindro interno (empacotamento continua no anel)",
             icm_choices,
-            self._default_from_loaded(
-                "bed.internal_cylinder_mode", "hollow_boolean_applied"
+            self._default_choice_index(
+                icm_choices, "bed.internal_cylinder_mode", 0
             ),
             "bed.internal_cylinder_mode",
         )

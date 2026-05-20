@@ -222,7 +222,7 @@ function App() {
     setDevMode(false);
     setThemeMode('system');
     setLanguage('pt');
-    api.defaults.timeout = 30000;
+    api.defaults.timeout = 120000;
     setExpandedSections((prev) => {
       const next = {};
       Object.keys(prev).forEach((k) => {

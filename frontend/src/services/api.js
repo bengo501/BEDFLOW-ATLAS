@@ -11,11 +11,21 @@ export function getApiBase() {
 
 const api = axios.create({
   baseURL: getApiBase(),
-  timeout: 30000,
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+/** pedidos que podem demorar (compilar .bed, jobs em fila). */
+const apiLong = axios.create({
+  baseURL: getApiBase(),
+  timeout: 180000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+apiLong.defaults.headers.common = api.defaults.headers.common;
 
 // chave fixa no local storage do browser para o id escolhido
 const ACTIVE_USER_STORAGE = 'cfd_active_user_id';
@@ -28,9 +38,18 @@ export function syncAxiosUserHeader() {
     const n = parseInt(raw, 10);
     const id = Number.isFinite(n) && n >= 1 ? n : 1;
     api.defaults.headers.common['X-User-Id'] = String(id);
+    apiLong.defaults.headers.common['X-User-Id'] = String(id);
   } catch (_) {
     api.defaults.headers.common['X-User-Id'] = '1';
+    apiLong.defaults.headers.common['X-User-Id'] = '1';
   }
+}
+
+export function setApiClientTimeoutMs(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 5000) return;
+  api.defaults.timeout = n;
+  apiLong.defaults.timeout = Math.max(n, 180000);
 }
 
 // grava novo id e refresca o cabecalho imediatamente
@@ -58,6 +77,13 @@ syncAxiosUserHeader();
 
 export function parseApiError(err) {
   if (err == null) return 'erro desconhecido';
+  if (err.code === 'ECONNABORTED' || /timeout/i.test(String(err.message || ''))) {
+    const sec = Math.round((err.config?.timeout || api.defaults.timeout) / 1000);
+    return `tempo esgotado (${sec}s). confirme que o backend está a correr e veja a secção jobs se a geração já foi iniciada.`;
+  }
+  if (err.code === 'ERR_NETWORK' || (!err.response && err.request)) {
+    return 'erro de conexão com o backend — inicie uvicorn (porta 8000) e recarregue a página';
+  }
   const status = err.response?.status;
   if (status === 405) {
     return 'metodo nao permitido (405): o backend precisa ser reiniciado para expor GET /api/simulations/{id}';
@@ -90,7 +116,7 @@ export const generateModel = async (jsonFile, openBlender = false, modelingProfi
   if (modelingProfile) {
     body.modeling_profile = modelingProfile;
   }
-  const response = await api.post('/api/model/generate', body);
+  const response = await apiLong.post('/api/model/generate', body);
   return response.data;
 };
 
@@ -617,7 +643,7 @@ export const launchWizardCliTerminal = async () => {
 };
 
 export const postBedWizard = async (body) => {
-  const r = await api.post('/api/bed/wizard', body);
+  const r = await apiLong.post('/api/bed/wizard', body);
   return r.data;
 };
 
@@ -632,7 +658,7 @@ export const postBedParse = async (body) => {
 };
 
 export const postBedCompileFromBed = async (body) => {
-  const r = await api.post('/api/bed/compile-from-bed', body);
+  const r = await apiLong.post('/api/bed/compile-from-bed', body);
   return r.data;
 };
 

@@ -107,7 +107,7 @@ def punch_holes_in_solid(
     particle_kind: str,
     particle_diameter: float,
     *,
-    max_holes: int = 80,
+    max_holes: int = 32,
 ) -> Tuple[List[vec3], List[tuple], str, List[str]]:
     """
     tenta boolean difference com trimesh; devolve mesh, status, warnings.
@@ -128,8 +128,14 @@ def punch_holes_in_solid(
             core.fix_normals()
         result = core
         n = min(len(particle_centers), max_holes)
+        if len(particle_centers) > n:
+            warnings.append(
+                f"furos limitados a {n} de {len(particle_centers)} particulas (desempenho)"
+            )
         pk = (particle_kind or "sphere").strip().lower()
         r = particle_diameter / 2.0
+        engines = ("manifold", "blender")
+        holes_ok = 0
         for c in particle_centers[:n]:
             cx, cy, cz = c
             if pk == "cube":
@@ -141,12 +147,22 @@ def punch_holes_in_solid(
                 )
                 tool.apply_translation([cx, cy, cz])
             else:
-                tool = trimesh.creation.icosphere(radius=r, subdivisions=2)
+                tool = trimesh.creation.icosphere(radius=r, subdivisions=1)
                 tool.apply_translation([cx, cy, cz])
-            try:
-                result = result.difference(tool, engine="blender")
-            except Exception as exc:
-                warnings.append(f"difference falhou em ({cx:.4f},{cy:.4f},{cz:.4f}): {exc}")
+            hole_applied = False
+            for eng in engines:
+                try:
+                    result = result.difference(tool, engine=eng)
+                    hole_applied = True
+                    holes_ok += 1
+                    break
+                except Exception as exc:
+                    if eng == engines[-1]:
+                        warnings.append(
+                            f"difference falhou em ({cx:.4f},{cy:.4f},{cz:.4f}): {exc}"
+                        )
+        if holes_ok == 0:
+            warnings.append("nenhuma booleana de furo aplicada no nucleo")
         if result is None or len(getattr(result, "vertices", [])) == 0:
             warnings.append("difference resultou malha vazia")
             return core_v, core_f, "failed", warnings

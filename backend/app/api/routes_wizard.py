@@ -367,6 +367,17 @@ def generate_bed_content(params: WizardParams, mode: str) -> str:
     lines.append(f"    material = \"{params.bed.material}\";")
     if params.bed.roughness and float(params.bed.roughness) > 0:
         lines.append(f"    roughness = {params.bed.roughness} m;")
+    icm = getattr(params.bed, "internal_cylinder_mode", None) or "hollow_boolean_applied"
+    lines.append(f'    internal_cylinder_mode = "{icm}";')
+    vis = params.bed.visibility
+    if vis is not None:
+        lines.append("    visibility {")
+        lines.append(f"        show_outer_cylinder = {str(vis.show_outer_cylinder).lower()};")
+        lines.append(f"        show_internal_cylinder = {str(vis.show_internal_cylinder).lower()};")
+        lines.append(f"        show_particles = {str(vis.show_particles).lower()};")
+        lines.append(f"        show_boolean_tools = {str(vis.show_boolean_tools).lower()};")
+        lines.append(f"        export_boolean_tools = {str(vis.export_boolean_tools).lower()};")
+        lines.append("    }")
     lines.append("}")
     lines.append("")
     

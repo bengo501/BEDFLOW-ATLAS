@@ -111,6 +111,44 @@ export const translations = {
     bedLoadSectionSlice: 'fatia fina',
     bedLoadSectionStat2d: '2d estatístico',
     bedLoadStatisticalPythonOnly: 'pseudo_2d_statistical exige backend python',
+    bedIcmLabel: 'construção do casco',
+    bedIcmGroupRecommended: 'recomendado',
+    bedIcmGroupAdvanced: 'avançado (validação / figuras)',
+    bedIcmHollow: 'tubo oco — só o anel do leito',
+    bedIcmVisible: 'anel + cilindro interior sólido (sem booleana única)',
+    bedIcmSolid: 'anel + núcleo sólido com furos nas partículas',
+    bedIcmHintHollow:
+      'casco oco padrão. o centro fica vazio; não há malha de núcleo no modelo.',
+    bedIcmHintVisible:
+      'exporta o plug interior como peça separada — útil para inspecionar a geometria.',
+    bedIcmHintSolid:
+      'aplica furos no núcleo alinhados às partículas — mais pesado; sobretudo para testes no blender.',
+    bedIcmPackingNote:
+      'o empacotamento usa sempre o raio interno da cavidade (diâmetro/2 − espessura da parede).',
+    bedExportTitle: 'incluir no modelo 3d',
+    bedExportHint:
+      'liga ou desliga peças na exportação. o tipo de casco/núcleo escolhe-se acima — não se repete aqui.',
+    bedExportOuter: 'casco do leito (parede e tampas)',
+    bedExportParticles: 'partículas',
+    bedExportNoteVisible:
+      'este modo já inclui o cilindro interior na exportação (definido acima).',
+    bedExportNoteSolid:
+      'este modo já inclui o núcleo perfurado na exportação (definido acima).',
+    bedExportAdvancedSummary: 'opções avançadas de exportação',
+    bedExportOmitInner: 'omitir núcleo interior no ficheiro 3d (só anel + partículas)',
+    bedExportBooleanViewport: 'mostrar ferramentas de corte no blender (debug)',
+    bedExportBooleanFile: 'guardar ferramentas de corte no .blend (debug)',
+    bedExportBooleanHint:
+      'só relevante com motor blender e modo com furos; deixe desligado na demonstração normal.',
+    bedSolidSlowHint:
+      'modo com furos no núcleo: a geração 3d pode demorar 1–3 min. acompanhe em jobs (não feche o browser durante o envio).',
+    bedWizardConfirmGenerate3d:
+      'deseja gerar o modelo 3d agora? (motor escolhido no passo pipeline)',
+    bedWizardConfirmGenerate3dBlender:
+      'deseja gerar o modelo 3d e abrir no blender?',
+    bedWizardJobStarted: 'job de modelo iniciado',
+    bedWizardMonitorJobs: 'secção jobs → histórico para ver progresso e erros',
+    bedWizardSubmitBusy: 'a enviar…',
     bedLoadSectionRun: 'execução',
     bedLoadRunType: 'tipo',
     bedLoadRunCompile: 'só compilar',
@@ -403,6 +441,44 @@ export const translations = {
     bedLoadSectionSlice: 'thin slice',
     bedLoadSectionStat2d: 'statistical 2d',
     bedLoadStatisticalPythonOnly: 'pseudo_2d_statistical requires python backend',
+    bedIcmLabel: 'shell construction',
+    bedIcmGroupRecommended: 'recommended',
+    bedIcmGroupAdvanced: 'advanced (validation / figures)',
+    bedIcmHollow: 'hollow tube — annulus only',
+    bedIcmVisible: 'annulus + solid inner cylinder (no single boolean)',
+    bedIcmSolid: 'annulus + solid core with particle holes',
+    bedIcmHintHollow:
+      'default hollow shell. center stays empty; no inner core mesh in the model.',
+    bedIcmHintVisible:
+      'exports inner plug as a separate piece — useful to inspect geometry.',
+    bedIcmHintSolid:
+      'bores holes in the core at particle sites — heavier; mainly for blender tests.',
+    bedIcmPackingNote:
+      'packing always uses the cavity inner radius (diameter/2 − wall thickness).',
+    bedExportTitle: 'include in 3d model',
+    bedExportHint:
+      'toggle exported parts. shell/core type is chosen above — not duplicated here.',
+    bedExportOuter: 'bed shell (wall and lids)',
+    bedExportParticles: 'particles',
+    bedExportNoteVisible:
+      'this mode already includes the inner cylinder in export (set above).',
+    bedExportNoteSolid:
+      'this mode already includes the perforated core in export (set above).',
+    bedExportAdvancedSummary: 'advanced export options',
+    bedExportOmitInner: 'omit inner core from 3d file (annulus + particles only)',
+    bedExportBooleanViewport: 'show cutter tools in blender viewport (debug)',
+    bedExportBooleanFile: 'keep cutter tools in .blend file (debug)',
+    bedExportBooleanHint:
+      'only relevant with blender backend and hole modes; leave off for normal demos.',
+    bedSolidSlowHint:
+      'perforated core mode: 3d generation may take 1–3 min. watch jobs (keep the browser open while submitting).',
+    bedWizardConfirmGenerate3d:
+      'generate the 3d model now? (engine chosen in the pipeline step)',
+    bedWizardConfirmGenerate3dBlender:
+      'generate the 3d model and open blender?',
+    bedWizardJobStarted: 'model job started',
+    bedWizardMonitorJobs: 'jobs section → history for progress and errors',
+    bedWizardSubmitBusy: 'submitting…',
     bedLoadSectionRun: 'execution',
     bedLoadRunType: 'type',
     bedLoadRunCompile: 'compile only',

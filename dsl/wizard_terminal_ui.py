@@ -109,7 +109,11 @@ def _numeric_menu_aux_lines(
     parts.append("h ajuda global")
     lines = ["  " + "  ·  ".join(parts)]
     if menu_default_index is not None:
-        lines.append(f"  enter vazio = opcao {menu_default_index + 1}")
+        try:
+            default_line = int(menu_default_index) + 1
+        except (TypeError, ValueError):
+            default_line = menu_default_index
+        lines.append(f"  enter vazio = opcao {default_line}")
     else:
         lines.append("  enter vazio nao escolhe linha")
     return lines
