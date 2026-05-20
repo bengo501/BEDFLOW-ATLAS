@@ -218,6 +218,52 @@ def filter_faces_by_slab(
     return new_verts, new_faces
 
 
+def annulus_cap_pair(
+    *,
+    r_ext: float,
+    r_int: float,
+    axis: str,
+    position: float,
+    thickness: float,
+    segments: int = 24,
+) -> Tuple[List[vec3], List[tri]]:
+    """fecha a lamina com dois aneis (tampas da fatia) no plano perpendicular ao eixo."""
+    if r_ext <= r_int or thickness <= 0 or segments < 3:
+        return [], []
+    a = axis.strip().lower()
+    if a not in ("x", "y", "z"):
+        a = "y"
+    half = thickness / 2.0
+    planes = (position - half, position + half)
+    verts: List[vec3] = []
+    faces: List[tri] = []
+
+    def ring_point(r: float, ang: float, plane_val: float) -> vec3:
+        c = math.cos(ang)
+        s = math.sin(ang)
+        if a == "x":
+            return (plane_val, r * c, r * s)
+        if a == "y":
+            return (r * c, plane_val, r * s)
+        return (r * c, r * s, plane_val)
+
+    for plane_val in planes:
+        base = len(verts)
+        for i in range(segments):
+            ang = 2 * math.pi * i / segments
+            verts.append(ring_point(r_ext, ang, plane_val))
+        for i in range(segments):
+            ang = 2 * math.pi * i / segments
+            verts.append(ring_point(r_int, ang, plane_val))
+        for i in range(segments):
+            j = (i + 1) % segments
+            eo, io = base + i, base + j
+            ei, ii = base + segments + i, base + segments + j
+            faces.append((eo, ei, io))
+            faces.append((io, ei, ii))
+    return verts, faces
+
+
 def write_stl_binary(path: Path, vertices: List[vec3], faces: List[tri]) -> None:
     # funcao write_stl_binary
     # grava ficheiro stl binario padrao com uma normal por triangulo

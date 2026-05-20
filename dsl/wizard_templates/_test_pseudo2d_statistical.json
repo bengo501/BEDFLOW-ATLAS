@@ -1,0 +1,39 @@
+{
+  "geometry_mode": "pseudo_2d_statistical",
+  "generation_backend": "python_engine",
+  "bed": {
+    "diameter": 0.04,
+    "height": 0.08,
+    "wall_thickness": 0.002,
+    "material": "steel"
+  },
+  "particles": {
+    "kind": "sphere",
+    "count": 1,
+    "diameter": 0.003,
+    "target_porosity": 0.38,
+    "seed": 7
+  },
+  "lids": {
+    "top_type": "flat",
+    "bottom_type": "flat",
+    "bottom_thickness": 0.003,
+    "top_thickness": 0.003
+  },
+  "packing": {
+    "method": "spherical_packing"
+  },
+  "export": {
+    "formats": ["stl_binary"],
+    "units": "m"
+  },
+  "statistical_2d": {
+    "domain_width": 0.04,
+    "domain_height": 0.08,
+    "target_porosity": 0.38,
+    "tolerance": 0.05,
+    "max_attempts": 30,
+    "slice_thickness": 0.002,
+    "seed": 7
+  }
+}

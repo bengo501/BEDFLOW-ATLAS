@@ -301,6 +301,23 @@ function ResultsModels3DPage({ onOpenInViewer }) {
                         <span>{model.packing_method || '—'}</span>
                       </div>
                       <div className="info-row">
+                        <span className="info-label">{pt ? 'geometria:' : 'geometry:'}</span>
+                        <span>{model.geometry_mode || 'full_3d'}</span>
+                      </div>
+                      {(model.porosity_target != null || model.porosity_result != null) && (
+                        <div className="info-row">
+                          <span className="info-label">{pt ? 'porosidade:' : 'porosity:'}</span>
+                          <span>
+                            {model.porosity_result != null
+                              ? `${(model.porosity_result * 100).toFixed(1)}%`
+                              : '—'}
+                            {model.porosity_target != null
+                              ? ` (alvo ${(model.porosity_target * 100).toFixed(0)}%)`
+                              : ''}
+                          </span>
+                        </div>
+                      )}
+                      <div className="info-row">
                         <span className="info-label">{pt ? 'tamanho:' : 'size:'}</span>
                         <span>{formatBytes(model.size_bytes)}</span>
                       </div>

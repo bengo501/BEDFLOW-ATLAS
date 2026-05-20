@@ -586,10 +586,20 @@ def aplicar_thin_slice(
             if keep_only:
                 continue
             continue
-        if pk == "sphere":
-            rs = math.sqrt(max(0.0, r_ax**2 - d_plane**2))
-        else:
-            rs = r_ax
+        try:
+            _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+            if str(_pm) not in sys.path:
+                sys.path.insert(0, str(_pm))
+            from geometry_modes import section_radius_for_particle_kind
+
+            rs = section_radius_for_particle_kind(
+                pk, particle_diameter, d_plane, axis=axis
+            )
+        except Exception:
+            if pk == "sphere":
+                rs = math.sqrt(max(0.0, r_ax**2 - d_plane**2))
+            else:
+                rs = r_ax
         if rs <= 1e-9:
             continue
         if preserve:
@@ -1045,14 +1055,34 @@ def main_com_parametros():
             print("particulas acomodadas bake aplicado pronto exportacao\n")
 
         # aplicar thin slice no fim (ambos os ramos ja criaram os meshes)
-        aplicar_thin_slice(
-            slice_cfg,
-            altura=altura,
-            raio_ext=raio_ext,
-            particle_centers=centers_for_slice,
-            particle_diameter=diametro_particula,
-            particle_kind=particle_kind,
-        )
+        try:
+            _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+            if str(_pm) not in sys.path:
+                sys.path.insert(0, str(_pm))
+            from geometry_modes import (
+                GEOMETRY_STATISTICAL,
+                geometry_mode_from_data,
+                resolve_slice_config,
+            )
+
+            gm = geometry_mode_from_data(params)
+            if gm == GEOMETRY_STATISTICAL:
+                print(
+                    "aviso: pseudo_2d_statistical deve usar generation_backend python_engine; "
+                    "blender gera full_3d ou thin_slice apenas."
+                )
+            slice_cfg = resolve_slice_config(params) or slice_cfg
+        except Exception:
+            pass
+        if isinstance(slice_cfg, dict) and slice_cfg.get("slice_enabled"):
+            aplicar_thin_slice(
+                slice_cfg,
+                altura=altura,
+                raio_ext=raio_ext,
+                particle_centers=centers_for_slice,
+                particle_diameter=diametro_particula,
+                particle_kind=particle_kind,
+            )
 
         # ambos os ramos chegam aqui com objetos na cena prontos para salvar
         if args.output:

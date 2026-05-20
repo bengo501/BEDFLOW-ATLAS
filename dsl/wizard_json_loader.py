@@ -191,6 +191,35 @@ def json_to_wizard_params(data: Dict[str, Any]) -> Dict[str, Any]:
     # pure python significa que usamos o gerador de stl sem blender
     # blender significa que o pipeline usa o leito extracao dentro do blender
     params["generation_backend"] = normalize_generation_backend(data.get("generation_backend"))
+
+    try:
+        _gm_dir = _REPO_ROOT / "scripts" / "python_modeling"
+        if str(_gm_dir) not in sys.path:
+            sys.path.insert(0, str(_gm_dir))
+        from geometry_modes import (  # noqa: WPS433
+            geometry_mode_from_data,
+            resolve_slice_config,
+            resolve_statistical_config,
+        )
+
+        params["geometry_mode"] = geometry_mode_from_data(data)
+        sl = resolve_slice_config(data)
+        if sl:
+            params["slice"] = sl
+        else:
+            params.pop("slice", None)
+        st = resolve_statistical_config(data)
+        if st:
+            params["statistical_2d"] = st
+        else:
+            params.pop("statistical_2d", None)
+    except ImportError:
+        params["geometry_mode"] = str(data.get("geometry_mode") or "full_3d")
+        if data.get("slice"):
+            params["slice"] = dict(data.get("slice") or {})
+        if data.get("statistical_2d"):
+            params["statistical_2d"] = dict(data.get("statistical_2d") or {})
+
     return params
 
 
@@ -321,6 +350,22 @@ def patch_compiled_json_slice(json_path: Path, wizard_params: Dict[str, Any]) ->
     with json_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     data["slice"] = ws
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def patch_compiled_json_statistical(json_path: Path, wizard_params: Dict[str, Any]) -> None:
+    ws = wizard_params.get("statistical_2d")
+    gm = wizard_params.get("geometry_mode")
+    with json_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if gm is not None:
+        data["geometry_mode"] = gm
+    if isinstance(ws, dict) and ws:
+        data["statistical_2d"] = ws
+        data.pop("slice", None)
+    elif gm == "full_3d":
+        data.pop("statistical_2d", None)
     with json_path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 

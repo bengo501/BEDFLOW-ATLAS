@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -24,9 +24,34 @@ class UnifiedDataService:
             return f"/generated/{normalized}"
         return None
 
+    @staticmethod
+    def _geometry_meta_from_parameters(pj: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if not isinstance(pj, dict):
+            return {}
+        gm = pj.get("geometry_mode")
+        gb = pj.get("generation_backend")
+        sl = pj.get("slice") if isinstance(pj.get("slice"), dict) else {}
+        st = pj.get("statistical_2d") if isinstance(pj.get("statistical_2d"), dict) else {}
+        porosity_target = st.get("target_porosity") or (pj.get("particles") or {}).get(
+            "target_porosity"
+        )
+        porosity_result = pj.get("porosity_result")
+        out: Dict[str, Any] = {
+            "geometry_mode": str(gm) if gm else None,
+            "generation_backend": str(gb) if gb else None,
+            "porosity_target": float(porosity_target) if porosity_target is not None else None,
+            "porosity_result": float(porosity_result) if porosity_result is not None else None,
+            "slice_axis": sl.get("slice_axis"),
+            "slice_thickness": float(sl["slice_thickness"])
+            if sl.get("slice_thickness") is not None
+            else None,
+        }
+        return out
+
     def _bed_to_model_3d(self, bed: models.Bed) -> schemas.Model3DResponse:
         blend_url = self._to_public_file_url(bed.blend_file_path)
         stl_url = self._to_public_file_url(bed.stl_file_path)
+        gmeta = self._geometry_meta_from_parameters(bed.parameters_json)
         return schemas.Model3DResponse(
             id=bed.id,
             user_id=bed.user_id,
@@ -40,6 +65,12 @@ class UnifiedDataService:
             particle_kind=bed.particle_kind,
             packing_method=bed.packing_method,
             porosity=bed.porosity,
+            geometry_mode=gmeta.get("geometry_mode"),
+            generation_backend=gmeta.get("generation_backend"),
+            porosity_target=gmeta.get("porosity_target"),
+            porosity_result=gmeta.get("porosity_result"),
+            slice_axis=gmeta.get("slice_axis"),
+            slice_thickness=gmeta.get("slice_thickness"),
             bed_file_path=bed.bed_file_path,
             json_file_path=bed.json_file_path,
             blend_file_path=bed.blend_file_path,

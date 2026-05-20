@@ -173,6 +173,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
     geometry_mode: 'full_3d',
     generation_backend: 'blender',
     slice: null,
+    statistical_2d: null,
     cfd: { ...DEFAULT_CFD_PARAMS },
   });
   const [includeCFD, setIncludeCFD] = useState(false);
@@ -341,8 +342,22 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             keep_only_intersecting_particles: true,
             preserve_original_packing: true,
           };
+          next.statistical_2d = null;
+        } else if (value === 'pseudo_2d_statistical') {
+          next.slice = null;
+          const bed = prev.bed || {};
+          next.statistical_2d = prev.statistical_2d || {
+            domain_width: String(bed.diameter ?? '0.05'),
+            domain_height: String(bed.height ?? '0.1'),
+            target_porosity: String(prev.particles?.target_porosity ?? '0.4'),
+            tolerance: '0.02',
+            max_attempts: '50',
+            slice_thickness: '0.002',
+            seed: String(prev.particles?.seed ?? '42'),
+          };
         } else {
           next.slice = null;
+          next.statistical_2d = null;
         }
       }
       return next;
@@ -360,6 +375,24 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           slice_position: '0.0',
           keep_only_intersecting_particles: true,
           preserve_original_packing: true,
+        }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleStatistical2DChange = (field, value) => {
+    setParams((prev) => ({
+      ...prev,
+      statistical_2d: {
+        ...(prev.statistical_2d || {
+          domain_width: String(prev.bed?.diameter ?? '0.05'),
+          domain_height: String(prev.bed?.height ?? '0.1'),
+          target_porosity: String(prev.particles?.target_porosity ?? '0.4'),
+          tolerance: '0.02',
+          max_attempts: '50',
+          slice_thickness: '0.002',
+          seed: String(prev.particles?.seed ?? '42'),
         }),
         [field]: value,
       },
@@ -1154,6 +1187,9 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             <option value="pseudo_2d_thin_slice">
               {pt ? 'fatia fina pseudo 2d' : 'thin pseudo-2d slice'}
             </option>
+            <option value="pseudo_2d_statistical">
+              {pt ? 'reconstrução 2d estatística' : 'statistical pseudo-2d'}
+            </option>
           </select>
         </div>
 
@@ -1224,6 +1260,66 @@ const BedWizard = ({ onNavigateTab } = {}) => {
                 />
                 {pt ? 'preservar coordenadas originais' : 'preserve original coordinates'}
               </label>
+            </div>
+          </>
+        )}
+
+        {params.geometry_mode === 'pseudo_2d_statistical' && params.statistical_2d && (
+          <>
+            <div className="form-group">
+              <label>{pt ? 'largura do domínio 2d (m)' : '2d domain width (m)'}</label>
+              <input
+                type="number"
+                step="0.001"
+                value={params.statistical_2d.domain_width}
+                onChange={(e) => handleStatistical2DChange('domain_width', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'altura do domínio 2d (m)' : '2d domain height (m)'}</label>
+              <input
+                type="number"
+                step="0.001"
+                value={params.statistical_2d.domain_height}
+                onChange={(e) => handleStatistical2DChange('domain_height', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'porosidade alvo' : 'target porosity'}</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                value={params.statistical_2d.target_porosity}
+                onChange={(e) => handleStatistical2DChange('target_porosity', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'tolerância' : 'tolerance'}</label>
+              <input
+                type="number"
+                step="0.01"
+                value={params.statistical_2d.tolerance}
+                onChange={(e) => handleStatistical2DChange('tolerance', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'máx. tentativas' : 'max attempts'}</label>
+              <input
+                type="number"
+                value={params.statistical_2d.max_attempts}
+                onChange={(e) => handleStatistical2DChange('max_attempts', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'espessura da geometria fina (m)' : 'thin 3d thickness (m)'}</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={params.statistical_2d.slice_thickness}
+                onChange={(e) => handleStatistical2DChange('slice_thickness', e.target.value)}
+              />
             </div>
           </>
         )}
@@ -1483,6 +1579,12 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           {params.geometry_mode === 'pseudo_2d_thin_slice' && params.slice && (
             <p>
               {pt ? 'fatia' : 'slice'} {params.slice.slice_axis} @ {params.slice.slice_position}m
+            </p>
+          )}
+          {params.geometry_mode === 'pseudo_2d_statistical' && params.statistical_2d && (
+            <p>
+              {pt ? 'domínio 2d' : '2d domain'}: {params.statistical_2d.domain_width}×
+              {params.statistical_2d.domain_height}m, ε alvo: {params.statistical_2d.target_porosity}
             </p>
           )}
         </div>

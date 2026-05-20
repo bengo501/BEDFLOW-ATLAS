@@ -187,6 +187,12 @@ class Model3DResponse(BaseModel):
     particle_kind: str
     packing_method: str
     porosity: Optional[float] = None
+    geometry_mode: Optional[str] = None
+    generation_backend: Optional[str] = None
+    porosity_target: Optional[float] = None
+    porosity_result: Optional[float] = None
+    slice_axis: Optional[str] = None
+    slice_thickness: Optional[float] = None
     bed_file_path: Optional[str] = None
     json_file_path: Optional[str] = None
     blend_file_path: Optional[str] = None

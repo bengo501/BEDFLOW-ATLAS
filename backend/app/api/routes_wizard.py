@@ -92,6 +92,16 @@ class SliceParams(BaseModel):
     preserve_original_packing: bool = True
 
 
+class Statistical2DParams(BaseModel):
+    domain_width: str = "0.05"
+    domain_height: str = "0.1"
+    target_porosity: str = "0.4"
+    tolerance: str = "0.02"
+    max_attempts: str = "50"
+    slice_thickness: str = "0.002"
+    seed: str = "42"
+
+
 class WizardParams(BaseModel):
     bed: BedParams
     lids: LidsParams
@@ -101,6 +111,7 @@ class WizardParams(BaseModel):
     geometry_mode: str = "full_3d"
     generation_backend: str = "blender"
     slice: Optional[SliceParams] = None
+    statistical_2d: Optional[Statistical2DParams] = None
     cfd: Optional[CFDParams] = None
 
 class WizardRequest(BaseModel):
@@ -191,6 +202,16 @@ def _wizard_params_for_json_patch(params: WizardParams) -> Dict[str, Any]:
     sl = data.get("slice")
     if isinstance(sl, dict):
         data["slice"] = sl
+    st = data.get("statistical_2d")
+    if isinstance(st, dict):
+        data["statistical_2d"] = st
+    if data.get("geometry_mode") == "pseudo_2d_statistical":
+        data.pop("slice", None)
+    elif data.get("geometry_mode") == "full_3d":
+        data.pop("slice", None)
+        data.pop("statistical_2d", None)
+    elif data.get("geometry_mode") == "pseudo_2d_thin_slice":
+        data.pop("statistical_2d", None)
     return data
 
 
@@ -202,6 +223,7 @@ def _patch_compiled_wizard_json(json_path: Path, dsl_dir: Path, params: WizardPa
         patch_compiled_json_metadata,
         patch_compiled_json_packing,
         patch_compiled_json_slice,
+        patch_compiled_json_statistical,
     )
 
     wizard_dict = _wizard_params_for_json_patch(params)
@@ -209,6 +231,7 @@ def _patch_compiled_wizard_json(json_path: Path, dsl_dir: Path, params: WizardPa
     patch_compiled_json_export(json_path, wizard_dict)
     patch_compiled_json_metadata(json_path, wizard_dict)
     patch_compiled_json_slice(json_path, wizard_dict)
+    patch_compiled_json_statistical(json_path, wizard_dict)
 
 
 def generate_bed_content(params: WizardParams, mode: str) -> str:

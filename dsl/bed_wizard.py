@@ -58,6 +58,7 @@ from wizard_json_loader import (
     normalize_loaded_dict,
     patch_compiled_json_export,
     patch_compiled_json_slice,
+    patch_compiled_json_statistical,
     patch_compiled_json_metadata,
     patch_compiled_json_packing,
     resolve_repo_path,
@@ -2057,6 +2058,42 @@ class BedWizard:
             "export.merge_distance",
         )
 
+    def _fill_statistical_2d_params_interactive(self) -> None:
+        """reconstrucao 2d por rsa; independente do packing 3d."""
+        self.print_section("parametros da reconstrucao 2d estatistica")
+        bed = self.params.get("bed") or {}
+        d_default = str(bed.get("diameter", "0.05"))
+        h_default = str(bed.get("height", "0.1"))
+        width = self.get_number_input(
+            "largura do dominio 2d", d_default, "m", False, ""
+        )
+        height = self.get_number_input(
+            "altura do dominio 2d", h_default, "m", False, ""
+        )
+        target = self.get_number_input(
+            "porosidade alvo",
+            str(self.params.get("particles", {}).get("target_porosity", "0.4")),
+            "",
+            False,
+            "",
+        )
+        tol = self.get_number_input("tolerancia de porosidade", "0.02", "", False, "")
+        max_att = self.get_input("numero maximo de tentativas", "50")
+        thickness = self.get_number_input("espessura da geometria fina 3d", "0.002", "m", False, "")
+        seed = self.get_input(
+            "seed",
+            str(self.params.get("particles", {}).get("seed", "42")),
+        )
+        self.params["statistical_2d"] = {
+            "domain_width": float(width),
+            "domain_height": float(height),
+            "target_porosity": float(target),
+            "tolerance": float(tol),
+            "max_attempts": int(max_att),
+            "slice_thickness": float(thickness),
+            "seed": int(seed),
+        }
+
     def _fill_slice_params_interactive(self) -> None:
         """detalhes da lamina; so faz sentido com geometry_mode pseudo_2d_thin_slice."""
         self.print_section("parametros da fatia fina")
@@ -2084,14 +2121,14 @@ class BedWizard:
         opts = [
             "full_3d — volume completo",
             "pseudo_2d_thin_slice — fatia fina (pseudo 2d)",
+            "pseudo_2d_statistical — reconstrucao 2d por porosidade",
         ]
         def_idx = 0
         gm = str(self.params.get("geometry_mode") or "").strip()
-        sl = self.params.get("slice")
         if gm == "pseudo_2d_thin_slice":
             def_idx = 1
-        elif isinstance(sl, dict) and sl.get("slice_enabled"):
-            def_idx = 1
+        elif gm == "pseudo_2d_statistical":
+            def_idx = 2
         pick = self.get_choice(
             "como representar a geometria final",
             opts,
@@ -2101,8 +2138,14 @@ class BedWizard:
         if pick.startswith("full"):
             self.params["geometry_mode"] = "full_3d"
             self.params.pop("slice", None)
+            self.params.pop("statistical_2d", None)
+        elif pick.startswith("pseudo_2d_statistical"):
+            self.params["geometry_mode"] = "pseudo_2d_statistical"
+            self.params.pop("slice", None)
+            self._fill_statistical_2d_params_interactive()
         else:
             self.params["geometry_mode"] = "pseudo_2d_thin_slice"
+            self.params.pop("statistical_2d", None)
             self._fill_slice_params_interactive()
 
     def _questionnaire_generation_backend_section(
@@ -2480,6 +2523,8 @@ class BedWizard:
             patch_compiled_json_export(jpath, self.params)
             patch_compiled_json_metadata(jpath, self.params)
             patch_compiled_json_slice(jpath, self.params)
+            patch_compiled_json_statistical(jpath, self.params)
+            patch_compiled_json_statistical(jpath, self.params)
         except Exception as exc:
             self.ui.warn(f"aviso ao aplicar metadados no json: {exc}")
 
@@ -3640,6 +3685,7 @@ cfd {
         patch_compiled_json_export(json_path, self.params)
         patch_compiled_json_metadata(json_path, self.params)
         patch_compiled_json_slice(json_path, self.params)
+        patch_compiled_json_statistical(json_path, self.params)
         self.ui.ok(f"arquivo compilado: {json_path}")
 
         # gerar modelo 3d no blender

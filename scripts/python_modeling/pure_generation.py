@@ -81,15 +81,22 @@ from bed_config import (  # noqa: E402
     normalize_generation_backend,
     resolve_bed_geometry_numbers,
 )
+from geometry_modes import (  # noqa: E402
+    GEOMETRY_STATISTICAL,
+    geometry_mode_from_data,
+    resolve_slice_config,
+    resolve_statistical_config,
+)
+from pseudo_2d_statistical import generate_statistical_thin_3d_stl  # noqa: E402
 from pure_bed_mesh import build_packed_bed_model, export_model_data  # noqa: E402
 from stl_mesh_utils import (  # noqa: E402
     box_mesh,
     cylinder_axis,
-    filter_faces_by_slab,
     merge_mesh,
     uv_sphere,
     write_stl_binary,
 )
+from thin_slice_build import apply_thin_slice_mesh, slice_cfg_active  # noqa: E402
 
 # alias de tipo para tripla de floats xyz
 vec3 = Tuple[float, float, float]
@@ -191,19 +198,9 @@ def load_bed_json(path: Path) -> Dict[str, Any]:
     # gap e o valor que define a folga minima entre particulas
     # ele entra tanto na geracao como na validacao
 
-    slice_raw = data.get("slice") if isinstance(data, dict) else None
-    slice_cfg = dict(slice_raw) if isinstance(slice_raw, dict) else {}
-    # compatibilidade: aceitar chaves soltas na raiz
-    for k in (
-        "slice_enabled",
-        "slice_thickness",
-        "slice_axis",
-        "slice_position",
-        "keep_only_intersecting_particles",
-        "preserve_original_packing",
-    ):
-        if isinstance(data, dict) and k in data and k not in slice_cfg:
-            slice_cfg[k] = data.get(k)
+    gm = geometry_mode_from_data(data) if isinstance(data, dict) else "full_3d"
+    slice_cfg = resolve_slice_config(data) if isinstance(data, dict) else {}
+    stat_cfg = resolve_statistical_config(data) if isinstance(data, dict) else {}
 
     # chaves abaixo alimentam tanto o modo cientifico como o legacy
     return {
@@ -229,7 +226,11 @@ def load_bed_json(path: Path) -> Dict[str, Any]:
         "generation_backend": normalize_generation_backend(
             data.get("generation_backend") if isinstance(data, dict) else None
         ),
+        "geometry_mode": gm,
         "slice": slice_cfg,
+        "statistical_2d": stat_cfg,
+        "bed": bed,
+        "particles": particles if isinstance(particles, dict) else {},
         "particle_kind": str(particles.get("kind") or "sphere").strip().lower(),
     }
 
@@ -306,20 +307,35 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
             "validacao pos simulacao rigid body falhou: "
             + str(report_legacy.get("messages", []))[:500]
         )
-    cyl_seg = max(12, min(32, int(p.get("mesh_segmentos", 48) // 2)))
-    for part in particulas_finais:
-        x, y, z = part.pos
-        if pk == "cube":
-            sv, sf = box_mesh(x, y, z, d_char)
-        elif pk == "cylinder":
-            sv, sf = cylinder_axis(
-                x, y, z, d_char * 0.5, d_char, axis="z", segments=cyl_seg
-            )
-        else:
-            sv, sf = uv_sphere(
-                x, y, z, r_s, lat=p["sphere_lat"], lon=p["sphere_lon"]
-            )
-        verts, faces = merge_mesh(verts, faces, sv, sf)
+    centers_legacy = [tuple(part.pos) for part in particulas_finais]
+    slice_cfg = dict(p.get("slice") or {})
+    if slice_cfg_active(slice_cfg):
+        verts, faces = apply_thin_slice_mesh(
+            verts,
+            faces,
+            centers_legacy,
+            particle_diameter=d_char,
+            particle_kind=pk,
+            r_ext=r_ext,
+            r_int=r_int,
+            slice_cfg=slice_cfg,
+            segmentos=int(p.get("mesh_segmentos", 48)),
+        )
+    else:
+        cyl_seg = max(12, min(32, int(p.get("mesh_segmentos", 48) // 2)))
+        for part in particulas_finais:
+            x, y, z = part.pos
+            if pk == "cube":
+                sv, sf = box_mesh(x, y, z, d_char)
+            elif pk == "cylinder":
+                sv, sf = cylinder_axis(
+                    x, y, z, d_char * 0.5, d_char, axis="z", segments=cyl_seg
+                )
+            else:
+                sv, sf = uv_sphere(
+                    x, y, z, r_s, lat=p["sphere_lat"], lon=p["sphere_lon"]
+                )
+            verts, faces = merge_mesh(verts, faces, sv, sf)
 
     write_stl_binary(out_stl, verts, faces)
     elapsed = time.perf_counter() - t_wall0
@@ -487,8 +503,8 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
     # segmentos do cilindro limitados para nao explodir memoria
     seg = min(64, max(12, p.get("mesh_segmentos", 48)))
     slice_cfg = dict(p.get("slice") or {})
-    slice_enabled = _coerce_bool(slice_cfg.get("slice_enabled"), False)
-    if not slice_enabled:
+    gm = str(p.get("geometry_mode") or "full_3d")
+    if not slice_cfg_active(slice_cfg):
         packed = build_packed_bed_model(
             r_ext=r_ext,
             r_int=r_int,
@@ -503,17 +519,6 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             lon_sphere=p["sphere_lon"],
         )
     else:
-        axis = str(slice_cfg.get("slice_axis") or "y").strip().lower()
-        if axis not in ("x", "y", "z"):
-            axis = "y"
-        thickness = _to_float(slice_cfg.get("slice_thickness"), r_pack * 0.6)
-        if thickness <= 0:
-            thickness = r_pack * 0.6
-        pos = _to_float(slice_cfg.get("slice_position"), 0.0)
-        keep_only = _coerce_bool(slice_cfg.get("keep_only_intersecting_particles"), True)
-        preserve = _coerce_bool(slice_cfg.get("preserve_original_packing"), True)
-
-        # parede+tampas
         shell = build_packed_bed_model(
             r_ext=r_ext,
             r_int=r_int,
@@ -527,55 +532,17 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             lat_sphere=p["sphere_lat"],
             lon_sphere=p["sphere_lon"],
         )
-        min_v = pos - thickness / 2.0
-        max_v = pos + thickness / 2.0
-        v_shell, f_shell = filter_faces_by_slab(
+        v_all, f_all = apply_thin_slice_mesh(
             shell.mesh.vertices,
             shell.mesh.faces,
-            axis=axis,
-            min_v=min_v,
-            max_v=max_v,
+            centers,
+            particle_diameter=d_char,
+            particle_kind=pk,
+            r_ext=r_ext,
+            r_int=r_int,
+            slice_cfg=slice_cfg,
+            segmentos=seg,
         )
-
-        # particulas como cilindros achatados (discos)
-        ai = 0 if axis == "x" else (1 if axis == "y" else 2)
-        v_all: List[vec3] = list(v_shell)
-        f_all: List[tri] = list(f_shell)
-        r_ax = d_char * 0.5
-        for (x, y, z) in centers:
-            coord = (x, y, z)[ai]
-            d = abs(coord - pos)
-            if d > (r_ax + thickness / 2.0):
-                if keep_only:
-                    continue
-                continue
-            if pk == "sphere":
-                rs = math.sqrt(max(0.0, (d_char * 0.5) ** 2 - d * d))
-            else:
-                rs = d_char * 0.5
-            if rs <= 0:
-                continue
-            if preserve:
-                cx, cy, cz = x, y, z
-            else:
-                if axis == "x":
-                    cx, cy, cz = pos, y, z
-                elif axis == "y":
-                    cx, cy, cz = x, pos, z
-                else:
-                    cx, cy, cz = x, y, pos
-            cv, cf = cylinder_axis(
-                cx,
-                cy,
-                cz,
-                rs,
-                thickness,
-                axis=axis,
-                segments=max(12, int(seg)),
-            )
-            v_all, f_all = merge_mesh(v_all, f_all, cv, cf)
-
-        # packed minimal para sidecar
         packed = type(shell)(mesh=type(shell.mesh)(vertices=v_all, faces=f_all), meta=shell.meta)  # type: ignore
 
     preview_n = 12
@@ -616,10 +583,11 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         "domain_violations": report_val.get("domain_violations"),
         "placement_attempts_total": attempts_i,
         "placement_rejections_approx": reject_approx,
+        "geometry_mode": gm,
     }
     # json opcional com mesmo nome base que stl mais sufixo pure bed
     out_json = out_stl.parent / f"{out_stl.stem}_pure_bed.json"
-    if slice_enabled:
+    if slice_cfg_active(slice_cfg):
         extra["slice"] = slice_cfg
     export_model_data(packed, out_stl, out_json=out_json, extra=extra)
 
@@ -632,7 +600,10 @@ def generate_packed_bed_stl(
     # out stl e o destino do triangulos
     # max passos so entra no fluxo legacy
     p = load_bed_json(bed_json)
-    # despacho simples por nome do metodo
+    gm = str(p.get("geometry_mode") or "full_3d")
+    if gm == GEOMETRY_STATISTICAL:
+        generate_statistical_thin_3d_stl(p, out_stl)
+        return
     if p["packing_method"] in ("spherical_packing", "hexagonal_3d"):
         _science_generate_stl(p, out_stl)
     else:
