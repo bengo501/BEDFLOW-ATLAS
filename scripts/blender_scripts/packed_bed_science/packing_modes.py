@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, FrozenSet, Optional
 
-# conjunto imutavel com os tres nomes oficiais usados em if e validacao
+# conjunto imutavel com os quatro nomes oficiais usados em if e validacao
 # frozen set impede alteracao acidental em tempo de execucao
 SUPPORTED_PACKING_MODES: FrozenSet[str] = frozenset(
     ("rigid_body", "spherical_packing", "hexagonal_3d", "dem")

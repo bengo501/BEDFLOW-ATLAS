@@ -22,13 +22,11 @@ class BedService:
         # true se o script python do compilador existir no disco
         return self.compiler_script.exists()
 
-    def _merge_packing_into_compiled_json(
+    def _merge_wizard_metadata_into_compiled_json(
         self, json_file: str, parameters: Dict[str, Any]
     ) -> None:
         # o compilador antlr gera json so com chaves que existem na gramatica bed
-        # campos novos como gap random_seed strict_validation ficam no dict python apos normalizar
-        # esta funcao reescreve o json final juntando essas chaves em packing
-        # o blender le o arquivo ja mesclado quando o backend chama generate model
+        # esta funcao reescreve o json com packing, geometry_mode, generation_backend, slice, etc.
         jp = Path(json_file)
         if not jp.is_file():
             alt = beds_dir() / jp.name
@@ -41,19 +39,37 @@ class BedService:
         except (json.JSONDecodeError, OSError):
             return
         extra = parameters.get("packing")
-        if not isinstance(extra, dict):
-            return
-        if "packing" not in data or not isinstance(data["packing"], dict):
-            data["packing"] = {}
-        for k, v in extra.items():
-            if v is not None:
-                data["packing"][k] = v
+        if isinstance(extra, dict):
+            if "packing" not in data or not isinstance(data["packing"], dict):
+                data["packing"] = {}
+            for k, v in extra.items():
+                if v is not None:
+                    data["packing"][k] = v
+        for root_key in (
+            "geometry_mode",
+            "generation_backend",
+            "slice",
+            "statistical_2d",
+        ):
+            if parameters.get(root_key) is not None:
+                data[root_key] = parameters[root_key]
+        pmode = parameters.get("packing_mode")
+        if pmode and isinstance(data.get("packing"), dict):
+            if not data["packing"].get("method"):
+                data["packing"]["method"] = pmode
+            data["packing_mode"] = pmode
         try:
             jp.write_text(
                 json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
             )
         except OSError:
             pass
+
+    def _merge_packing_into_compiled_json(
+        self, json_file: str, parameters: Dict[str, Any]
+    ) -> None:
+        """alias retrocompativel."""
+        self._merge_wizard_metadata_into_compiled_json(json_file, parameters)
     
     async def compile_bed(
         self,
@@ -94,8 +110,8 @@ class BedService:
         # compilar usando script existente
         json_file = await self._run_compiler(str(bed_file))
 
-        # garante que o arquivo consumido pelo script blender tenha packing completo
-        self._merge_packing_into_compiled_json(json_file, parameters)
+        # garante que o arquivo consumido pelo motor 3d tenha packing e metadados de geometria
+        self._merge_wizard_metadata_into_compiled_json(json_file, parameters)
 
         result = {
             "bed_file": str(bed_file.relative_to(self.project_root)),

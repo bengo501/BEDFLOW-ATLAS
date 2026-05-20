@@ -86,6 +86,11 @@ class BedParametersNested(BaseModel):
     packing: Dict[str, Any] = Field(..., description="parâmetros do empacotamento")
     export: Dict[str, Any] = Field(..., description="parâmetros de exportação")
     cfd: Optional[Dict[str, Any]] = Field(None, description="parâmetros CFD (opcional)")
+    geometry_mode: Optional[str] = Field(None, description="full_3d, pseudo_2d_thin_slice, pseudo_2d_statistical")
+    generation_backend: Optional[str] = Field(None, description="python_engine ou blender")
+    slice: Optional[Dict[str, Any]] = Field(None, description="parametros thin slice")
+    statistical_2d: Optional[Dict[str, Any]] = Field(None, description="parametros rsa 2d")
+    packing_mode: Optional[str] = Field(None, description="alias de packing.method na raiz")
 
 class CompileRequest(BaseModel):
     """requisição para compilar arquivo .bed"""

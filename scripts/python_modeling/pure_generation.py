@@ -396,6 +396,8 @@ def _porosity_volume_kind(
 
 
 def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
+    # legado: substituido por engine.pipeline.run_packing + _build_and_export_mesh
+    # mantido para referencia; nao e chamado por generate_packed_bed_stl
     # modo cientifico sem fisica tipo blender
     # passo um calcula raios e altura e monta annulus bed domain
     # passo dois escolhe gerador conforme packing method

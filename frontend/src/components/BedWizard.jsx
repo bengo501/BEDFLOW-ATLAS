@@ -491,24 +491,31 @@ const BedWizard = ({ onNavigateTab } = {}) => {
 
       if (mode === 'pipeline_completo') {
         if (confirm('deseja executar o pipeline completo agora? (modelo 3d + simulação cfd)')) {
-          const pipelineResult = await postPipelineFullSimulation({
-            bed: params.bed,
-            lids: params.lids,
-            particles: params.particles,
-            packing: params.packing,
-            export: params.export,
-            cfd: includeCFD && params.cfd
-              ? {
-                  regime: params.cfd.regime,
-                  inlet_velocity: params.cfd.inlet_velocity,
-                  fluid_density: params.cfd.fluid_density,
-                  fluid_viscosity: params.cfd.fluid_viscosity,
-                  max_iterations: params.cfd.max_iterations,
-                  convergence_criteria: params.cfd.convergence_criteria,
-                  write_fields: params.cfd.write_fields,
-                }
-              : null,
-          });
+          const pipelineResult = await postPipelineFullSimulation(
+            {
+              bed: params.bed,
+              lids: params.lids,
+              particles: params.particles,
+              packing: params.packing,
+              export: params.export,
+              geometry_mode: params.geometry_mode,
+              generation_backend: params.generation_backend,
+              slice: params.slice,
+              statistical_2d: params.statistical_2d,
+              cfd: includeCFD && params.cfd
+                ? {
+                    regime: params.cfd.regime,
+                    inlet_velocity: params.cfd.inlet_velocity,
+                    fluid_density: params.cfd.fluid_density,
+                    fluid_viscosity: params.cfd.fluid_viscosity,
+                    max_iterations: params.cfd.max_iterations,
+                    convergence_criteria: params.cfd.convergence_criteria,
+                    write_fields: params.cfd.write_fields,
+                  }
+                : null,
+            },
+            { modeling_profile: modelingProfileFromBackend(params.generation_backend) },
+          );
           alert(`pipeline completo iniciado!\njob_id: ${pipelineResult.job_id}\nmonitore o progresso na seção 'jobs'`);
         }
       }

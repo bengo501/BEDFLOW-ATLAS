@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from sqlalchemy import func
@@ -29,8 +30,26 @@ class UnifiedDataService:
         if not isinstance(pj, dict):
             return {}
         gm = pj.get("geometry_mode")
+        try:
+            _pm = (
+                Path(__file__).resolve().parents[2]
+                / "scripts"
+                / "python_modeling"
+            )
+            import sys
+
+            pm_str = str(_pm)
+            if pm_str not in sys.path:
+                sys.path.insert(0, pm_str)
+            from geometry_modes import geometry_mode_from_data  # noqa: WPS433
+
+            gm = geometry_mode_from_data(pj)
+        except Exception:
+            pass
         gb = pj.get("generation_backend")
         sl = pj.get("slice") if isinstance(pj.get("slice"), dict) else {}
+        if gm not in ("pseudo_2d_thin_slice", "pseudo_2d_statistical"):
+            sl = {}
         st = pj.get("statistical_2d") if isinstance(pj.get("statistical_2d"), dict) else {}
         porosity_target = st.get("target_porosity") or (pj.get("particles") or {}).get(
             "target_porosity"
