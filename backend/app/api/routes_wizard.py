@@ -101,7 +101,7 @@ class CFDParams(BaseModel):
 class SliceParams(BaseModel):
     slice_enabled: bool = True
     slice_thickness: str = "0.002"
-    slice_axis: str = "z"
+    slice_axis: str = "y"
     slice_position: str = "0.0"
     keep_only_intersecting_particles: bool = True
     preserve_original_packing: bool = True

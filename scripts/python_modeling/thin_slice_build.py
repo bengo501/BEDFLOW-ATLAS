@@ -11,12 +11,30 @@ from geometry_modes import (
 )
 from stl_mesh_utils import (
     annulus_cap_pair,
+    box_mesh,
     cylinder_axis,
     filter_faces_by_slab,
     merge_mesh,
     tri,
+    uv_sphere,
     vec3,
 )
+
+
+def _append_particle_full(
+    particle_kind: str,
+    center: vec3,
+    particle_diameter: float,
+    segmentos: int,
+) -> Tuple[List[vec3], List[tri]]:
+    pk = (particle_kind or "sphere").strip().lower()
+    d = float(particle_diameter)
+    cx, cy, cz = center
+    if pk == "cube":
+        return box_mesh(cx, cy, cz, d)
+    if pk == "cylinder":
+        return cylinder_axis(cx, cy, cz, d * 0.5, d, axis="z", segments=segmentos)
+    return uv_sphere(cx, cy, cz, d * 0.5, lat=4, lon=6)
 
 __all__ = ["apply_thin_slice_mesh", "slice_cfg_active"]
 
@@ -84,6 +102,11 @@ def apply_thin_slice_mesh(
         ):
             if keep_only:
                 continue
+            # keep_only=false: incluir particula 3d completa (fora da lamina)
+            sv, sf = _append_particle_full(
+                pk, center, particle_diameter, seg_p
+            )
+            v_all, f_all = merge_mesh(v_all, f_all, sv, sf)
             continue
         d_plane = abs(
             (center[0] if axis == "x" else center[1] if axis == "y" else center[2])

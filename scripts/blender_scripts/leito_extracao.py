@@ -1061,17 +1061,24 @@ def main_com_parametros():
                 sys.path.insert(0, str(_pm))
             from geometry_modes import (
                 GEOMETRY_STATISTICAL,
+                GEOMETRY_THIN_SLICE,
                 geometry_mode_from_data,
                 resolve_slice_config,
             )
 
             gm = geometry_mode_from_data(params)
             if gm == GEOMETRY_STATISTICAL:
-                print(
-                    "aviso: pseudo_2d_statistical deve usar generation_backend python_engine; "
-                    "blender gera full_3d ou thin_slice apenas."
+                raise RuntimeError(
+                    "pseudo_2d_statistical requer generation_backend python_engine; "
+                    "use packed_bed_stl.py ou escolha python_engine no wizard."
                 )
-            slice_cfg = resolve_slice_config(params) or slice_cfg
+            resolved_slice = resolve_slice_config(params)
+            if resolved_slice:
+                slice_cfg = resolved_slice
+            elif gm != GEOMETRY_THIN_SLICE:
+                slice_cfg = {}
+        except RuntimeError:
+            raise
         except Exception:
             pass
         if isinstance(slice_cfg, dict) and slice_cfg.get("slice_enabled"):

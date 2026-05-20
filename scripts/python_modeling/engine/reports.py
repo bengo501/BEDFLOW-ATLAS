@@ -30,8 +30,11 @@ class PackingResult:
         return {
             "packing_method": self.method,
             "particle_type": self.particle_type,
+            "particle_kind": self.particle_type,
             "n_particles_requested": self.n_requested,
             "n_particles_placed": self.n_placed,
+            "n_spheres_requested": self.n_requested,
+            "n_spheres_placed": self.n_placed,
             "porosity_estimate": self.porosity,
             "validation_ok": self.validation_ok,
             "collisions_checked": self.collisions_checked,

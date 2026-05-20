@@ -337,13 +337,21 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   };
 
   const handleInputChange = (section, field, value) => {
-    setParams(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [field]: value
+    setParams((prev) => {
+      const next = {
+        ...prev,
+        [section]: {
+          ...prev[section],
+          [field]: value,
+        },
+      };
+      if (section === 'packing' && field === 'method') {
+        if (value === 'dem') {
+          next.generation_backend = 'python_engine';
+        }
       }
-    }));
+      return next;
+    });
   };
 
   const handleMetaChange = (field, value) => {
@@ -354,13 +362,14 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           next.slice = prev.slice || {
             slice_enabled: true,
             slice_thickness: '0.002',
-            slice_axis: 'z',
+            slice_axis: 'y',
             slice_position: '0.0',
             keep_only_intersecting_particles: true,
             preserve_original_packing: true,
           };
           next.statistical_2d = null;
         } else if (value === 'pseudo_2d_statistical') {
+          next.generation_backend = 'python_engine';
           next.slice = null;
           const bed = prev.bed || {};
           next.statistical_2d = prev.statistical_2d || {

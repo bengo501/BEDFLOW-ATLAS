@@ -18,7 +18,11 @@ from packed_bed_science.packing_hexagonal import generate_hexagonal_packing  # n
 from packed_bed_science.packing_spherical import generate_spherical_packing  # noqa: E402
 from packed_bed_science.validation import validate_configuration  # noqa: E402
 
-from geometry_modes import GEOMETRY_STATISTICAL  # noqa: E402
+from geometry_modes import (  # noqa: E402
+    GEOMETRY_STATISTICAL,
+    geometry_mode_from_data,
+    resolve_slice_config,
+)
 from pseudo_2d_statistical import generate_statistical_thin_3d_stl  # noqa: E402
 from pure_bed_mesh import build_packed_bed_model, export_model_data  # noqa: E402
 from thin_slice_build import apply_thin_slice_mesh, slice_cfg_active  # noqa: E402
@@ -187,8 +191,8 @@ def _build_and_export_mesh(
     tb = domain.bottom_cap_thickness
     tt = domain.top_cap_thickness
     seg = min(64, max(12, _to_int(p.get("mesh_segmentos"), 48)))
-    slice_cfg = dict(p.get("slice") or {})
-    gm = str(p.get("geometry_mode") or "full_3d")
+    gm = geometry_mode_from_data(p)
+    slice_cfg = resolve_slice_config(p)
 
     if not slice_cfg_active(slice_cfg):
         packed = build_packed_bed_model(
@@ -258,7 +262,7 @@ def _build_and_export_mesh(
 
 
 def generate_packed_bed(p: Dict[str, Any], out_stl: Path) -> PackingResult:
-    gm = str(p.get("geometry_mode") or "full_3d")
+    gm = geometry_mode_from_data(p)
     if gm == GEOMETRY_STATISTICAL:
         generate_statistical_thin_3d_stl(p, out_stl)
         return PackingResult(

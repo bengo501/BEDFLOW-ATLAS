@@ -14,23 +14,30 @@ from backend.app import config as app_config
 
 
 def _profile_from_bed_json(json_path: Path, modeling_profile: Optional[str]) -> str:
-    if modeling_profile not in (None, ""):
-        return _normalize_modeling_profile(modeling_profile)
     try:
         with json_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return _normalize_modeling_profile(modeling_profile)
+
+    packing = data.get("packing") if isinstance(data.get("packing"), dict) else {}
+    method = str(packing.get("method") or data.get("packing_mode") or "").lower()
+    gm = str(data.get("geometry_mode") or "").lower()
+
+    if modeling_profile not in (None, ""):
+        profile = _normalize_modeling_profile(modeling_profile)
+    else:
         gb = str(data.get("generation_backend") or "").strip().lower()
         if gb in ("python_engine", "pure_python", "python"):
             profile = "python"
         else:
             profile = _normalize_modeling_profile(None)
-        packing = data.get("packing") if isinstance(data.get("packing"), dict) else {}
-        method = str(packing.get("method") or data.get("packing_mode") or "").lower()
-        if method == "dem" and profile == "blender":
-            profile = "python"
-        return profile
-    except (OSError, json.JSONDecodeError, ValueError):
-        return _normalize_modeling_profile(modeling_profile)
+
+    if method == "dem" and profile == "blender":
+        profile = "python"
+    if gm in ("pseudo_2d_statistical", "statistical") and profile == "blender":
+        profile = "python"
+    return profile
 
 
 def _normalize_modeling_profile(modeling_profile: Optional[str]) -> str:

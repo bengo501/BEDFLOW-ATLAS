@@ -64,7 +64,8 @@ def test_generate_science_writes_stl_and_optional_json(
         assert side.is_file()
         data = json.loads(side.read_text(encoding="utf-8"))
         assert "validation" in data
-        assert data.get("n_spheres_placed", 0) >= 1
+        placed = data.get("n_particles_placed", data.get("n_spheres_placed", 0))
+        assert placed >= 1
 
 
 def test_generate_legacy_rigid_writes_stl(tmp_path: Path):

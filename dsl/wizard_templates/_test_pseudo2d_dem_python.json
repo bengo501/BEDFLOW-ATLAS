@@ -1,0 +1,25 @@
+{
+  "geometry_mode": "pseudo_2d_thin_slice",
+  "generation_backend": "python_engine",
+  "bed": { "diameter": 0.04, "height": 0.06, "wall_thickness": 0.002 },
+  "lids": { "bottom_thickness": 0.002, "top_thickness": 0.002 },
+  "particles": { "kind": "sphere", "count": 10, "diameter": 0.005 },
+  "packing": {
+    "method": "dem",
+    "strict_validation": false,
+    "dem": {
+      "steps": 1200,
+      "time_step": 0.0003,
+      "seed": 3
+    }
+  },
+  "slice": {
+    "slice_enabled": true,
+    "slice_axis": "y",
+    "slice_position": 0.0,
+    "slice_thickness": 0.002,
+    "keep_only_intersecting_particles": true,
+    "preserve_original_packing": true
+  },
+  "export": { "formats": ["stl_binary"] }
+}

@@ -184,7 +184,8 @@ def _cli_json_for_disk(data: Dict[str, Any], wizard_params: Dict[str, Any]) -> D
 def _wants_pure_python(args: argparse.Namespace, wizard_params: Dict[str, Any]) -> bool:
     if args.pure_python:
         return True
-    return str(wizard_params.get("generation_backend") or "") == "pure_python"
+    gb = str(wizard_params.get("generation_backend") or "").lower()
+    return gb in ("pure_python", "python_engine")
 
 
 def run_cli(wizard: Any, argv: Optional[list[str]] = None) -> int:
