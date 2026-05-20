@@ -37,6 +37,19 @@ class MeshInfo(BaseModel):
         default="",
         description="modos de visualizacao sugeridos (web | desktop | blender)",
     )
+    geometry_mode: Optional[str] = Field(
+        None, description="full_3d, pseudo_2d_thin_slice, pseudo_2d_statistical (sidecar)"
+    )
+    generation_backend: Optional[str] = Field(None, description="python_engine ou blender")
+    packing_method: Optional[str] = Field(None, description="metodo de empacotamento ou statistical_reconstruction")
+    particle_kind: Optional[str] = Field(None, description="sphere, cube, cylinder")
+    porosity_target: Optional[float] = Field(None, description="porosidade alvo (2d/3d)")
+    porosity_result: Optional[float] = Field(None, description="porosidade estimada no sidecar")
+    porosity_method: Optional[str] = Field(None, description="raster ou formula (modo estatistico)")
+    slice_axis: Optional[str] = Field(None, description="eixo da lamina fina x|y|z")
+    slice_thickness: Optional[float] = Field(None, description="espessura da lamina (m)")
+    slice_position: Optional[float] = Field(None, description="posicao do plano de corte (m)")
+    sidecar_json: Optional[str] = Field(None, description="nome do ficheiro json lido")
 
 
 class MeshListResponse(BaseModel):
@@ -61,6 +74,16 @@ def _resolve_mesh_file(mesh_id: str) -> Tuple[Path, Dict[str, Any]]:
 
 def _to_mesh_info(row: Dict[str, Any]) -> MeshInfo:
     ts = datetime.fromtimestamp(row["mtime"], tz=timezone.utc).isoformat()
+
+    def _opt_float(key: str) -> Optional[float]:
+        v = row.get(key)
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
     return MeshInfo(
         mesh_id=row["mesh_id"],
         relative_path=row["relative_path"],
@@ -70,6 +93,17 @@ def _to_mesh_info(row: Dict[str, Any]) -> MeshInfo:
         format=str(row["format"]),
         source_hint=str(row.get("source_hint") or ""),
         recommended_modes=str(row.get("recommended_modes") or ""),
+        geometry_mode=row.get("geometry_mode"),
+        generation_backend=row.get("generation_backend"),
+        packing_method=row.get("packing_method"),
+        particle_kind=row.get("particle_kind"),
+        porosity_target=_opt_float("porosity_target"),
+        porosity_result=_opt_float("porosity_result"),
+        porosity_method=row.get("porosity_method"),
+        slice_axis=row.get("slice_axis"),
+        slice_thickness=_opt_float("slice_thickness"),
+        slice_position=_opt_float("slice_position"),
+        sidecar_json=row.get("sidecar_json"),
     )
 
 

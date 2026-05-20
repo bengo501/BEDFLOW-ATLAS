@@ -577,54 +577,99 @@ def aplicar_thin_slice(
     else:
         rot = Euler((0.0, math.pi / 2.0, 0.0), "XYZ")
 
+    _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+    if str(_pm) not in sys.path:
+        sys.path.insert(0, str(_pm))
+    from geometry_modes import (  # noqa: E402
+        particle_intersects_slice,
+        slice_footprint_center,
+        slice_footprint_spec,
+    )
+
     disc_verts = 24
-    n_discs = 0
+    n_slice_parts = 0
+    n_full_parts = 0
     for idx, (x, y, z) in enumerate(centers_final, start=1):
-        coord = (x, y, z)[ai]
-        d_plane = abs(coord - pos)
-        if d_plane > (r_ax + thickness / 2.0):
+        center = (float(x), float(y), float(z))
+        d_plane = abs(center[ai] - pos)
+        if not particle_intersects_slice(
+            center,
+            particle_kind=pk,
+            particle_diameter=d_char,
+            axis=axis,
+            slice_position=pos,
+            slice_thickness=thickness,
+        ):
             if keep_only:
                 continue
+            loc3 = center
+            if pk == "cube":
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc3)
+                obj = bpy.context.active_object
+                obj.dimensions = (d_char, d_char, d_char)
+            elif pk == "cylinder":
+                bpy.ops.mesh.primitive_cylinder_add(
+                    radius=r_ax,
+                    depth=d_char,
+                    location=loc3,
+                    rotation=Euler((0.0, 0.0, 0.0), "XYZ"),
+                )
+                obj = bpy.context.active_object
+            else:
+                bpy.ops.mesh.primitive_uv_sphere_add(
+                    radius=r_ax,
+                    location=loc3,
+                    segments=disc_verts,
+                    ring_count=max(8, disc_verts // 2),
+                )
+                obj = bpy.context.active_object
+            obj.name = f"particula_full_{idx:04d}"
+            n_full_parts += 1
             continue
-        try:
-            _pm = Path(__file__).resolve().parents[1] / "python_modeling"
-            if str(_pm) not in sys.path:
-                sys.path.insert(0, str(_pm))
-            from geometry_modes import section_radius_for_particle_kind
 
-            rs = section_radius_for_particle_kind(
-                pk, particle_diameter, d_plane, axis=axis
-            )
-        except Exception:
-            if pk == "sphere":
-                rs = math.sqrt(max(0.0, r_ax**2 - d_plane**2))
-            else:
-                rs = r_ax
-        if rs <= 1e-9:
-            continue
-        if preserve:
-            cx, cy, cz = x, y, z
-        else:
-            if axis == "x":
-                cx, cy, cz = pos, y, z
-            elif axis == "y":
-                cx, cy, cz = x, pos, z
-            else:
-                cx, cy, cz = x, y, pos
-        bpy.ops.mesh.primitive_cylinder_add(
-            vertices=disc_verts,
-            radius=rs,
-            depth=thickness,
-            location=(cx, cy, cz),
-            rotation=rot,
+        spec = slice_footprint_spec(
+            pk,
+            d_char,
+            d_plane,
+            slice_axis=axis,
+            slice_thickness=thickness,
         )
-        disc = bpy.context.active_object
-        disc.name = f"slice_disc_{idx:04d}"
-        n_discs += 1
+        if spec.get("shape") == "none":
+            continue
+        cx, cy, cz = slice_footprint_center(
+            center,
+            slice_axis=axis,
+            slice_position=pos,
+            preserve_original_packing=preserve,
+        )
+        loc3 = (cx, cy, cz)
+        if spec.get("shape") == "box":
+            bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc3)
+            obj = bpy.context.active_object
+            obj.dimensions = (
+                float(spec["size_x"]),
+                float(spec["size_y"]),
+                float(spec["size_z"]),
+            )
+            obj.name = f"slice_box_{idx:04d}"
+        else:
+            rs = float(spec.get("radius") or 0.0)
+            if rs <= 1e-9:
+                continue
+            bpy.ops.mesh.primitive_cylinder_add(
+                vertices=disc_verts,
+                radius=rs,
+                depth=float(spec.get("thickness") or thickness),
+                location=loc3,
+                rotation=rot,
+            )
+            obj = bpy.context.active_object
+            obj.name = f"slice_disc_{idx:04d}"
+        n_slice_parts += 1
 
     print(
         f"fatia pseudo-2d: leito/tampas cortados por boolean; "
-        f"{n_discs} discos finos (eixo {axis}) substituem particulas 3d na lamina"
+        f"{n_slice_parts} secções na lamina, {n_full_parts} particulas 3d completas (fora da fatia)"
     )
 
 

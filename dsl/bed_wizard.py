@@ -2455,8 +2455,15 @@ class BedWizard:
         """preenche self.params com todas as secoes do questionario (sem nome de arquivo nem salvar)."""
         self._questionnaire_bed_and_lids()
         self._questionnaire_particle_shape_and_count()
-        self.params["packing"] = self._collect_packing_params(with_param_help=True)
         self._questionnaire_geometry_mode_section()
+        gm = str(self.params.get("geometry_mode") or "full_3d")
+        if gm == "pseudo_2d_statistical":
+            self.params["packing"] = {"method": "statistical_reconstruction"}
+            self.ui.muted(
+                "empacotamento 3d ignorado: modo pseudo_2d_statistical usa reconstrucao rsa 2d"
+            )
+        else:
+            self.params["packing"] = self._collect_packing_params(with_param_help=True)
         self._questionnaire_generation_backend_section()
         self._questionnaire_export_section()
         self._questionnaire_particles_properties_tail(self.params["packing"]["method"])
@@ -3039,8 +3046,15 @@ cfd {
         """mesmo encadeamento do questionario completo (sem cfd)."""
         self._questionnaire_bed_and_lids()
         self._questionnaire_particle_shape_and_count()
-        self.params["packing"] = self._collect_packing_params(with_param_help=True)
         self._questionnaire_geometry_mode_section()
+        gm = str(self.params.get("geometry_mode") or "full_3d")
+        if gm == "pseudo_2d_statistical":
+            self.params["packing"] = {"method": "statistical_reconstruction"}
+            self.ui.muted(
+                "empacotamento 3d ignorado: modo pseudo_2d_statistical usa reconstrucao rsa 2d"
+            )
+        else:
+            self.params["packing"] = self._collect_packing_params(with_param_help=True)
         self._questionnaire_generation_backend_section(
             geracao_3d_flow=geracao_3d_flow and locked_generation_backend is None,
             locked_backend=locked_generation_backend,

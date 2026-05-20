@@ -241,13 +241,15 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   const [wizardCliBusy, setWizardCliBusy] = useState(false);
   const [wizardCliLaunchMsg, setWizardCliLaunchMsg] = useState('');
 
+  const skipPackingStep = params.geometry_mode === 'pseudo_2d_statistical';
+
   const steps = useMemo(() => {
     const list = [
       { title: t('selectMode'), section: 'mode' },
       { title: t('bedGeometry'), section: 'bed' },
       { title: t('lids'), section: 'lids' },
       { title: t('particles'), section: 'particles' },
-      { title: t('packing'), section: 'packing' },
+      ...(skipPackingStep ? [] : [{ title: t('packing'), section: 'packing' }]),
       { title: t('pipelineStep'), section: 'pipeline' },
       { title: t('export'), section: 'export' },
     ];
@@ -259,7 +261,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
     }
     list.push({ title: t('confirmation'), section: 'confirm' });
     return list;
-  }, [language, showCfdSteps, includeCFD, t]);
+  }, [language, showCfdSteps, includeCFD, t, skipPackingStep]);
 
   const currentSection = steps[step]?.section;
 
@@ -370,6 +372,10 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           next.statistical_2d = null;
         } else if (value === 'pseudo_2d_statistical') {
           next.generation_backend = 'python_engine';
+          next.packing = {
+            ...(prev.packing || {}),
+            method: 'statistical_reconstruction',
+          };
           next.slice = null;
           const bed = prev.bed || {};
           next.statistical_2d = prev.statistical_2d || {
@@ -1091,7 +1097,20 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   );
 
   // renderizar seção packing
-  const renderPackingSection = () => (
+  const renderPackingSection = () => {
+    if (params.geometry_mode === 'pseudo_2d_statistical') {
+      return (
+        <div className="form-section">
+          <h2>empacotamento</h2>
+          <p className="wizard-hint-muted">
+            {pt
+              ? 'no modo estatístico o empacotamento 3d é ignorado; a porosidade vem da reconstrução 2d (rsa).'
+              : 'statistical mode skips 3d packing; porosity comes from 2d rsa reconstruction.'}
+          </p>
+        </div>
+      );
+    }
+    return (
     <div className="form-section">
       <h2>empacotamento</h2>
       <div className="form-grid">
@@ -1309,7 +1328,8 @@ const BedWizard = ({ onNavigateTab } = {}) => {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   const renderPipelineSection = () => (
     <div className="form-section">
@@ -1336,12 +1356,18 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           <select
             value={params.generation_backend}
             onChange={(e) => handleMetaChange('generation_backend', e.target.value)}
+            disabled={params.geometry_mode === 'pseudo_2d_statistical'}
           >
             <option value="blender">{pt ? 'blender — malha via blender' : 'blender'}</option>
             <option value="python_engine">
               {pt ? 'python engine — malha via motor feito em python' : 'python engine'}
             </option>
           </select>
+          {params.geometry_mode === 'pseudo_2d_statistical' && (
+            <small className="field-hint">
+              {pt ? 'modo estatístico exige motor python.' : 'statistical mode requires python engine.'}
+            </small>
+          )}
         </div>
 
         {params.geometry_mode === 'pseudo_2d_thin_slice' && params.slice && (

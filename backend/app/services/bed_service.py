@@ -224,6 +224,12 @@ class BedService:
         out["packing"] = p_pack
         if not isinstance(out.get("export"), dict):
             out["export"] = {}
+        gm = out.get("geometry_mode")
+        if gm == "pseudo_2d_statistical":
+            if not isinstance(out.get("packing"), dict):
+                out["packing"] = {}
+            if not out["packing"].get("method"):
+                out["packing"]["method"] = "statistical_reconstruction"
         return out
     
     def _generate_bed_content(self, params: Dict[str, Any]) -> str:

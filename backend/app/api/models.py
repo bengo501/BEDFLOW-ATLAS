@@ -77,6 +77,19 @@ class BedParameters(BaseModel):
     fluid_density: Optional[float] = Field(1000.0, description="densidade fluido (kg/m³)")
     fluid_viscosity: Optional[float] = Field(0.001, description="viscosidade (Pa.s)")
 
+    geometry_mode: Optional[str] = Field(
+        "full_3d",
+        description="full_3d, pseudo_2d_thin_slice ou pseudo_2d_statistical",
+    )
+    generation_backend: Optional[str] = Field(
+        "blender",
+        description="python_engine ou blender",
+    )
+    slice: Optional[Dict[str, Any]] = Field(None, description="parametros thin slice")
+    statistical_2d: Optional[Dict[str, Any]] = Field(
+        None, description="parametros rsa 2d estatistico"
+    )
+
 # modelo para estrutura aninhada do frontend
 class BedParametersNested(BaseModel):
     """parâmetros do leito empacotado em estrutura aninhada (frontend)"""

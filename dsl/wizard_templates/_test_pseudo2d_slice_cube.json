@@ -1,0 +1,46 @@
+{
+  "geometry_mode": "pseudo_2d_thin_slice",
+  "generation_backend": "python_engine",
+  "packing_mode": "spherical_packing",
+  "bed": {
+    "diameter": 0.05,
+    "height": 0.1,
+    "wall_thickness": 0.002,
+    "clearance": 0.01,
+    "material": "steel"
+  },
+  "particles": {
+    "kind": "cube",
+    "count": 25,
+    "diameter": 0.003,
+    "target_porosity": 0.4,
+    "density": 2500.0,
+    "seed": 3
+  },
+  "lids": {
+    "top_type": "flat",
+    "bottom_type": "flat",
+    "bottom_thickness": 0.003,
+    "top_thickness": 0.003
+  },
+  "packing": {
+    "method": "spherical_packing",
+    "gap": 0.0001,
+    "strict_validation": true,
+    "mesh_segmentos": 24
+  },
+  "export": {
+    "formats": ["stl_binary"],
+    "units": "m",
+    "wall_mode": "surface",
+    "fluid_mode": "none"
+  },
+  "slice": {
+    "slice_enabled": true,
+    "slice_thickness": 0.002,
+    "slice_axis": "y",
+    "slice_position": 0.0,
+    "keep_only_intersecting_particles": true,
+    "preserve_original_packing": true
+  }
+}

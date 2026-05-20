@@ -6,12 +6,14 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader';
 import '../styles/ModelViewer.css';
+import { fitCameraToObject } from '../utils/viewerCamera';
 
 function ModelViewer({ modelPath }) {
   const mountRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
 
@@ -91,6 +93,9 @@ function ModelViewer({ modelPath }) {
         });
         scene.add(root);
         logBounds(root);
+        if (cameraRef.current && controlsRef.current) {
+          fitCameraToObject(cameraRef.current, controlsRef.current, root);
+        }
         setLoading(false);
         return;
       }
@@ -110,6 +115,9 @@ function ModelViewer({ modelPath }) {
             }
           });
           scene.add(model);
+          if (cameraRef.current && controlsRef.current) {
+            fitCameraToObject(cameraRef.current, controlsRef.current, model);
+          }
           setLoading(false);
           logBounds(model);
         },
@@ -149,6 +157,7 @@ function ModelViewer({ modelPath }) {
     );
     camera.position.set(0.15, 0.15, 0.15);
     camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
     // criar renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });

@@ -50,4 +50,13 @@ def augment_mesh_scan_row(row: Dict[str, Any]) -> Dict[str, Any]:
     fmt = str(out.get("format") or "")
     out["source_hint"] = mesh_source_hint(rel, fn)
     out["recommended_modes"] = mesh_recommended_modes(rel, fmt)
+    try:
+        from bedflow_local_paths import resolve_validated_mesh_path
+        from bedflow_mesh_metadata import augment_mesh_row_with_sidecar
+
+        mp = resolve_validated_mesh_path(rel)
+        if mp is not None:
+            out = augment_mesh_row_with_sidecar(out, mp)
+    except ImportError:
+        pass
     return out

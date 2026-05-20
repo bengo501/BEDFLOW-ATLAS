@@ -15,7 +15,12 @@ from pure_generation import generate_packed_bed_stl  # noqa: E402
 
 @pytest.mark.parametrize(
     "fixture_name",
-    ["_test_pseudo2d_slice.json", "_test_pseudo2d_statistical.json"],
+    [
+        "_test_pseudo2d_slice.json",
+        "_test_pseudo2d_slice_cube.json",
+        "_test_pseudo2d_slice_cylinder.json",
+        "_test_pseudo2d_statistical.json",
+    ],
 )
 def test_generate_stl_from_fixture(fixture_name):
     fx = _ROOT / "dsl" / "wizard_templates" / fixture_name

@@ -15,6 +15,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import ThemeIcon from './ThemeIcon';
 import '../styles/MeshViewer3DPage.css';
+import { fitCameraToObject, viewHintFromMeshInfo } from '../utils/viewerCamera';
 
 const LS_LAST_MESH = 'bedflow_last_mesh_id';
 
@@ -132,21 +133,6 @@ function centerOnFloor(root) {
   root.position.x -= center.x;
   root.position.z -= center.z;
   root.position.y -= minY;
-}
-
-function fitCameraToObject(camera, controls, root, margin = 1.05) {
-  const box = new THREE.Box3().setFromObject(root);
-  if (box.isEmpty()) return;
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const dist = maxDim * margin;
-  camera.near = Math.max(maxDim / 2000, 0.0001);
-  camera.far = Math.max(maxDim * 200, 1000);
-  camera.updateProjectionMatrix();
-  camera.position.set(center.x + dist * 0.7, center.y + dist * 0.55, center.z + dist * 0.7);
-  controls.target.copy(center);
-  controls.update();
 }
 
 export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBootId }) {
@@ -315,7 +301,8 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
         syncBoundingBox(obj);
         const cam = cameraRef.current;
         const ctr = controlsRef.current;
-        if (cam && ctr) fitCameraToObject(cam, ctr, obj);
+        const viewHint = viewHintFromMeshInfo(info);
+        if (cam && ctr) fitCameraToObject(cam, ctr, obj, 1.05, viewHint);
         setMeta({
           filename: info?.filename || 'mesh',
           format: ext,
@@ -324,6 +311,8 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           path: info?.relative_path || '',
           source_hint: info?.source_hint || '',
           recommended_modes: info?.recommended_modes || '',
+          geometry_mode: info?.geometry_mode || '',
+          slice_axis: info?.slice_axis || '',
         });
       }
       try {
@@ -449,7 +438,15 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     const root = rootRef.current;
     const cam = cameraRef.current;
     const ctr = controlsRef.current;
-    if (root && cam && ctr) fitCameraToObject(cam, ctr, root);
+    if (root && cam && ctr) {
+      const hint = meta?.geometry_mode
+        ? {
+            geometry_mode: meta.geometry_mode,
+            slice_axis: meta.slice_axis,
+          }
+        : null;
+      fitCameraToObject(cam, ctr, root, 1.05, hint);
+    }
   };
 
   const showToolNotice = (payload) => {

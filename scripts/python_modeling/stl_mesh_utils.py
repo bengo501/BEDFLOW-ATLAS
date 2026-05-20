@@ -56,25 +56,27 @@ def uv_sphere(
     return verts, faces
 
 
-def box_mesh(
+def box_mesh_anisotropic(
     cx: float,
     cy: float,
     cz: float,
-    edge: float,
+    size_x: float,
+    size_y: float,
+    size_z: float,
 ) -> Tuple[List[vec3], List[tri]]:
-    """cubo alinhado aos eixos centrado em (cx,cy,cz); aresta edge em metros."""
-    if edge <= 0:
+    """paralelepípedo alinhado aos eixos centrado em (cx,cy,cz)."""
+    if size_x <= 0 or size_y <= 0 or size_z <= 0:
         return [], []
-    h = edge / 2.0
+    hx, hy, hz = size_x / 2.0, size_y / 2.0, size_z / 2.0
     verts: List[vec3] = [
-        (cx - h, cy - h, cz - h),
-        (cx + h, cy - h, cz - h),
-        (cx + h, cy + h, cz - h),
-        (cx - h, cy + h, cz - h),
-        (cx - h, cy - h, cz + h),
-        (cx + h, cy - h, cz + h),
-        (cx + h, cy + h, cz + h),
-        (cx - h, cy + h, cz + h),
+        (cx - hx, cy - hy, cz - hz),
+        (cx + hx, cy - hy, cz - hz),
+        (cx + hx, cy + hy, cz - hz),
+        (cx - hx, cy + hy, cz - hz),
+        (cx - hx, cy - hy, cz + hz),
+        (cx + hx, cy - hy, cz + hz),
+        (cx + hx, cy + hy, cz + hz),
+        (cx - hx, cy + hy, cz + hz),
     ]
     faces: List[tri] = [
         (0, 2, 1),
@@ -91,6 +93,16 @@ def box_mesh(
         (1, 6, 5),
     ]
     return verts, faces
+
+
+def box_mesh(
+    cx: float,
+    cy: float,
+    cz: float,
+    edge: float,
+) -> Tuple[List[vec3], List[tri]]:
+    """cubo alinhado aos eixos centrado em (cx,cy,cz); aresta edge em metros."""
+    return box_mesh_anisotropic(cx, cy, cz, edge, edge, edge)
 
 
 def merge_mesh(

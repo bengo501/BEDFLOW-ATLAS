@@ -166,17 +166,34 @@ def particle_coord_on_axis(center: vec3, axis: str) -> float:
     return center[ai]
 
 
+def collision_radius_for_particle_kind(kind: str, characteristic_diameter: float) -> float:
+    """alinhado a packed_bed_science.geometry_math (raio de colisao conservador)."""
+    k = (kind or "sphere").strip().lower()
+    d = float(characteristic_diameter)
+    if d <= 0:
+        return 1e-9
+    if k == "sphere":
+        return d * 0.5
+    if k == "cube":
+        return d * math.sqrt(3.0) * 0.5
+    if k == "cylinder":
+        return d * 0.5
+    return d * 0.5
+
+
 def particle_intersects_slice(
     center: vec3,
-    radius: float,
     *,
+    particle_kind: str,
+    particle_diameter: float,
     axis: str,
     slice_position: float,
     slice_thickness: float,
 ) -> bool:
+    r_eq = collision_radius_for_particle_kind(particle_kind, particle_diameter)
     coord = particle_coord_on_axis(center, axis)
     half = slice_thickness / 2.0
-    return abs(coord - slice_position) <= radius + half
+    return abs(coord - slice_position) <= r_eq + half
 
 
 def sphere_section_radius(sphere_radius: float, distance_to_plane: float) -> float:
@@ -193,23 +210,169 @@ def section_radius_for_particle_kind(
     *,
     axis: str = "y",
 ) -> float:
-    """raio efetivo do disco/cilindro fino na fatia."""
+    """raio efetivo do disco na fatia (esfera/cilindro perp. ao eixo z)."""
+    spec = slice_footprint_spec(kind, diameter, distance_to_plane, slice_axis=axis)
+    if spec.get("shape") == "disc":
+        return float(spec.get("radius") or 0.0)
+    return 0.0
+
+
+def slice_footprint_spec(
+    kind: str,
+    diameter: float,
+    distance_to_plane: float,
+    *,
+    slice_axis: str = "y",
+    slice_thickness: float = 0.002,
+) -> Dict[str, Any]:
+    """
+    especificacao da secao na lamina fina.
+    disc: cilindro fino (esfera ou cilindro com corte perp. ao eixo z da particula).
+    box: paralelepipedo achatado (cubo ou cilindro com corte // eixo z).
+    """
     pk = (kind or "sphere").strip().lower()
-    r = diameter * 0.5
-    d = abs(distance_to_plane)
+    d = float(diameter)
+    r = d * 0.5
+    d_plane = abs(distance_to_plane)
+    ax = normalize_slice_axis(slice_axis)
+    t = max(float(slice_thickness), 1e-9)
+
     if pk == "sphere":
-        return sphere_section_radius(r, d)
+        rs = sphere_section_radius(r, d_plane)
+        if rs <= 1e-9:
+            return {"shape": "none"}
+        return {"shape": "disc", "radius": rs, "thickness": t, "slice_axis": ax}
+
     if pk == "cube":
-        # aproximacao: inscrito na esfera circumscrita, depois achatamento pelo plano
-        rs = sphere_section_radius(r * math.sqrt(3.0) / 2.0, d)
-        return min(r, rs) if rs > 0 else 0.0
+        half = d * 0.5
+        if d_plane > half + 1e-12:
+            return {"shape": "none"}
+        sx, sy, sz = d, d, d
+        if ax == "x":
+            sx = t
+        elif ax == "y":
+            sy = t
+        else:
+            sz = t
+        return {
+            "shape": "box",
+            "size_x": sx,
+            "size_y": sy,
+            "size_z": sz,
+            "slice_axis": ax,
+        }
+
     if pk == "cylinder":
-        # cilindro alinhado a z por defeito no legacy; secao circular se plano perpendicular a z
-        ax = normalize_slice_axis(axis)
+        # particula com eixo z (legacy): corte perp. a z -> disco; corte perp. a x/y -> retangulo d x d
         if ax == "z":
-            return sphere_section_radius(r, d)
-        return min(r, sphere_section_radius(r, d))
-    return sphere_section_radius(r, d)
+            rs = sphere_section_radius(r, d_plane)
+            if rs <= 1e-9:
+                return {"shape": "none"}
+            return {"shape": "disc", "radius": rs, "thickness": t, "slice_axis": ax}
+        if d_plane > r + 1e-12:
+            return {"shape": "none"}
+        if ax == "x":
+            return {
+                "shape": "box",
+                "size_x": t,
+                "size_y": d,
+                "size_z": d,
+                "slice_axis": ax,
+            }
+        return {
+            "shape": "box",
+            "size_x": d,
+            "size_y": t,
+            "size_z": d,
+            "slice_axis": ax,
+        }
+
+    rs = sphere_section_radius(r, d_plane)
+    if rs <= 1e-9:
+        return {"shape": "none"}
+    return {"shape": "disc", "radius": rs, "thickness": t, "slice_axis": ax}
+
+
+def slice_footprint_center(
+    center: vec3,
+    *,
+    slice_axis: str,
+    slice_position: float,
+    preserve_original_packing: bool,
+) -> vec3:
+    x, y, z = center
+    if preserve_original_packing:
+        return (float(x), float(y), float(z))
+    ax = normalize_slice_axis(slice_axis)
+    if ax == "x":
+        return (float(slice_position), float(y), float(z))
+    if ax == "y":
+        return (float(x), float(slice_position), float(z))
+    return (float(x), float(y), float(slice_position))
+
+
+def compute_global_porosity_2d_formula(
+    disc_centers: Sequence[vec2],
+    disc_radius: float,
+    domain_width: float,
+    domain_height: float,
+) -> float:
+    """formula analitica sem sobreposicao: solido = N * pi * r^2 (superestima se discos se tocam)."""
+    area_total = max(domain_width * domain_height, 1e-12)
+    area_solid = len(disc_centers) * math.pi * disc_radius * disc_radius
+    return max(0.0, min(1.0, 1.0 - area_solid / area_total))
+
+
+def compute_global_porosity_2d_raster(
+    disc_centers: Sequence[vec2],
+    disc_radius: float,
+    domain_width: float,
+    domain_height: float,
+    *,
+    cells_per_radius: int = 10,
+    max_cells_per_axis: int = 512,
+) -> Tuple[float, Dict[str, Any]]:
+    """
+    porosidade 2d por raster: grelha no dominio; celula solida se o centro cai dentro de algum disco.
+    desconta sobreposicao (uniao das areas), ao contrario da formula analitica.
+    """
+    w = max(float(domain_width), 1e-12)
+    h = max(float(domain_height), 1e-12)
+    r = max(float(disc_radius), 0.0)
+    if r <= 0 or not disc_centers:
+        return 1.0, {
+            "porosity_method": "raster",
+            "raster_nx": 0,
+            "raster_ny": 0,
+            "solid_fraction": 0.0,
+        }
+    cpr = max(4, int(cells_per_radius))
+    cell = r / float(cpr)
+    nx = max(8, min(max_cells_per_axis, int(math.ceil(w / cell))))
+    ny = max(8, min(max_cells_per_axis, int(math.ceil(h / cell))))
+    r2 = r * r
+    solid_cells = 0
+    for j in range(ny):
+        cy = (j + 0.5) * h / ny
+        for i in range(nx):
+            cx = (i + 0.5) * w / nx
+            for (dx, dy) in disc_centers:
+                ddx = cx - dx
+                ddy = cy - dy
+                if ddx * ddx + ddy * ddy <= r2:
+                    solid_cells += 1
+                    break
+    total = nx * ny
+    solid_frac = solid_cells / max(total, 1)
+    porosity = max(0.0, min(1.0, 1.0 - solid_frac))
+    return porosity, {
+        "porosity_method": "raster",
+        "raster_nx": nx,
+        "raster_ny": ny,
+        "raster_cell_m": cell,
+        "solid_fraction": solid_frac,
+        "n_discs": len(disc_centers),
+    }
 
 
 def compute_global_porosity_2d(
@@ -217,10 +380,22 @@ def compute_global_porosity_2d(
     disc_radius: float,
     domain_width: float,
     domain_height: float,
+    *,
+    use_raster: bool = True,
+    cells_per_radius: int = 10,
 ) -> float:
-    area_total = max(domain_width * domain_height, 1e-12)
-    area_solid = len(disc_centers) * math.pi * disc_radius * disc_radius
-    return max(0.0, min(1.0, 1.0 - area_solid / area_total))
+    if use_raster:
+        p, _meta = compute_global_porosity_2d_raster(
+            disc_centers,
+            disc_radius,
+            domain_width,
+            domain_height,
+            cells_per_radius=cells_per_radius,
+        )
+        return p
+    return compute_global_porosity_2d_formula(
+        disc_centers, disc_radius, domain_width, domain_height
+    )
 
 
 def compute_axial_porosity_profile_2d(

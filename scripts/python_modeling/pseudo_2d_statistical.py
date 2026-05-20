@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Tuple
 from geometry_modes import (
     GEOMETRY_STATISTICAL,
     compute_axial_porosity_profile_2d,
-    compute_global_porosity_2d,
+    compute_global_porosity_2d_raster,
     compute_radial_porosity_profile_2d,
     compute_two_point_correlation_2d,
     resolve_statistical_config,
@@ -72,6 +72,7 @@ def generate_statistical_2d_centers(
     best_centers: List[vec2] = []
     best_porosity = 0.0
     best_err = 1.0
+    best_raster_meta: Dict[str, Any] = {}
 
     for attempt in range(max(1, max_attempts)):
         n_try = max(1, n_target + attempt - max_attempts // 2)
@@ -83,12 +84,13 @@ def generate_statistical_2d_centers(
             rng=rng,
             max_place_attempts=min(5000, max(500, n_try * 200)),
         )
-        porosity = compute_global_porosity_2d(centers, r, w, h)
+        porosity, raster_meta = compute_global_porosity_2d_raster(centers, r, w, h)
         err = abs(porosity - target)
         if err < best_err:
             best_err = err
             best_porosity = porosity
             best_centers = centers
+            best_raster_meta = raster_meta
         if err <= tol:
             break
         if porosity > target:
@@ -100,6 +102,11 @@ def generate_statistical_2d_centers(
         "porosity_target": target,
         "porosity_result": best_porosity,
         "porosity_error": best_err,
+        "porosity_method": best_raster_meta.get("porosity_method", "raster"),
+        "raster_nx": best_raster_meta.get("raster_nx"),
+        "raster_ny": best_raster_meta.get("raster_ny"),
+        "raster_cell_m": best_raster_meta.get("raster_cell_m"),
+        "solid_fraction": best_raster_meta.get("solid_fraction"),
         "n_discs": len(best_centers),
         "domain_width": w,
         "domain_height": h,
@@ -230,6 +237,13 @@ def generate_statistical_thin_3d_stl(p: Dict[str, Any], out_stl: Path) -> None:
         "statistical_2d": stat_cfg,
         "porosity_target": pack_meta["porosity_target"],
         "porosity_result": pack_meta["porosity_result"],
+        "porosity_method": pack_meta.get("porosity_method", "raster"),
+        "porosity_raster": {
+            "nx": pack_meta.get("raster_nx"),
+            "ny": pack_meta.get("raster_ny"),
+            "cell_m": pack_meta.get("raster_cell_m"),
+            "solid_fraction": pack_meta.get("solid_fraction"),
+        },
         "porosity_axial_profile": axial,
         "porosity_radial_profile": radial,
         "two_point_correlation": tpc,

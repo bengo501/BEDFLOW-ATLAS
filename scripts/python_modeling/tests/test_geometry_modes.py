@@ -11,11 +11,15 @@ if str(_PM) not in sys.path:
 from geometry_modes import (  # noqa: E402
     GEOMETRY_STATISTICAL,
     GEOMETRY_THIN_SLICE,
+    collision_radius_for_particle_kind,
     compute_global_porosity_2d,
+    compute_global_porosity_2d_formula,
+    compute_global_porosity_2d_raster,
     geometry_mode_from_data,
     particle_intersects_slice,
     resolve_slice_config,
     resolve_statistical_config,
+    slice_footprint_spec,
     sphere_section_radius,
 )
 
@@ -32,21 +36,70 @@ def test_resolve_slice_forces_enabled():
     assert sl["slice_axis"] == "z"
 
 
-def test_particle_intersects_slice():
+def test_particle_intersects_slice_sphere():
+    d = 0.01
     assert particle_intersects_slice(
         (0.0, 0.0, 0.0),
-        0.005,
+        particle_kind="sphere",
+        particle_diameter=d,
         axis="y",
         slice_position=0.0,
         slice_thickness=0.002,
     )
     assert not particle_intersects_slice(
         (0.0, 0.1, 0.0),
-        0.005,
+        particle_kind="sphere",
+        particle_diameter=d,
         axis="y",
         slice_position=0.0,
         slice_thickness=0.002,
     )
+
+
+def test_particle_intersects_slice_cube_uses_circumscribed_radius():
+    d = 0.01
+    r_eq = collision_radius_for_particle_kind("cube", d)
+    # centro perto do plano: esfera nao intersecta; cubo (raio maior) intersecta
+    assert not particle_intersects_slice(
+        (0.0, 0.007, 0.0),
+        particle_kind="sphere",
+        particle_diameter=d,
+        axis="y",
+        slice_position=0.0,
+        slice_thickness=0.002,
+    )
+    assert particle_intersects_slice(
+        (0.0, 0.007, 0.0),
+        particle_kind="cube",
+        particle_diameter=d,
+        axis="y",
+        slice_position=0.0,
+        slice_thickness=0.002,
+    )
+    assert r_eq > d * 0.5
+
+
+def test_slice_footprint_cube_is_box_not_disc():
+    spec = slice_footprint_spec("cube", 0.01, 0.0, slice_axis="y", slice_thickness=0.002)
+    assert spec["shape"] == "box"
+    assert spec["size_x"] == 0.01
+    assert spec["size_y"] == 0.002
+
+
+def test_slice_footprint_cylinder_disc_on_z_axis():
+    spec = slice_footprint_spec(
+        "cylinder", 0.01, 0.0, slice_axis="z", slice_thickness=0.002
+    )
+    assert spec["shape"] == "disc"
+    assert abs(spec["radius"] - 0.005) < 1e-9
+
+
+def test_slice_footprint_cylinder_box_on_y_axis():
+    spec = slice_footprint_spec(
+        "cylinder", 0.01, 0.0, slice_axis="y", slice_thickness=0.002
+    )
+    assert spec["shape"] == "box"
+    assert spec["size_y"] == 0.002
 
 
 def test_sphere_section_radius():
@@ -72,3 +125,15 @@ def test_global_porosity_2d():
     centers = [(0.01, 0.01), (0.03, 0.03)]
     p = compute_global_porosity_2d(centers, 0.005, 0.05, 0.05)
     assert 0.0 < p < 1.0
+
+
+def test_porosity_raster_handles_overlap():
+    r = 0.005
+    w, h = 0.05, 0.05
+    # discos sobrepostos (distancia < 2r): formula conta area em dobro
+    c1 = (0.02, 0.025)
+    c2 = (0.02 + 1.5 * r, 0.025)
+    p_formula = compute_global_porosity_2d_formula([c1, c2], r, w, h)
+    p_raster, meta = compute_global_porosity_2d_raster([c1, c2], r, w, h)
+    assert meta["porosity_method"] == "raster"
+    assert p_raster > p_formula

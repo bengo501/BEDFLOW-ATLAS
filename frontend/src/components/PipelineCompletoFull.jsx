@@ -5,6 +5,61 @@ import BackendConnectionError from './BackendConnectionError';
 import '../styles/PipelineCompletoFull.css';
 import { postPipelineFullSimulation, getPipelineJob, parseApiError } from '../services/api';
 
+function buildNestedPipelineBody(p) {
+  const packing =
+    p.geometry_mode === 'pseudo_2d_statistical'
+      ? { method: 'statistical_reconstruction' }
+      : {
+          method: p.packing_method,
+          gravity: p.gravity,
+          substeps: p.substeps,
+          friction: p.friction,
+        };
+  const body = {
+    bed: {
+      diameter: p.diameter,
+      height: p.height,
+      wall_thickness: p.wall_thickness,
+      clearance: 0.01,
+      material: 'steel',
+    },
+    lids: {
+      top_type: p.lid_top,
+      bottom_type: p.lid_bottom,
+      top_thickness: p.lid_thickness,
+      bottom_thickness: p.lid_thickness,
+    },
+    particles: {
+      kind: p.particle_type,
+      count: p.particle_count,
+      diameter: p.particle_diameter,
+      target_porosity: p.target_porosity ?? 0.4,
+      seed: p.seed ?? 42,
+    },
+    packing,
+    export: { formats: ['stl_binary'], units: 'm' },
+    geometry_mode: p.geometry_mode,
+    generation_backend: p.generation_backend,
+    cfd: {
+      regime: p.cfd_regime,
+      inlet_velocity: p.inlet_velocity,
+      fluid_density: p.fluid_density,
+      fluid_viscosity: p.fluid_viscosity,
+    },
+  };
+  if (p.geometry_mode === 'pseudo_2d_thin_slice' && p.slice) {
+    body.slice = { ...p.slice, slice_enabled: true };
+  }
+  if (p.geometry_mode === 'pseudo_2d_statistical' && p.statistical_2d) {
+    body.statistical_2d = p.statistical_2d;
+  }
+  return body;
+}
+
+function modelingProfileFromBackend(generationBackend) {
+  return generationBackend === 'python_engine' ? 'python_engine' : 'blender';
+}
+
 /**
  * pipeline completo end-to-end com execucao cfd
  * 
@@ -40,6 +95,27 @@ const PipelineCompletoFull = () => {
     gravity: -9.81,
     friction: 0.5,
     substeps: 10,
+    geometry_mode: 'full_3d',
+    generation_backend: 'blender',
+    target_porosity: 0.4,
+    seed: 42,
+    slice: {
+      slice_enabled: true,
+      slice_thickness: 0.002,
+      slice_axis: 'y',
+      slice_position: 0,
+      keep_only_intersecting_particles: true,
+      preserve_original_packing: true,
+    },
+    statistical_2d: {
+      domain_width: 0.05,
+      domain_height: 0.1,
+      target_porosity: 0.38,
+      tolerance: 0.02,
+      max_attempts: 30,
+      slice_thickness: 0.002,
+      seed: 7,
+    },
     cfd_regime: 'laminar',
     inlet_velocity: 0.1,
     fluid_density: 1000,
@@ -80,7 +156,10 @@ const PipelineCompletoFull = () => {
     setJobId(null);
 
     try {
-      const data = await postPipelineFullSimulation(parametros);
+      const nested = buildNestedPipelineBody(parametros);
+      const data = await postPipelineFullSimulation(nested, {
+        modeling_profile: modelingProfileFromBackend(parametros.generation_backend),
+      });
       setJobId(data.job_id);
     } catch (error) {
       console.error('erro ao iniciar pipeline:', error);
@@ -232,6 +311,129 @@ const PipelineCompletoFull = () => {
             </select>
           </label>
         </div>
+      </div>
+
+      <div className="config-section">
+        <h3>{language === 'pt' ? 'geometria e motor' : 'geometry and backend'}</h3>
+        <div className="config-grid">
+          <label>
+            {language === 'pt' ? 'modo de geometria' : 'geometry mode'}
+            <select
+              value={parametros.geometry_mode}
+              onChange={(e) => {
+                const gm = e.target.value;
+                setParametros((prev) => ({
+                  ...prev,
+                  geometry_mode: gm,
+                  generation_backend:
+                    gm === 'pseudo_2d_statistical' ? 'python_engine' : prev.generation_backend,
+                  statistical_2d: {
+                    ...prev.statistical_2d,
+                    domain_width: prev.diameter,
+                    domain_height: prev.height,
+                  },
+                }));
+              }}
+            >
+              <option value="full_3d">{language === 'pt' ? 'volume 3d' : 'full 3d'}</option>
+              <option value="pseudo_2d_thin_slice">
+                {language === 'pt' ? 'fatia fina' : 'thin slice'}
+              </option>
+              <option value="pseudo_2d_statistical">
+                {language === 'pt' ? 'estatístico 2d' : 'statistical 2d'}
+              </option>
+            </select>
+          </label>
+          <label>
+            {language === 'pt' ? 'motor' : 'backend'}
+            <select
+              value={parametros.generation_backend}
+              disabled={parametros.geometry_mode === 'pseudo_2d_statistical'}
+              onChange={(e) =>
+                setParametros({ ...parametros, generation_backend: e.target.value })
+              }
+            >
+              <option value="blender">blender</option>
+              <option value="python_engine">python_engine</option>
+            </select>
+          </label>
+        </div>
+        {parametros.geometry_mode === 'pseudo_2d_thin_slice' && (
+          <div className="config-grid">
+            <label>
+              {language === 'pt' ? 'eixo fatia' : 'slice axis'}
+              <select
+                value={parametros.slice?.slice_axis || 'y'}
+                onChange={(e) =>
+                  setParametros({
+                    ...parametros,
+                    slice: { ...parametros.slice, slice_axis: e.target.value },
+                  })
+                }
+              >
+                <option value="x">x</option>
+                <option value="y">y</option>
+                <option value="z">z</option>
+              </select>
+            </label>
+            <label>
+              {language === 'pt' ? 'espessura (m)' : 'thickness (m)'}
+              <input
+                type="number"
+                step="0.0001"
+                value={parametros.slice?.slice_thickness ?? 0.002}
+                onChange={(e) =>
+                  setParametros({
+                    ...parametros,
+                    slice: {
+                      ...parametros.slice,
+                      slice_thickness: parseFloat(e.target.value),
+                    },
+                  })
+                }
+              />
+            </label>
+          </div>
+        )}
+        {parametros.geometry_mode === 'pseudo_2d_statistical' && (
+          <div className="config-grid">
+            <label>
+              {language === 'pt' ? 'porosidade alvo' : 'target porosity'}
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                value={parametros.statistical_2d?.target_porosity ?? 0.38}
+                onChange={(e) =>
+                  setParametros({
+                    ...parametros,
+                    statistical_2d: {
+                      ...parametros.statistical_2d,
+                      target_porosity: parseFloat(e.target.value),
+                    },
+                  })
+                }
+              />
+            </label>
+            <label>
+              {language === 'pt' ? 'tentativas rsa' : 'rsa attempts'}
+              <input
+                type="number"
+                value={parametros.statistical_2d?.max_attempts ?? 30}
+                onChange={(e) =>
+                  setParametros({
+                    ...parametros,
+                    statistical_2d: {
+                      ...parametros.statistical_2d,
+                      max_attempts: parseInt(e.target.value, 10),
+                    },
+                  })
+                }
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="config-section">
