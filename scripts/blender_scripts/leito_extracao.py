@@ -23,9 +23,11 @@ from packed_bed_science.packing_hexagonal import generate_hexagonal_packing
 
 # blender_build usa bpy para criar tubo tampas e esferas ja posicionadas
 from packed_bed_science.blender_build import (
-    create_hollow_cylinder,
+    create_bed_by_internal_mode,
     create_caps,
+    create_hollow_cylinder,
     create_particles_by_kind,
+    punch_core_with_particle_tools,
 )
 
 # =============
@@ -992,9 +994,22 @@ def main_com_parametros():
                     num_particulas,
                 )
 
-            # agora materializa no blender o mesmo dominio usado na matematica
-            print("criando geometria leito oco e tampas")
-            leito = create_hollow_cylinder(raio_ext, raio_int, altura)
+            _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+            if str(_pm) not in sys.path:
+                sys.path.insert(0, str(_pm))
+            from bed_internal_modes import (  # noqa: E402
+                MODE_SOLID_HOLES,
+                bed_internal_sidecar,
+                resolve_bed_internal_config,
+            )
+
+            internal_mode, vis, _ = resolve_bed_internal_config(params)
+            print(f"modo cilindro interno: {internal_mode}")
+
+            print("criando geometria leito e tampas")
+            leito, nucleo, bed_partial = create_bed_by_internal_mode(
+                internal_mode, raio_ext, raio_int, altura, vis
+            )
             tampa_inferior, tampa_superior = create_caps(
                 altura,
                 diametro,
@@ -1002,10 +1017,47 @@ def main_com_parametros():
                 esp_tampa_sup,
                 top_has_collision=True,
             )
+            bool_status = dict(bed_partial)
+            bool_warnings: List[str] = []
+            if internal_mode == MODE_SOLID_HOLES and nucleo is not None:
+                pstat, pw = punch_core_with_particle_tools(
+                    nucleo,
+                    centers,
+                    diametro_particula,
+                    particle_kind,
+                )
+                bool_status["particle_tools"] = pstat
+                bool_warnings.extend(pw)
+            elif internal_mode == MODE_SOLID_HOLES:
+                bool_status["particle_tools"] = "skipped"
+
             _plural = _log_particle_plural(particle_kind)
-            print(f"{_plural}: {len(centers)} malhas mesh compartilhada")
-            particulas = create_particles_by_kind(
-                particle_kind, centers, diametro_particula
+            if vis.get("show_particles", True):
+                print(f"{_plural}: {len(centers)} malhas mesh compartilhada")
+                particulas = create_particles_by_kind(
+                    particle_kind, centers, diametro_particula
+                )
+            else:
+                print("particulas omitidas (show_particles=false)")
+                particulas = []
+
+            sidecar = bed_internal_sidecar(
+                params,
+                backend="blender",
+                status={
+                    **bool_status,
+                    "backend": "blender",
+                    "warnings": bool_warnings,
+                    "r_int": raio_int,
+                    "r_ext": raio_ext,
+                },
+            )
+            relatorio["internal_cylinder_mode"] = sidecar["internal_cylinder_mode"]
+            relatorio["visibility"] = sidecar["visibility"]
+            relatorio["boolean_operation_status"] = sidecar["boolean_operation_status"]
+            print(
+                "boolean_operation_status:",
+                relatorio["boolean_operation_status"],
             )
 
         else:

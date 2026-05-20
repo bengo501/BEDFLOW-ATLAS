@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import bpy
-from typing import List, Tuple, Any
+from typing import Any, List, Optional, Tuple
 
 
 def create_hollow_cylinder(
@@ -47,6 +47,149 @@ def create_hollow_cylinder(
     bpy.ops.object.modifier_apply(modifier="Boolean")
     bpy.data.objects.remove(cilindro_interno, do_unlink=True)
     return cilindro_externo
+
+
+def create_visible_inner_cylinders(
+    outer_radius: float,
+    inner_radius: float,
+    height: float,
+    *,
+    outer_name: str = "leito_externo",
+    inner_name: str = "cilindro_interno_vis",
+) -> Tuple[Any, Any]:
+    """m2: dois cilindros cheios sem boolean entre si."""
+    if inner_radius >= outer_radius:
+        raise ValueError("inner_radius must be less than outer_radius")
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=outer_radius,
+        depth=height,
+        location=(0, 0, height / 2),
+    )
+    outer = bpy.context.active_object
+    outer.name = outer_name
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=inner_radius,
+        depth=height,
+        location=(0, 0, height / 2),
+    )
+    inner = bpy.context.active_object
+    inner.name = inner_name
+    return outer, inner
+
+
+def create_solid_inner_core(
+    inner_radius: float,
+    height: float,
+    name: str = "nucleo_interno",
+) -> Any:
+    """m3: cilindro solido r_int para perfuracao posterior."""
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=inner_radius,
+        depth=height,
+        location=(0, 0, height / 2),
+    )
+    core = bpy.context.active_object
+    core.name = name
+    return core
+
+
+def _apply_boolean_difference(target: Any, tool: Any, mod_name: str = "Boolean") -> bool:
+    bool_mod = target.modifiers.new(name=mod_name, type="BOOLEAN")
+    bool_mod.operation = "DIFFERENCE"
+    bool_mod.object = tool
+    try:
+        bool_mod.solver = "EXACT"
+    except TypeError:
+        pass
+    bpy.context.view_layer.objects.active = target
+    try:
+        bpy.ops.object.modifier_apply(modifier=mod_name)
+        return True
+    except Exception:
+        return False
+
+
+def punch_core_with_particle_tools(
+    core_obj: Any,
+    centers: List[Tuple[float, float, float]],
+    diameter: float,
+    kind: str = "sphere",
+    *,
+    max_tools: int = 40,
+) -> Tuple[str, List[str]]:
+    """m3 blender: difference no nucleo; tools removidas apos apply."""
+    warnings: List[str] = []
+    if not centers or core_obj is None:
+        return "n/a", warnings
+    k = (kind or "sphere").strip().lower()
+    r = diameter / 2.0
+    n = min(len(centers), max_tools)
+    applied = 0
+    for idx, loc in enumerate(centers[:n], start=1):
+        if k == "cube":
+            bpy.ops.mesh.primitive_cube_add(size=diameter, location=loc)
+        elif k == "cylinder":
+            bpy.ops.mesh.primitive_cylinder_add(
+                radius=r, depth=diameter, location=loc
+            )
+        else:
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=r, location=loc)
+        tool = bpy.context.active_object
+        tool.name = f"boolean_tool_{idx:03d}"
+        tool.data = tool.data.copy()
+        if _apply_boolean_difference(core_obj, tool, mod_name=f"BoolHole{idx}"):
+            applied += 1
+        bpy.data.objects.remove(tool, do_unlink=True)
+    if applied == 0:
+        warnings.append("nenhuma booleana de furo aplicada no nucleo")
+        return "failed", warnings
+    if applied < n:
+        warnings.append(f"apenas {applied}/{n} furos aplicados (limite max_tools)")
+    return "applied", warnings
+
+
+def create_bed_by_internal_mode(
+    mode: str,
+    outer_radius: float,
+    inner_radius: float,
+    height: float,
+    visibility: Optional[dict] = None,
+) -> Tuple[Any, Optional[Any], dict]:
+    """
+    devolve (leito_principal, nucleo_opcional, boolean_operation_status parcial).
+    """
+    vis = visibility or {}
+    show_outer = vis.get("show_outer_cylinder", True)
+    show_inner = vis.get("show_internal_cylinder", False)
+    m = (mode or "hollow_boolean_applied").strip().lower()
+
+    if m == "internal_cylinder_visible_no_boolean":
+        if not show_outer:
+            return None, None, {
+                "outer_shell": "skipped",
+                "inner_core": "visible_separate",
+            }
+        outer, inner = create_visible_inner_cylinders(
+            outer_radius, inner_radius, height
+        )
+        if not show_inner:
+            bpy.data.objects.remove(inner, do_unlink=True)
+            inner = None
+        return outer, inner, {
+            "outer_shell": "fallback_separate_meshes",
+            "inner_core": "visible_separate" if inner else "n/a",
+        }
+
+    if m == "solid_internal_cylinder_with_particle_holes":
+        leito = create_hollow_cylinder(outer_radius, inner_radius, height)
+        core = create_solid_inner_core(inner_radius, height) if show_inner else None
+        return leito, core, {
+            "outer_shell": "explicit_annulus",
+            "inner_core": "solid_with_holes" if core else "n/a",
+        }
+
+    leito = create_hollow_cylinder(outer_radius, inner_radius, height)
+    return leito, None, {"outer_shell": "applied", "inner_core": "n/a"}
 
 
 def create_caps(

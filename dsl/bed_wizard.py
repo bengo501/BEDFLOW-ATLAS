@@ -2280,6 +2280,30 @@ class BedWizard:
             False,
             "bed.roughness",
         )
+        icm_choices = [
+            "hollow_boolean_applied",
+            "internal_cylinder_visible_no_boolean",
+            "solid_internal_cylinder_with_particle_holes",
+        ]
+        bd["internal_cylinder_mode"] = self.get_choice(
+            "modo cilindro interno (empacotamento continua no anel)",
+            icm_choices,
+            self._default_from_loaded(
+                "bed.internal_cylinder_mode", "hollow_boolean_applied"
+            ),
+            "bed.internal_cylinder_mode",
+        )
+        if str(bd.get("internal_cylinder_mode")) != "hollow_boolean_applied":
+            print(
+                "  nota: empacotamento continua com r_int = diametro/2 - espessura da parede"
+            )
+        vis_defaults = {
+            "internal_cylinder_visible_no_boolean": True,
+            "solid_internal_cylinder_with_particle_holes": True,
+        }
+        show_inner = vis_defaults.get(str(bd.get("internal_cylinder_mode")), False)
+        bd.setdefault("visibility", {})
+        bd["visibility"]["show_internal_cylinder"] = show_inner
 
         self.print_section("etapa 2: tampas")
         lid_types = ["flat", "hemispherical", "none"]

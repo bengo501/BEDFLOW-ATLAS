@@ -18,6 +18,7 @@ from packed_bed_science.packing_hexagonal import generate_hexagonal_packing  # n
 from packed_bed_science.packing_spherical import generate_spherical_packing  # noqa: E402
 from packed_bed_science.validation import validate_configuration  # noqa: E402
 
+from bed_internal_modes import bed_internal_sidecar, validate_bed_geometry_mode  # noqa: E402
 from geometry_modes import (  # noqa: E402
     GEOMETRY_STATISTICAL,
     compute_thin_slice_porosity,
@@ -196,6 +197,7 @@ def _build_and_export_mesh(
     validate_geometry_contract(p, mutate=True)
     gm = geometry_mode_from_data(p)
     slice_cfg = resolve_slice_config(p)
+    bed_mode_notes = validate_bed_geometry_mode(p, gm)
 
     if not slice_cfg_active(slice_cfg):
         packed = build_packed_bed_model(
@@ -210,6 +212,7 @@ def _build_and_export_mesh(
             segmentos_cil=seg,
             lat_sphere=_to_int(p.get("sphere_lat"), 4),
             lon_sphere=_to_int(p.get("sphere_lon"), 6),
+            bed_config=p,
         )
     else:
         shell = build_packed_bed_model(
@@ -224,6 +227,7 @@ def _build_and_export_mesh(
             segmentos_cil=seg,
             lat_sphere=_to_int(p.get("sphere_lat"), 4),
             lon_sphere=_to_int(p.get("sphere_lon"), 6),
+            bed_config=p,
         )
         v_all, f_all = apply_thin_slice_mesh(
             shell.mesh.vertices,
@@ -272,6 +276,20 @@ def _build_and_export_mesh(
         extra["porosity_slice_meta"] = slice_poro_meta
         if result.porosity is not None:
             extra["porosity_packing_3d"] = result.porosity
+
+    sidecar = bed_internal_sidecar(
+        p, backend="python_engine", r_int=r_int, r_ext=r_ext
+    )
+    st = sidecar.get("boolean_operation_status") or {}
+    if bed_mode_notes:
+        st = dict(st)
+        st["warnings"] = list(st.get("warnings") or []) + bed_mode_notes
+        sidecar["boolean_operation_status"] = st
+    extra.update(sidecar)
+    if isinstance(packed.meta, dict):
+        for k in ("internal_cylinder_mode", "visibility", "boolean_operation_status"):
+            if k in packed.meta and k not in extra:
+                extra[k] = packed.meta[k]
 
     out_json = out_stl.parent / f"{out_stl.stem}_pure_bed.json"
     report_path = out_stl.parent / f"{out_stl.stem}_packing_report.json"

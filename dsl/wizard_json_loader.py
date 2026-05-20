@@ -29,6 +29,10 @@ _PM = _REPO_ROOT / "scripts" / "python_modeling"
 if str(_PM) not in sys.path:
     sys.path.insert(0, str(_PM))
 
+from bed_internal_modes import (  # noqa: E402
+    default_visibility_for_mode,
+    normalize_internal_cylinder_mode,
+)
 from bed_config import (  # noqa: E402
     bed_section_for_wizard,
     merge_root_generation_backend,
@@ -107,6 +111,13 @@ def json_to_wizard_params(data: Dict[str, Any]) -> Dict[str, Any]:
         packing["method"] = normalize_packing_mode(data.get("packing_mode"))
 
     kind = str(particles.get("kind") or "sphere").strip().strip('"')
+    icm = normalize_internal_cylinder_mode(bed.get("internal_cylinder_mode"))
+    vis_raw = bed.get("visibility")
+    vis = default_visibility_for_mode(icm)
+    if isinstance(vis_raw, dict):
+        for k in vis:
+            if k in vis_raw:
+                vis[k] = bool(vis_raw[k]) if isinstance(vis_raw[k], bool) else str(vis_raw[k]).lower() in ("true", "1", "yes")
     params: Dict[str, Any] = {
         "bed": {
             "diameter": bed.get("diameter", 0.05),
@@ -115,6 +126,8 @@ def json_to_wizard_params(data: Dict[str, Any]) -> Dict[str, Any]:
             "clearance": bed.get("clearance", 0.01),
             "material": bed.get("material", "steel"),
             "roughness": bed.get("roughness", 0.0),
+            "internal_cylinder_mode": icm,
+            "visibility": vis,
         },
         "lids": {
             "top_type": str(lids.get("top_type") or "flat").strip().strip('"'),

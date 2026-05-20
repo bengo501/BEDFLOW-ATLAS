@@ -45,6 +45,13 @@ class BedService:
             for k, v in extra.items():
                 if v is not None:
                     data["packing"][k] = v
+        bed_extra = parameters.get("bed")
+        if isinstance(bed_extra, dict):
+            if "bed" not in data or not isinstance(data["bed"], dict):
+                data["bed"] = {}
+            for k in ("internal_cylinder_mode", "visibility"):
+                if bed_extra.get(k) is not None:
+                    data["bed"][k] = bed_extra[k]
         for root_key in (
             "geometry_mode",
             "generation_backend",

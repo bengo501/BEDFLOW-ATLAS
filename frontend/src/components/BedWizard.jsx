@@ -129,7 +129,15 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       wall_thickness: '0.002',
       clearance: '0.01',
       material: 'steel',
-      roughness: '0.0'
+      roughness: '0.0',
+      internal_cylinder_mode: 'hollow_boolean_applied',
+      visibility: {
+        show_outer_cylinder: true,
+        show_internal_cylinder: false,
+        show_particles: true,
+        show_boolean_tools: false,
+        export_boolean_tools: false,
+      },
     },
     lids: {
       top_type: 'flat',
@@ -872,6 +880,65 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             onChange={(e) => handleInputChange('bed', 'roughness', e.target.value)}
           />
           <small>0.0 = superfície lisa</small>
+        </div>
+
+        <div className="form-group form-group-full">
+          <label>modo do cilindro interno</label>
+          <select
+            value={params.bed.internal_cylinder_mode || 'hollow_boolean_applied'}
+            onChange={(e) => {
+              const mode = e.target.value;
+              handleInputChange('bed', 'internal_cylinder_mode', mode);
+              const vis = { ...(params.bed.visibility || {}) };
+              if (mode === 'internal_cylinder_visible_no_boolean') {
+                vis.show_internal_cylinder = true;
+              } else if (mode === 'solid_internal_cylinder_with_particle_holes') {
+                vis.show_internal_cylinder = true;
+              } else {
+                vis.show_internal_cylinder = false;
+              }
+              setParams((prev) => ({
+                ...prev,
+                bed: { ...prev.bed, visibility: vis },
+              }));
+            }}
+          >
+            <option value="hollow_boolean_applied">tubo oco (booleana aplicada, padrão)</option>
+            <option value="internal_cylinder_visible_no_boolean">cilindro interno visível sem booleana externa</option>
+            <option value="solid_internal_cylinder_with_particle_holes">núcleo sólido perfurado pelas partículas</option>
+          </select>
+          <small>
+            o empacotamento usa sempre o raio interno da cavidade (diâmetro/2 − espessura da parede)
+          </small>
+        </div>
+
+        <div className="form-group form-group-full bed-visibility-panel">
+          <label>visibilidade na exportação</label>
+          <div className="checkbox-row">
+            {[
+              ['show_outer_cylinder', 'parede externa'],
+              ['show_internal_cylinder', 'cilindro interno'],
+              ['show_particles', 'partículas'],
+              ['show_boolean_tools', 'ferramentas booleanas (viewport)'],
+              ['export_boolean_tools', 'exportar ferramentas booleanas'],
+            ].map(([key, label]) => (
+              <label key={key} className="checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={Boolean(params.bed.visibility?.[key])}
+                  onChange={(e) => {
+                    const vis = { ...(params.bed.visibility || {}) };
+                    vis[key] = e.target.checked;
+                    setParams((prev) => ({
+                      ...prev,
+                      bed: { ...prev.bed, visibility: vis },
+                    }));
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
       </div>
     </div>

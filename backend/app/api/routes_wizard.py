@@ -21,6 +21,14 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 # modelos pydantic para validação
+class BedVisibilityParams(BaseModel):
+    show_outer_cylinder: bool = True
+    show_internal_cylinder: bool = False
+    show_particles: bool = True
+    show_boolean_tools: bool = False
+    export_boolean_tools: bool = False
+
+
 class BedParams(BaseModel):
     diameter: str
     height: str
@@ -28,6 +36,8 @@ class BedParams(BaseModel):
     clearance: str
     material: str
     roughness: str = "0.0"
+    internal_cylinder_mode: str = "hollow_boolean_applied"
+    visibility: Optional[BedVisibilityParams] = None
 
 class LidsParams(BaseModel):
     top_type: str

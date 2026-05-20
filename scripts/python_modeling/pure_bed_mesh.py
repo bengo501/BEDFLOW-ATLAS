@@ -240,23 +240,34 @@ def build_packed_bed_model(
     segmentos_cil: int = 48,
     lat_sphere: int = 4,
     lon_sphere: int = 6,
+    bed_config: Optional[Dict[str, Any]] = None,
 ) -> PackedBedModel:
-    # funcao build_packed_bed_model
-    # passo um gera corpo cilindrico oco
+    if bed_config is not None:
+        from bed_shell_build import build_bed_with_internal_mode
+
+        v, f, meta = build_bed_with_internal_mode(
+            bed_config,
+            r_ext,
+            r_int,
+            height,
+            bottom_cap_thickness,
+            top_cap_thickness,
+            particle_centers,
+            particle_diameter,
+            particle_kind,
+            segmentos=segmentos_cil,
+            lat_sphere=lat_sphere,
+            lon_sphere=lon_sphere,
+        )
+        return PackedBedModel(mesh=MeshData(vertices=v, faces=f), meta=meta)
     body = create_hollow_cylinder_geometry(
         r_ext, r_int, height, segmentos=segmentos_cil
     )
-    # v f acumulam vertices e faces ao longo de todas as partes
     v, f = meshdata_to_lists(body)
-    # z_inf centro da tampa inferior metade da espessura acima de z zero
     z_inf = bottom_cap_thickness / 2.0
-    # z_sup centro da tampa superior metade da espessura abaixo do topo
     z_sup = height - top_cap_thickness / 2.0
-    # cap_i tampa de baixo
     cap_i = create_cap_geometry(r_ext, bottom_cap_thickness, z_inf, segmentos_cil)
-    # cap_s tampa de cima
     cap_s = create_cap_geometry(r_ext, top_cap_thickness, z_sup, segmentos_cil)
-    # merge das tampas sobre o tubo
     v, f = merge_mesh(v, f, cap_i.vertices, cap_i.faces)
     v, f = merge_mesh(v, f, cap_s.vertices, cap_s.faces)
     pk = (particle_kind or "sphere").strip().lower()
