@@ -65,7 +65,14 @@ from wizard_json_loader import (
 # listar nomes de templates json e carregar um template por nome
 from wizard_quick_tests import run as wizard_quick_tests_run
 from param_help_en import PARAM_HELP_EN
-from wizard_template_engine import list_template_names, load_template
+from wizard_template_engine import (
+    list_saved_template_names,
+    list_template_names,
+    load_saved_template,
+    load_template,
+    save_saved_template,
+    saved_templates_dir,
+)
 from wizard_terminal_ui import (
     MenuRow,
     _internal_prompt_aux_lines,
@@ -121,7 +128,7 @@ class BedWizard:
             "menu.start.q.title": "criar basico",
             "menu.start.q.desc": "passo a passo; gera .bed; cfd opcional; export configuravel",
             "menu.start.tpl.title": "templates e editor",
-            "menu.start.tpl.desc": "carregar json em dsl/wizard_templates ou editor .bed classico com ficheiro temporario",
+            "menu.start.tpl.desc": "templates embutidos ou salvos em local_data; editar .bed antes de gravar e compilar",
             "menu.start.quick.title": "testes rapidos",
             "menu.start.quick.desc": "validar json ou .bed existente; preview rich; python puro ou blender; sem misturar com templates",
             "menu.start.blender.title": "geracao 3d",
@@ -287,7 +294,7 @@ class BedWizard:
             "menu.start.q.title": "basic create",
             "menu.start.q.desc": "step-by-step; generates .bed; optional cfd; configurable export",
             "menu.start.tpl.title": "templates and editor",
-            "menu.start.tpl.desc": "load json from dsl/wizard_templates or classic .bed temp-file editor",
+            "menu.start.tpl.desc": "built-in or saved templates in local_data; edit .bed before save and compile",
             "menu.start.quick.title": "quick tests",
             "menu.start.quick.desc": "validate existing json or .bed; rich preview; pure python or blender; separate from templates",
             "menu.start.blender.title": "3d generation",
@@ -1079,8 +1086,8 @@ class BedWizard:
 
     def _hint_fluxo_template(self) -> None:
         self.ui.muted(
-            "ordem: escolher origem (json pronto ou .bed em editor) → nome de saida → "
-            "gravar/compilar (e stl python se o template pedir)."
+            "ordem: escolher template (embutido ou salvo) → editar no editor externo → "
+            "nome de saida → gravar/compilar → opcional: guardar copia como template salvo ou gerar stl."
         )
 
     def _hint_fluxo_blender(self) -> None:
@@ -2432,139 +2439,184 @@ class BedWizard:
             return
         finally:
             self._cancel_enabled = old
-    
+
+    def _open_external_bed_editor(self, bed_text: str) -> str:
+        """abre ficheiro temporario no editor externo e devolve o texto editado."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".bed", delete=False, encoding="utf-8"
+        ) as temp_file:
+            temp_file.write(bed_text)
+            temp_file_path = temp_file.name
+
+        self.ui.println()
+        self.ui.muted(f"ficheiro para editar: {temp_file_path}")
+        self.ui.println("editores sugeridos:")
+        self.ui.muted("notepad (windows) | nano / vim (linux ou mac) | ou continuar sem editar")
+
+        editor_choice = self.get_choice(
+            "escolha um editor",
+            ["notepad", "nano", "vim", "continuar sem editar"],
+            None,
+        )
+
+        if editor_choice != "continuar sem editar":
+            try:
+                subprocess.run([editor_choice, temp_file_path], check=True)
+            except subprocess.CalledProcessError:
+                self.ui.warn(f"erro ao abrir editor {editor_choice}; continuando sem edicao")
+            except FileNotFoundError:
+                self.ui.warn(f"editor {editor_choice} nao encontrado; continuando sem edicao")
+
+        with open(temp_file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        os.unlink(temp_file_path)
+        return content
+
+    def _patch_compiled_json_from_params(self, jpath: Path) -> None:
+        if not self.params:
+            return
+        try:
+            patch_compiled_json_packing(jpath, self.params)
+            patch_compiled_json_export(jpath, self.params)
+            patch_compiled_json_metadata(jpath, self.params)
+            patch_compiled_json_slice(jpath, self.params)
+        except Exception as exc:
+            self.ui.warn(f"aviso ao aplicar metadados no json: {exc}")
+
+    def _maybe_offer_python_stl_after_template(self, jpath: Path) -> None:
+        gb = str((self.params or {}).get("generation_backend") or "")
+        if normalize_generation_backend(gb) != "python_engine":
+            return
+        if not self.ui.confirm(
+            "gerar stl com o motor python agora?",
+            default=False,
+            allow_empty_default=False,
+        ):
+            return
+        out_stl = (Path.cwd() / f"{Path(self.output_file).stem}_pure.stl").resolve()
+        ok, stl = self.run_pure_python_with_json_path(jpath, out_stl=out_stl)
+        if ok and stl and self.ui.confirm(
+            "abrir o blender com o stl gerado?",
+            default=False,
+            allow_empty_default=False,
+        ):
+            self.open_blender_gui_with_stl(stl)
+
+    def _maybe_offer_save_saved_template(self, bed_content: str, suggested_stem: str) -> None:
+        if not self.ui.confirm(
+            "guardar copia como template salvo (aparece em carregar templates salvos)?",
+            default=False,
+            allow_empty_default=False,
+        ):
+            return
+        nome = self.get_input("nome do template salvo", suggested_stem).strip()
+        if not nome:
+            self.ui.warn("nome vazio; template salvo ignorado.")
+            return
+        try:
+            path = save_saved_template(nome, bed_content)
+            self.ui.ok(f"template salvo: {path}")
+        except (OSError, ValueError) as exc:
+            self.ui.err(f"nao foi possivel guardar template: {exc}")
+
+    def _finalize_template_bed_flow(
+        self,
+        bed_text: str,
+        suggested_output: str,
+        *,
+        patch_params: bool = True,
+    ) -> None:
+        """editor → ficheiro de saida → compilar → stl opcional → guardar template opcional."""
+        self.ui.println()
+        self.ui.muted("edite o modelo no editor; ao fechar, confirme o nome de saida.")
+        edited = self._open_external_bed_editor(bed_text)
+        self.output_file = self.get_input("nome do arquivo de saida", suggested_output)
+        self._normalize_bed_output_path()
+        Path(self.output_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(self.output_file, "w", encoding="utf-8") as f:
+            f.write(edited)
+        self._register_saved_bed()
+        self.ui.ok(f"arquivo salvo: {self.output_file}")
+        if not self.verify_and_compile():
+            return
+        jpath = Path(str(Path(self.output_file).resolve()) + ".json")
+        if patch_params:
+            self._patch_compiled_json_from_params(jpath)
+        self._maybe_offer_python_stl_after_template(jpath)
+        self._maybe_offer_save_saved_template(edited, Path(self.output_file).stem)
+
     def template_mode(self, prefer: Optional[str] = None) -> None:
-        """modo edicao de template - usuario edita um arquivo template padrao.
+        """modo edicao de template - carregar modelo, editar .bed, gravar e compilar.
 
         prefer:
-          None — comportamento original (escolha json vs editor se existirem templates).
-          "json" — forcar fluxo de templates json em dsl/wizard_templates (se existir).
-          "editor" — saltar para o editor .bed classico.
+          None — menu com embutidos, salvos e editor classico.
+          "json" — apenas templates embutidos (dsl/wizard_templates).
+          "saved" — apenas templates salvos (local_data/wizard_templates_saved).
+          "editor" — editor .bed classico com modelo exemplo.
         """
-        self._active_creation_mode = "template_json" if prefer == "json" else "template"
         self.clear_screen()
         self.print_header("editor de template", "edicao de modelo .bed")
         self.ui.breadcrumbs("setup", "template")
         self._hint_fluxo_template()
         self.ui.println()
 
-        # nomes dos ficheiros json em dsl wizard templates sem extensao
         json_names = list_template_names()
-        # se existir pelo menos um template json oferecemos fluxo rapido sem editor externo
-        if json_names and prefer != "editor":
-            if prefer == "json":
-                modo = "ficheiros json em dsl/wizard_templates"
+        saved_names = list_saved_template_names()
+        modo: Optional[str] = None
+
+        if prefer == "editor":
+            modo = "editor .bed classico (modelo exemplo)"
+        elif prefer == "json":
+            if not json_names:
+                self.ui.warn("nao ha templates embutidos em dsl/wizard_templates.")
+                self.ui.println()
+                prefer = "editor"
+                modo = "editor .bed classico (modelo exemplo)"
             else:
-                modo = self.get_choice(
-                    "origem do template",
-                    ["ficheiros json em dsl/wizard_templates", "editor .bed classico"],
-                    None,
+                modo = "templates embutidos (dsl/wizard_templates)"
+        elif prefer == "saved":
+            if not saved_names:
+                self.ui.warn(
+                    f"ainda nao ha templates salvos em {saved_templates_dir()}; "
+                    "grave um modelo ao fim do fluxo ou use um embutido."
                 )
-            # ramo json carrega dict ja estruturado converte para params do wizard e compila
-            if modo.startswith("ficheiros"):
-                # pick e o identificador do template por exemplo default spherical
-                pick = self.get_choice("template", json_names, None)
-                # data e o dicionario python lido do ficheiro json do template
-                data = load_template(pick)
-                # normalizar chaves aninhadas e tipos antes de mapear para o wizard
-                normalize_loaded_dict(data)
-                # self params fica no mesmo formato que o questionario interativo preencheria
-                self.params = json_to_wizard_params(data)
-                # sugestao de nome troca prefixo default por leito para o bed de saida
-                self.output_file = self.get_input(
-                    "nome do arquivo de saida", f"{pick.replace('default_', 'leito_')}.bed"
-                )
-                # grava o texto bed no disco a partir de self params
-                self.save_bed_file()
-                # se o compilador antlr passar aplicamos patches no json gerado
-                if self.verify_and_compile():
-                    # jpath e o json compilado ao lado do bed mesmo nome com sufixo json
-                    jpath = Path(str(Path(self.output_file).resolve()) + ".json")
-                    # recoloca packing mode e campos que a gramatica bed nao serializa
-                    patch_compiled_json_packing(jpath, self.params)
-                    # recoloca formatos de export pedidos pelo usuario stl obj etc
-                    patch_compiled_json_export(jpath, self.params)
-                    patch_compiled_json_metadata(jpath, self.params)
-                    patch_compiled_json_slice(jpath, self.params)
-                    # aqui usamos o metadado generation_backend
-                    # se ele for pure_python entao o pipeline pode gerar o stl em python puro
-                    # isso evita depender de um passo extra dentro do blender
-                    gb = str(self.params.get("generation_backend") or "")
-                    if normalize_generation_backend(gb) == "python_engine" and self.ui.confirm(
-                        "gerar stl em python puro agora?",
-                        default=True,
-                        allow_empty_default=False,
-                    ):
-                        out_stl = (
-                            Path.cwd() / f"{Path(self.output_file).stem}_pure.stl"
-                        ).resolve()
-                        ok, stl = self.run_pure_python_with_json_path(jpath, out_stl=out_stl)
-                        if ok and stl and self.ui.confirm(
-                            "gostaria de abrir o blender com o stl gerado?",
-                            default=False,
-                            allow_empty_default=False,
-                        ):
-                            self.open_blender_gui_with_stl(stl)
-                # termina template mode neste fluxo sem abrir editor temporario
-                return
-        if prefer == "json" and not json_names:
-            self.ui.warn(
-                "nao ha ficheiros json em dsl/wizard_templates; a seguir para o editor .bed classico."
-            )
-            self.ui.println()
-        
-        # criar template padrao com valores exemplo
-        template = self.create_default_template()
-        
-        # obter nome do arquivo de saida
-        self.output_file = self.get_input("nome do arquivo de saida", "meu_leito.bed")
-        
-        # criar arquivo temporario para edicao
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.bed', delete=False, encoding='utf-8') as temp_file:
-            temp_file.write(template)  # escrever template no arquivo temporario
-            temp_file_path = temp_file.name  # obter caminho do arquivo temporario
-        
-        self.ui.println()
-        self.ui.muted(f"template temporario: {temp_file_path}")
-        self.ui.println("editores sugeridos:")
-        self.ui.muted("notepad (windows) | nano / vim (linux ou mac) | ou continuar sem editar")
-        
-        # obter escolha do editor
-        editor_choice = self.get_choice(
-            "escolha um editor",
-            ["notepad", "nano", "vim", "continuar sem editar"],
-            None,
-        )
-        
-        # abrir editor se escolhido
-        if editor_choice != "continuar sem editar":
-            try:
-                # executar editor com arquivo temporario
-                if editor_choice == "notepad":
-                    subprocess.run([editor_choice, temp_file_path], check=True)
-                else:
-                    subprocess.run([editor_choice, temp_file_path], check=True)
-            except subprocess.CalledProcessError:
-                self.ui.warn(f"erro ao abrir editor {editor_choice}; continuando sem edicao")
-            except FileNotFoundError:
-                self.ui.warn(f"editor {editor_choice} nao encontrado; continuando sem edicao")
-        
-        # ler conteudo editado do arquivo temporario
-        with open(temp_file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # limpar arquivo temporario
-        os.unlink(temp_file_path)
-        
-        # salvar arquivo final com conteudo editado
-        with open(self.output_file, 'w', encoding='utf-8') as f:
-            f.write(content)
-        
-        self.ui.ok(f"arquivo salvo: {self.output_file}")
-        
-        # verificar sintaxe e compilar arquivo
-        self.verify_and_compile()
-    
+                self.ui.println()
+            else:
+                modo = "templates salvos (local_data/wizard_templates_saved)"
+        else:
+            opcoes: List[str] = []
+            if json_names:
+                opcoes.append("templates embutidos (dsl/wizard_templates)")
+            if saved_names:
+                opcoes.append("templates salvos (local_data/wizard_templates_saved)")
+            opcoes.append("editor .bed classico (modelo exemplo)")
+            modo = self.get_choice("origem do template", opcoes, None)
+
+        if modo and modo.startswith("templates embutidos"):
+            self._active_creation_mode = "template_json"
+            pick = self.get_choice("template embutido", json_names, None)
+            data = load_template(pick)
+            normalize_loaded_dict(data)
+            self.params = json_to_wizard_params(data)
+            bed_text = self.generate_bed_content()
+            suggested = f"{pick.replace('default_', 'leito_')}.bed"
+            self._finalize_template_bed_flow(bed_text, suggested, patch_params=True)
+            return
+
+        if modo and modo.startswith("templates salvos"):
+            self._active_creation_mode = "template_saved"
+            pick = self.get_choice("template salvo", saved_names, None)
+            bed_text = load_saved_template(pick)
+            self.params = {}
+            suggested = pick if pick.endswith(".bed") else f"{pick}.bed"
+            self._finalize_template_bed_flow(bed_text, suggested, patch_params=False)
+            return
+
+        self._active_creation_mode = "template"
+        bed_text = self.create_default_template()
+        self.params = {}
+        self._finalize_template_bed_flow(bed_text, "meu_leito.bed", patch_params=False)
+
     def create_default_template(self) -> str:
         """criar template padrao com valores exemplo para edicao"""
         return '''// template padrao para leito empacotado
@@ -3990,29 +4042,35 @@ cfd {
             self.ui.pause("enter para voltar ao submenu comecar...")
 
     def templates_editor_menu(self) -> None:
-        """templates json e editor .bed classico (sem testes rapidos)."""
+        """templates embutidos, salvos e editor .bed classico (sem testes rapidos)."""
         while True:
             self.clear_screen()
             self.print_header(
                 "templates e editor",
-                "carregar modelo json ou editar .bed com editor externo",
+                "carregar template, editar .bed, gravar e compilar (como na web)",
             )
             self.ui.breadcrumbs("setup", "comecar", "templates-editor")
+            self.ui.muted(
+                f"templates salvos: {saved_templates_dir()} "
+                "(aparecem apos guardar ao fim do fluxo)"
+            )
             self.ui.println()
+            opcoes = [
+                "carregar template embutido (dsl/wizard_templates)",
+                "carregar templates salvos (local_data)",
+                "editor .bed classico (modelo exemplo)",
+            ]
             try:
-                fluxo = self.get_choice(
-                    "fluxo",
-                    [
-                        "carregar template json (dsl/wizard_templates)",
-                        "editor .bed classico (template + editor externo)",
-                    ],
-                    None,
-                )
+                fluxo = self.get_choice("fluxo", opcoes, None)
             except _WizardCancelled:
                 return
             try:
-                if fluxo.startswith("carregar"):
+                if fluxo.startswith("carregar template embutido"):
                     self.template_mode(prefer="json")
+                    self.ui.pause("enter para voltar...")
+                    continue
+                if fluxo.startswith("carregar templates salvos"):
+                    self.template_mode(prefer="saved")
                     self.ui.pause("enter para voltar...")
                     continue
                 if fluxo.startswith("editor"):

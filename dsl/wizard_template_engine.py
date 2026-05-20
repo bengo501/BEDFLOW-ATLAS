@@ -45,6 +45,49 @@ def load_template(name: str) -> Dict[str, Any]:
     return data
 
 
+def saved_templates_dir() -> Path:
+    # copias .bed editadas pelo utilizador (terminal); analogo a bed_templates na web
+    try:
+        from bedflow_local_paths import local_data_root
+
+        root = local_data_root()
+    except ImportError:
+        root = Path(__file__).resolve().parent.parent / "local_data"
+        root.mkdir(parents=True, exist_ok=True)
+    d = root / "wizard_templates_saved"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def list_saved_template_names() -> list[str]:
+    d = saved_templates_dir()
+    names = []
+    for p in sorted(d.glob("*.bed")):
+        names.append(p.stem)
+    return names
+
+
+def load_saved_template(name: str) -> str:
+    stem = name.strip()
+    if stem.endswith(".bed"):
+        stem = stem[:-4]
+    path = saved_templates_dir() / f"{stem}.bed"
+    if not path.is_file():
+        raise FileNotFoundError(f"template salvo nao encontrado: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def save_saved_template(name: str, content: str) -> Path:
+    stem = name.strip()
+    if stem.endswith(".bed"):
+        stem = stem[:-4]
+    if not stem:
+        raise ValueError("nome do template salvo vazio")
+    path = saved_templates_dir() / f"{stem}.bed"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 def merge_template(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
     # base e o template carregado primeiro
     # overrides e tipicamente outro json de teste ou ajustes finos
