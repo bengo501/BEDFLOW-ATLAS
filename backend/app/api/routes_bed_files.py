@@ -22,6 +22,10 @@ class BedFileItem(BaseModel):
     has_json: bool
     json_relative_path: Optional[str] = None
     origin: str
+    source: str = "terminal"
+    creation_mode: Optional[str] = None
+    created_at: Optional[str] = None
+    storage_folder: Optional[str] = None
 
 
 class BedFileListResponse(BaseModel):
@@ -41,6 +45,10 @@ class BedFileContentResponse(BaseModel):
     has_json: bool
     json_relative_path: Optional[str] = None
     origin: str
+    source: str = "terminal"
+    creation_mode: Optional[str] = None
+    created_at: Optional[str] = None
+    storage_folder: Optional[str] = None
 
 
 def _filter_items(
@@ -49,6 +57,7 @@ def _filter_items(
     search: Optional[str],
     has_json: Optional[bool],
     origin: Optional[str],
+    creation_mode: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     out = items
     if search:
@@ -56,13 +65,24 @@ def _filter_items(
         out = [
             x
             for x in out
-            if q in x["filename"].lower() or q in x["relative_path"].lower()
+            if q in x["filename"].lower()
+            or q in x["relative_path"].lower()
+            or q in str(x.get("creation_mode") or "").lower()
+            or q in str(x.get("storage_folder") or "").lower()
         ]
     if has_json is not None:
         out = [x for x in out if bool(x.get("has_json")) is has_json]
     if origin:
         o = origin.strip().lower()
-        out = [x for x in out if str(x.get("origin", "")).lower() == o]
+        out = [
+            x
+            for x in out
+            if str(x.get("origin", "")).lower() == o
+            or str(x.get("source", "")).lower() == o
+        ]
+    if creation_mode:
+        cm = creation_mode.strip().lower()
+        out = [x for x in out if str(x.get("creation_mode") or "").lower() == cm]
     return out
 
 
@@ -73,11 +93,16 @@ async def list_bed_files(
     search: Optional[str] = Query(None),
     has_json: Optional[bool] = Query(None),
     origin: Optional[str] = Query(None),
+    creation_mode: Optional[str] = Query(None),
 ):
     """lista ficheiros .bed no disco (local_data/beds, legado, dsl, raiz)."""
     all_items = scan_bed_files()
     filtered = _filter_items(
-        all_items, search=search, has_json=has_json, origin=origin
+        all_items,
+        search=search,
+        has_json=has_json,
+        origin=origin,
+        creation_mode=creation_mode,
     )
     total = len(filtered)
     total_pages = max(1, (total + limit - 1) // limit)
@@ -116,16 +141,31 @@ async def get_bed_file_content(rel: str = Query(..., description="caminho relati
             json_rel = json_path.name
     rel_norm = str(fp.relative_to(root)).replace("\\", "/")
     from bedflow_local_paths import _detect_bed_origin
+    from bedflow_bed_registry import enrich_scan_item
+
+    row = enrich_scan_item(
+        {
+            "relative_path": rel_norm,
+            "filename": fp.name,
+            "mtime_iso": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+            "origin": _detect_bed_origin(content[:1200]),
+        },
+        preview=content[:1200],
+    )
 
     return BedFileContentResponse(
         relative_path=rel_norm,
         filename=fp.name,
         content=content,
         size_bytes=st.st_size,
-        mtime_iso=datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+        mtime_iso=row.get("mtime_iso") or datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
         has_json=json_path.is_file(),
         json_relative_path=json_rel,
-        origin=_detect_bed_origin(content[:1200]),
+        origin=row.get("origin") or _detect_bed_origin(content[:1200]),
+        source=row.get("source") or "terminal",
+        creation_mode=row.get("creation_mode"),
+        created_at=row.get("created_at"),
+        storage_folder=row.get("storage_folder"),
     )
 
 

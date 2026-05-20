@@ -1,25 +1,3 @@
 @echo off
-setlocal
-
-rem muda para a pasta onde o script está
 cd /d "%~dp0"
-
-echo gerando malha do cilindro e particulas...
-python "tools\vis_cilindro\modelo_cilindro.py"
-if errorlevel 1 (
-    echo houve um erro ao gerar a malha ou as particulas.
-    echo verifique as mensagens acima.
-    echo.
-    pause
-    goto :fim
-)
-
-echo.
-echo abrindo visualizacao em opengl...
-python "tools\vis_cilindro\visualizador.py"
-
-:fim
-echo.
-echo execucao finalizada.
-pause
-
+call "%~dp0scripts\automation\executar_modelo_e_visualizar.bat" %*

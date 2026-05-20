@@ -282,6 +282,7 @@ export const listBedFiles = async ({
   search = null,
   has_json = null,
   origin = null,
+  creation_mode = null,
 } = {}) => {
   const response = await api.get('/api/bed-files', {
     params: {
@@ -290,6 +291,7 @@ export const listBedFiles = async ({
       ...(search ? { search } : {}),
       ...(has_json !== null && has_json !== '' ? { has_json } : {}),
       ...(origin ? { origin } : {}),
+      ...(creation_mode ? { creation_mode } : {}),
     },
   });
   return response.data;

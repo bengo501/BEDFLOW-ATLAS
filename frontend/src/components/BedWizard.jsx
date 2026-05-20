@@ -1430,7 +1430,8 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       setWizardConnectionError(null);
       const result = await postBedProcess({
         content: bedFileContent,
-        filename: bedFileName || 'leito_custom.bed'
+        filename: bedFileName || 'leito_custom.bed',
+        mode: mode || 'bed_editor',
       });
 
       if (mode === 'interactive') {

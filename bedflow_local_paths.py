@@ -88,6 +88,108 @@ def legacy_output_root() -> Path:
 def ensure_local_data_layout() -> None:
     for fn in (beds_dir, models_3d_dir, simulations_dir, reports_dir, aux_dir):
         fn()
+    scratch = local_data_root() / "scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    captures = aux_dir() / "captures"
+    captures.mkdir(parents=True, exist_ok=True)
+    migrated_beds = beds_dir() / "migrated-from-root"
+    migrated_beds.mkdir(parents=True, exist_ok=True)
+    migrated_models = models_3d_dir() / "migrated-from-root"
+    migrated_models.mkdir(parents=True, exist_ok=True)
+    organize_project_root_once()
+
+
+def organize_project_root_once() -> None:
+    """
+    move artefactos soltos da raiz do repo para pastas em local_data (uma vez).
+    nao altera bed_wizard.py, README.md nem ficheiros de configuracao do projeto.
+    """
+    marker = local_data_root() / ".root_organized_v1"
+    if marker.is_file():
+        return
+    root = project_root()
+    moves: List[tuple[Path, Path]] = []
+
+    def _plan(src_name: str, dest: Path) -> None:
+        src = root / src_name
+        if src.is_file():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            target = dest / src.name
+            if not target.exists():
+                moves.append((src, target))
+
+    for bed in sorted(root.glob("*.bed")):
+        _plan(bed.name, beds_dir() / "migrated-from-root")
+        json_side = Path(f"{bed}.json")
+        if json_side.is_file():
+            _plan(json_side.name, beds_dir() / "migrated-from-root")
+        alt_json = bed.with_name(f"{bed.name}.json")
+        if alt_json.is_file() and alt_json != json_side:
+            _plan(alt_json.name, beds_dir() / "migrated-from-root")
+
+    for pattern in (
+        "_quick_work_*",
+        "_tmp_*",
+        "_test_*",
+        "leito*.json",
+        "*_pure_bed.json",
+        "*_pure_pure_bed.json",
+        "leito1Blender.json",
+    ):
+        for fp in root.glob(pattern):
+            if fp.is_file():
+                _plan(fp.name, local_data_root() / "scratch")
+
+    for stl in root.glob("*.stl"):
+        _plan(stl.name, models_3d_dir() / "migrated-from-root")
+
+    for cap in list(root.glob("Depth*.json")) + list(root.glob("Depth*.png")) + list(
+        root.glob("RenderOption*.json")
+    ):
+        if cap.is_file():
+            _plan(cap.name, aux_dir() / "captures")
+
+    db_root = root / "cfd_pipeline.db"
+    db_local = local_data_root() / "cfd_pipeline.db"
+    if db_root.is_file() and not db_local.is_file():
+        db_local.parent.mkdir(parents=True, exist_ok=True)
+        moves.append((db_root, db_local))
+
+    for src, dest in moves:
+        try:
+            src.rename(dest)
+        except OSError:
+            try:
+                import shutil
+
+                shutil.move(str(src), str(dest))
+            except OSError:
+                continue
+
+    try:
+        from bedflow_bed_registry import register_bed_file
+
+        for dest in {d for _s, d in moves}:
+            if dest.suffix.lower() == ".bed":
+                try:
+                    rel = str(dest.relative_to(root.resolve())).replace("\\", "/")
+                except ValueError:
+                    rel = dest.name
+                register_bed_file(
+                    rel,
+                    source="terminal",
+                    creation_mode="migrated",
+                    filename=dest.name,
+                    extra={"migrated_from_root": True},
+                )
+    except ImportError:
+        pass
+
+    marker.write_text(_now_iso_marker(), encoding="utf-8")
+
+
+def _now_iso_marker() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def resolve_repo_relative(rel: str) -> Path:
@@ -230,20 +332,28 @@ def scan_bed_files(*, max_files: int = 2000) -> List[Dict[str, Any]]:
                 json_rel = str(json_path.relative_to(root_res)).replace("\\", "/")
             except ValueError:
                 json_rel = json_path.name
-        items.append(
-            {
-                "relative_path": rel,
-                "filename": fp.name,
-                "size_bytes": st.st_size,
-                "mtime": st.st_mtime,
-                "mtime_iso": datetime.fromtimestamp(
-                    st.st_mtime, tz=timezone.utc
-                ).isoformat(),
-                "has_json": json_path.is_file(),
-                "json_relative_path": json_rel,
-                "origin": _detect_bed_origin(preview),
-            }
-        )
+        row = {
+            "relative_path": rel,
+            "filename": fp.name,
+            "size_bytes": st.st_size,
+            "mtime": st.st_mtime,
+            "mtime_iso": datetime.fromtimestamp(
+                st.st_mtime, tz=timezone.utc
+            ).isoformat(),
+            "has_json": json_path.is_file(),
+            "json_relative_path": json_rel,
+            "origin": _detect_bed_origin(preview),
+        }
+        try:
+            from bedflow_bed_registry import enrich_scan_item
+
+            enrich_scan_item(row, preview=preview)
+        except ImportError:
+            row["source"] = row["origin"]
+            row["creation_mode"] = None
+            row["created_at"] = row["mtime_iso"]
+            row["storage_folder"] = str(Path(rel).parent).replace("\\", "/") or "."
+        items.append(row)
     items.sort(key=lambda x: (-float(x["mtime"]), x["filename"].lower()))
     return items[:max_files]
 

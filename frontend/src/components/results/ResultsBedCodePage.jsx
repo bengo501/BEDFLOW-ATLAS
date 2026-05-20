@@ -16,18 +16,35 @@ import '../../styles/MeshViewer3DPage.css'
 import '../SimulationHistory.css'
 import { IconRefresh, formatBytes, isConnectionError } from './resultsShared'
 
-function originLabel(origin, pt) {
-  const o = String(origin || '').toLowerCase()
-  if (o === 'web') return pt ? 'web (wizard)' : 'web (wizard)'
-  if (o === 'wizard') return pt ? 'wizard' : 'wizard'
-  return pt ? 'terminal / outro' : 'terminal / other'
+function originLabel(item, pt) {
+  const o = String(item?.source || item?.origin || '').toLowerCase()
+  if (o === 'web') return pt ? 'web' : 'web'
+  if (o === 'wizard') return 'wizard'
+  return pt ? 'terminal' : 'terminal'
 }
 
-function originBadgeClass(origin) {
-  const o = String(origin || '').toLowerCase()
+function originBadgeClass(item) {
+  const o = String(item?.source || item?.origin || '').toLowerCase()
   if (o === 'web') return 'status-completed'
   if (o === 'wizard') return 'status-configured'
   return 'status-meshed'
+}
+
+function modeLabel(mode, pt) {
+  if (!mode) return '—'
+  const m = String(mode)
+  const map = {
+    interactive: pt ? 'criar básico' : 'basic create',
+    generation_3d: pt ? 'geração 3d' : '3d generation',
+    pipeline_completo: pt ? 'pipeline completo' : 'full pipeline',
+    blender_interactive: pt ? 'blender interativo' : 'blender interactive',
+    blender: 'blender',
+    bed_editor: pt ? 'editor .bed' : '.bed editor',
+    template_json: pt ? 'template json' : 'json template',
+    template: pt ? 'template' : 'template',
+    migrated: pt ? 'migrado (raiz)' : 'migrated (root)',
+  }
+  return map[m] || m
 }
 
 function buildJsonUrl(jsonRel) {
@@ -52,6 +69,7 @@ export default function ResultsBedCodePage() {
     search: '',
     has_json: '',
     origin: '',
+    creation_mode: '',
   })
   const [selected, setSelected] = useState(null)
   const [contentLoading, setContentLoading] = useState(false)
@@ -71,6 +89,7 @@ export default function ResultsBedCodePage() {
               ? null
               : filters.has_json === 'true',
           origin: filters.origin || null,
+          creation_mode: filters.creation_mode || null,
         })
         setItems(Array.isArray(data?.items) ? data.items : [])
         setTotal(data?.total ?? 0)
@@ -118,7 +137,7 @@ export default function ResultsBedCodePage() {
     setCopyMsg('')
     try {
       const data = await getBedFileContent(item.relative_path)
-      setSelected(data)
+      setSelected({ ...item, ...data })
     } catch (err) {
       console.error(err)
       alert(
@@ -236,7 +255,23 @@ export default function ResultsBedCodePage() {
             <option value="">{pt ? 'origem: qualquer' : 'origin: any'}</option>
             <option value="web">{pt ? 'web (wizard)' : 'web (wizard)'}</option>
             <option value="wizard">wizard</option>
-            <option value="terminal">{pt ? 'terminal / outro' : 'terminal / other'}</option>
+            <option value="terminal">{pt ? 'terminal' : 'terminal'}</option>
+          </select>
+
+          <select
+            className="history-select"
+            value={filters.creation_mode}
+            onChange={(e) => {
+              setPage(1)
+              setFilters((prev) => ({ ...prev, creation_mode: e.target.value }))
+            }}
+          >
+            <option value="">{pt ? 'modo: qualquer' : 'mode: any'}</option>
+            <option value="interactive">{pt ? 'criar básico' : 'basic create'}</option>
+            <option value="generation_3d">{pt ? 'geração 3d' : '3d generation'}</option>
+            <option value="pipeline_completo">{pt ? 'pipeline completo' : 'full pipeline'}</option>
+            <option value="blender_interactive">blender</option>
+            <option value="bed_editor">{pt ? 'editor .bed' : '.bed editor'}</option>
           </select>
 
           <button
@@ -244,7 +279,7 @@ export default function ResultsBedCodePage() {
             className="history-clear-btn"
             onClick={() => {
               setPage(1)
-              setFilters({ search: '', has_json: '', origin: '' })
+              setFilters({ search: '', has_json: '', origin: '', creation_mode: '' })
             }}
           >
             {pt ? 'limpar filtros' : 'clear filters'}
@@ -272,11 +307,27 @@ export default function ResultsBedCodePage() {
                   <div key={item.relative_path} className="caso-card">
                     <div className="caso-header">
                       <h3>{item.filename}</h3>
-                      <span className={`status-badge ${originBadgeClass(item.origin)}`}>
-                        {originLabel(item.origin, pt)}
+                      <span className={`status-badge ${originBadgeClass(item)}`}>
+                        {originLabel(item, pt)}
                       </span>
                     </div>
                     <div className="caso-info">
+                      <div className="info-row">
+                        <span className="info-label">{pt ? 'modo:' : 'mode:'}</span>
+                        <span>{modeLabel(item.creation_mode, pt)}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">{pt ? 'criado:' : 'created:'}</span>
+                        <span>
+                          {item.created_at
+                            ? new Date(item.created_at).toLocaleString(pt ? 'pt-BR' : 'en-US')
+                            : '—'}
+                        </span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">{pt ? 'pasta:' : 'folder:'}</span>
+                        <span>{item.storage_folder || '—'}</span>
+                      </div>
                       <div className="info-row">
                         <span className="info-label">{pt ? 'tamanho:' : 'size:'}</span>
                         <span>{formatBytes(item.size_bytes)}</span>
@@ -395,7 +446,9 @@ export default function ResultsBedCodePage() {
             <p className="wizard-hint-muted">
               <code>{selected.relative_path}</code>
               {' · '}
-              {originLabel(selected.origin, pt)}
+              {originLabel(selected, pt)}
+              {' · '}
+              {modeLabel(selected.creation_mode, pt)}
               {selected.has_json && selected.json_relative_path
                 ? ` · json: ${selected.json_relative_path}`
                 : ''}

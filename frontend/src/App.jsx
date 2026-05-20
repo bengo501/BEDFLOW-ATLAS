@@ -622,7 +622,7 @@ function App() {
                           className={`nav-item ${activeTab === 'results-bed' ? 'active' : ''}`}
                           onClick={() => navigateToTab('results-bed')}
                         >
-                          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="código bed" className="nav-icon" />
+                          <ThemeIcon light="textEditorLight.png" dark="textEditorLight.png" alt="código bed" className="nav-icon" location="sidebar" />
                           <span className="nav-label">{language === 'pt' ? 'código .bed' : '.bed code'}</span>
                         </button>
                       </div>

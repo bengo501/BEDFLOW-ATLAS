@@ -134,6 +134,19 @@ async def create_bed_from_wizard(request: WizardRequest):
             )
 
         _patch_compiled_wizard_json(json_file_path, dsl_dir, request.params)
+
+        try:
+            from bedflow_bed_registry import register_bed_file
+
+            rel_bed = str(bed_file_path.relative_to(project_root)).replace("\\", "/")
+            register_bed_file(
+                rel_bed,
+                source="web",
+                creation_mode=request.mode,
+                filename=request.fileName,
+            )
+        except ImportError:
+            pass
         
         return {
             "success": True,
@@ -469,40 +482,59 @@ export {
 @router.post("/bed/process", tags=["bed"])
 async def process_bed_file(request: Dict[str, Any]):
     """
-    processa um arquivo .bed carregado
+    processa um arquivo .bed carregado (grava em local_data/beds e regista metadados)
     """
     try:
         content = request.get("content", "")
         filename = request.get("filename", "leito_custom.bed")
+        mode = request.get("mode") or "bed_editor"
         
         if not content.strip():
             raise HTTPException(status_code=400, detail="conteúdo do arquivo .bed está vazio")
+
+        project_root = Path(__file__).parent.parent.parent.parent
+        dsl_dir = project_root / "dsl"
+        safe_name = Path(filename).name if filename else "leito_custom.bed"
+        if not safe_name.lower().endswith(".bed"):
+            safe_name = f"{safe_name}.bed"
+        bed_file_path = beds_dir() / safe_name
+        bed_file_path.write_text(content, encoding="utf-8")
+        json_file_path = Path(f"{bed_file_path}.json")
         
-        # criar arquivo temporário
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.bed', delete=False) as temp_file:
-            temp_file.write(content)
-            temp_bed_path = temp_file.name
-        
-        # compilar arquivo .bed
-        compiler_script = Path(__file__).parent.parent.parent / "dsl" / "compiler" / "bed_compiler_antlr_standalone.py"
+        compiler_script = dsl_dir / "compiler" / "bed_compiler_antlr_standalone.py"
         
         if not compiler_script.exists():
             raise HTTPException(status_code=500, detail="compilador não encontrado")
         
         result = subprocess.run([
-            sys.executable, str(compiler_script), temp_bed_path
-        ], capture_output=True, text=True, timeout=30)
+            sys.executable,
+            str(compiler_script),
+            str(bed_file_path),
+            "-o",
+            str(json_file_path),
+            "-v",
+        ], capture_output=True, text=True, timeout=30, cwd=str(dsl_dir))
         
         if result.returncode == 0:
-            # arquivo compilado com sucesso
-            json_path = temp_bed_path.replace('.bed', '.json')
+            try:
+                from bedflow_bed_registry import register_bed_file
+
+                rel_bed = str(bed_file_path.relative_to(project_root)).replace("\\", "/")
+                register_bed_file(
+                    rel_bed,
+                    source="web",
+                    creation_mode=mode,
+                    filename=safe_name,
+                )
+            except ImportError:
+                pass
             
             return {
                 "success": True,
                 "message": "arquivo .bed processado com sucesso",
-                "bed_file": temp_bed_path,
-                "json_file": json_path,
-                "filename": filename
+                "bed_file": str(bed_file_path.relative_to(project_root)),
+                "json_file": str(json_file_path.relative_to(project_root)),
+                "filename": safe_name
             }
         else:
             raise HTTPException(

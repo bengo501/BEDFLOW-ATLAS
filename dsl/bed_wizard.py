@@ -542,6 +542,7 @@ class BedWizard:
         self._web_frontend_proc: Optional[subprocess.Popen] = None
         # true apos carregar .bed e o utilizador pedir saltar o questionario
         self.skip_questionnaire_after_load = False
+        self._active_creation_mode = "terminal"
         self.lang = BedWizard._normalize_lang_code("pt")
         self._load_wizard_ui_lang()
         if hasattr(self.ui, "set_ui_lang"):
@@ -2328,6 +2329,7 @@ class BedWizard:
     
     def interactive_mode(self):
         """modo questionario interativo - usuario responde perguntas passo a passo"""
+        self._active_creation_mode = "interactive"
         old = self._cancel_enabled
         self._cancel_enabled = True
         try:
@@ -2363,6 +2365,7 @@ class BedWizard:
           "json" — forcar fluxo de templates json em dsl/wizard_templates (se existir).
           "editor" — saltar para o editor .bed classico.
         """
+        self._active_creation_mode = "template_json" if prefer == "json" else "template"
         self.clear_screen()
         self.print_header("editor de template", "edicao de modelo .bed")
         self.ui.breadcrumbs("setup", "template")
@@ -2589,6 +2592,28 @@ cfd {
             return
         self.output_file = str((beds_dir() / p).resolve())
     
+    def _register_saved_bed(self) -> None:
+        if not self.output_file:
+            return
+        try:
+            from bedflow_bed_registry import register_bed_file
+            from bedflow_local_paths import project_root
+
+            p = Path(self.output_file).resolve()
+            root = project_root().resolve()
+            try:
+                rel = str(p.relative_to(root)).replace("\\", "/")
+            except ValueError:
+                rel = p.name
+            register_bed_file(
+                rel,
+                source="terminal",
+                creation_mode=self._active_creation_mode,
+                filename=p.name,
+            )
+        except Exception:
+            pass
+
     def save_bed_file(self):
         """salvar arquivo .bed com conteudo gerado"""
         self._normalize_bed_output_path()
@@ -2598,6 +2623,7 @@ cfd {
         with open(self.output_file, 'w', encoding='utf-8') as f:
             f.write(content)
         
+        self._register_saved_bed()
         self.ui.ok(f"arquivo salvo: {self.output_file}")
 
     def generate_bed_file(self) -> bool:
@@ -2610,6 +2636,7 @@ cfd {
             Path(self.output_file).parent.mkdir(parents=True, exist_ok=True)
             with open(self.output_file, "w", encoding="utf-8") as f:
                 f.write(content)
+            self._register_saved_bed()
             return True
         except OSError as e:
             self.ui.err(f"falha ao gravar .bed: {e}")
@@ -2858,6 +2885,7 @@ cfd {
 
     def generation_3d_mode(self) -> None:
         """unico fluxo 3d sem cfd: primeiro motor (blender ou python), depois questionario e geracao."""
+        self._active_creation_mode = "generation_3d"
         try:
             self.clear_screen()
             self.print_header(
@@ -3402,6 +3430,7 @@ cfd {
     
     def pipeline_completo_mode(self):
         """modo pipeline completo - gera modelo 3d, cria caso cfd e executa simulacao"""
+        self._active_creation_mode = "pipeline_completo"
         self.clear_screen()
         self.print_header(
             self._t("menu.start.pipe.title", "pipeline completo"),
