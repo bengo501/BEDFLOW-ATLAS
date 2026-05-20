@@ -170,6 +170,9 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       manifold_check: true,
       merge_distance: '0.001'
     },
+    geometry_mode: 'full_3d',
+    generation_backend: 'blender',
+    slice: null,
     cfd: { ...DEFAULT_CFD_PARAMS },
   });
   const [includeCFD, setIncludeCFD] = useState(false);
@@ -227,6 +230,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       { title: t('lids'), section: 'lids' },
       { title: t('particles'), section: 'particles' },
       { title: t('packing'), section: 'packing' },
+      { title: t('pipelineStep'), section: 'pipeline' },
       { title: t('export'), section: 'export' },
     ];
     if (showCfdSteps) {
@@ -321,6 +325,44 @@ const BedWizard = ({ onNavigateTab } = {}) => {
         ...prev[section],
         [field]: value
       }
+    }));
+  };
+
+  const handleMetaChange = (field, value) => {
+    setParams((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'geometry_mode') {
+        if (value === 'pseudo_2d_thin_slice') {
+          next.slice = prev.slice || {
+            slice_enabled: true,
+            slice_thickness: '0.002',
+            slice_axis: 'z',
+            slice_position: '0.0',
+            keep_only_intersecting_particles: true,
+            preserve_original_packing: true,
+          };
+        } else {
+          next.slice = null;
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleSliceChange = (field, value) => {
+    setParams((prev) => ({
+      ...prev,
+      slice: {
+        ...(prev.slice || {
+          slice_enabled: true,
+          slice_thickness: '0.002',
+          slice_axis: 'z',
+          slice_position: '0.0',
+          keep_only_intersecting_particles: true,
+          preserve_original_packing: true,
+        }),
+        [field]: value,
+      },
     }));
   };
 
@@ -886,8 +928,8 @@ const BedWizard = ({ onNavigateTab } = {}) => {
         </div>
       </div>
       
-      <details className="advanced-params">
-        <summary>parâmetros avançados de física</summary>
+      <details className="advanced-params" open>
+        <summary>propriedades adicionais das partículas</summary>
         <div className="form-grid">
           <div className="form-group">
             <label>restituição (quique)</label>
@@ -1098,15 +1140,106 @@ const BedWizard = ({ onNavigateTab } = {}) => {
     </div>
   );
 
+  const renderPipelineSection = () => (
+    <div className="form-section">
+      <h2>{t('pipelineStep')}</h2>
+      <div className="form-grid">
+        <div className="form-group">
+          <label>{pt ? 'modo de geometria' : 'geometry mode'}</label>
+          <select
+            value={params.geometry_mode}
+            onChange={(e) => handleMetaChange('geometry_mode', e.target.value)}
+          >
+            <option value="full_3d">{pt ? 'volume completo (full_3d)' : 'full volume (full_3d)'}</option>
+            <option value="pseudo_2d_thin_slice">
+              {pt ? 'fatia fina pseudo 2d' : 'thin pseudo-2d slice'}
+            </option>
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>{pt ? 'motor de geração' : 'generation backend'}</label>
+          <select
+            value={params.generation_backend}
+            onChange={(e) => handleMetaChange('generation_backend', e.target.value)}
+          >
+            <option value="blender">{pt ? 'blender — malha via blender' : 'blender'}</option>
+            <option value="python_engine">
+              {pt ? 'python engine — malha via motor feito em python' : 'python engine'}
+            </option>
+          </select>
+        </div>
+
+        {params.geometry_mode === 'pseudo_2d_thin_slice' && params.slice && (
+          <>
+            <div className="form-group">
+              <label>{pt ? 'eixo do corte' : 'slice axis'}</label>
+              <select
+                value={params.slice.slice_axis}
+                onChange={(e) => handleSliceChange('slice_axis', e.target.value)}
+              >
+                <option value="x">x</option>
+                <option value="y">y</option>
+                <option value="z">z</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'espessura da fatia (m)' : 'slice thickness (m)'}</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={params.slice.slice_thickness}
+                onChange={(e) => handleSliceChange('slice_thickness', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'posição central (m)' : 'slice position (m)'}</label>
+              <input
+                type="number"
+                step="0.001"
+                value={params.slice.slice_position}
+                onChange={(e) => handleSliceChange('slice_position', e.target.value)}
+              />
+            </div>
+            <div className="form-group checkbox-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={Boolean(params.slice.keep_only_intersecting_particles)}
+                  onChange={(e) =>
+                    handleSliceChange('keep_only_intersecting_particles', e.target.checked)
+                  }
+                />
+                {pt ? 'manter só partículas na fatia' : 'keep only particles in slice'}
+              </label>
+            </div>
+            <div className="form-group checkbox-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={Boolean(params.slice.preserve_original_packing)}
+                  onChange={(e) =>
+                    handleSliceChange('preserve_original_packing', e.target.checked)
+                  }
+                />
+                {pt ? 'preservar coordenadas originais' : 'preserve original coordinates'}
+              </label>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   // renderizar seção export
   const renderExportSection = () => {
     const formatosDisponiveis = [
-      { value: 'blend', label: 'blend (nativo blender)' },
-      { value: 'gltf', label: 'gltf (web - multiplos arquivos)' },
-      { value: 'glb', label: 'glb (web - arquivo unico)' },
+      { value: 'stl_binary', label: 'stl binário (impressão 3d / openfoam)' },
       { value: 'obj', label: 'obj (universal)' },
+      { value: 'blend', label: 'blend (nativo blender)' },
+      { value: 'gltf', label: 'gltf (web — vários ficheiros)' },
+      { value: 'glb', label: 'glb (web — ficheiro único)' },
       { value: 'fbx', label: 'fbx (unity, unreal)' },
-      { value: 'stl', label: 'stl (impressao 3d)' }
     ];
 
     const toggleFormato = (formato) => {
@@ -1338,6 +1471,20 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           <p>{params.particles.count} {params.particles.kind}</p>
           <p>diâmetro: {params.particles.diameter}m</p>
           <p>densidade: {params.particles.density} kg/m³</p>
+          <p>porosidade: {params.particles.target_porosity}</p>
+          <p>restituição: {params.particles.restitution}, atrito: {params.particles.friction}</p>
+          <p>seed: {params.particles.seed}</p>
+        </div>
+
+        <div className="summary-card">
+          <h3>{pt ? 'geometria e motor' : 'geometry and engine'}</h3>
+          <p>{pt ? 'modo' : 'mode'}: {params.geometry_mode}</p>
+          <p>{pt ? 'motor' : 'backend'}: {params.generation_backend}</p>
+          {params.geometry_mode === 'pseudo_2d_thin_slice' && params.slice && (
+            <p>
+              {pt ? 'fatia' : 'slice'} {params.slice.slice_axis} @ {params.slice.slice_position}m
+            </p>
+          )}
         </div>
         
         <div className="summary-card">
@@ -1658,6 +1805,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
         {currentSection === 'lids' && renderLidsSection()}
         {currentSection === 'particles' && renderParticlesSection()}
         {currentSection === 'packing' && renderPackingSection()}
+        {currentSection === 'pipeline' && renderPipelineSection()}
         {currentSection === 'export' && renderExportSection()}
         {currentSection === 'cfd-toggle' && renderCfdToggleSection()}
         {currentSection === 'cfd-form' && renderCfdSection()}

@@ -83,12 +83,24 @@ class CFDParams(BaseModel):
     convergence_criteria: str = "1e-6"
     write_fields: bool = False
 
+class SliceParams(BaseModel):
+    slice_enabled: bool = True
+    slice_thickness: str = "0.002"
+    slice_axis: str = "z"
+    slice_position: str = "0.0"
+    keep_only_intersecting_particles: bool = True
+    preserve_original_packing: bool = True
+
+
 class WizardParams(BaseModel):
     bed: BedParams
     lids: LidsParams
     particles: ParticlesParams
     packing: PackingParams
     export: ExportParams
+    geometry_mode: str = "full_3d"
+    generation_backend: str = "blender"
+    slice: Optional[SliceParams] = None
     cfd: Optional[CFDParams] = None
 
 class WizardRequest(BaseModel):
@@ -174,6 +186,11 @@ def _wizard_params_for_json_patch(params: WizardParams) -> Dict[str, Any]:
     else:
         pack["step_x"] = float(pack["step_x"])
     data["packing"] = pack
+    data["geometry_mode"] = data.get("geometry_mode") or "full_3d"
+    data["generation_backend"] = data.get("generation_backend") or "blender"
+    sl = data.get("slice")
+    if isinstance(sl, dict):
+        data["slice"] = sl
     return data
 
 
@@ -182,12 +199,16 @@ def _patch_compiled_wizard_json(json_path: Path, dsl_dir: Path, params: WizardPa
         sys.path.insert(0, str(dsl_dir))
     from wizard_json_loader import (  # noqa: WPS433
         patch_compiled_json_export,
+        patch_compiled_json_metadata,
         patch_compiled_json_packing,
+        patch_compiled_json_slice,
     )
 
     wizard_dict = _wizard_params_for_json_patch(params)
     patch_compiled_json_packing(json_path, wizard_dict)
     patch_compiled_json_export(json_path, wizard_dict)
+    patch_compiled_json_metadata(json_path, wizard_dict)
+    patch_compiled_json_slice(json_path, wizard_dict)
 
 
 def generate_bed_content(params: WizardParams, mode: str) -> str:

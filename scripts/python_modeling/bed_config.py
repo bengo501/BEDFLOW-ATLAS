@@ -43,7 +43,7 @@ def _first_float(bed: Dict[str, Any], keys: Tuple[str, ...]) -> Optional[float]:
 def normalize_generation_backend(raw: Optional[Any], default: str = "blender") -> str:
     # esta funcao normaliza o modo de geracao que o usuario pediu
     # ela aceita varias formas de entrada e devolve apenas dois nomes canonicos
-    # pure_python e blender
+    # python_engine e blender
     # default e usado quando o campo nao existe ou nao e reconhecido
 
     # se vier none usamos default
@@ -63,16 +63,19 @@ def normalize_generation_backend(raw: Optional[Any], default: str = "blender") -
     # tabela de alias comuns
     # o objetivo e aceitar nomes informais
     aliases = {
-        "python": "pure_python",
-        "pure": "pure_python",
-        "stl_only": "pure_python",
+        "python": "python_engine",
+        "pure": "python_engine",
+        "pure_python": "python_engine",
+        "python_engine": "python_engine",
+        "python_puro": "python_engine",
+        "stl_only": "python_engine",
         "blender_python": "blender",
         "blender": "blender",
     }
     s = aliases.get(s, s)
 
     # se depois de alias ainda for um dos nomes validos devolvemos
-    if s in ("pure_python", "blender"):
+    if s in ("python_engine", "blender"):
         return s
 
     # caso desconhecido usamos default para nao quebrar o pipeline

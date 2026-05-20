@@ -1919,6 +1919,92 @@ class BedWizard:
             )
         return pack
 
+    _EXPORT_FORMAT_CATALOG: List[Tuple[str, str]] = [
+        ("stl_binary", "stl binario (impressao 3d / openfoam)"),
+        ("obj", "wavefront obj (universal)"),
+        ("blend", "blender nativo (.blend)"),
+        ("gltf", "gltf (web, varios ficheiros)"),
+        ("glb", "glb (web, ficheiro unico)"),
+        ("fbx", "fbx (unity / unreal)"),
+    ]
+
+    def _pick_export_formats_interactive(self) -> List[str]:
+        """lista numerada de formatos; utilizador indica 1,2,5 (como checkboxes na web)."""
+        catalog = list(self._EXPORT_FORMAT_CATALOG)
+        fed = self._default_from_loaded("export.formats", "stl_binary,obj")
+        default_codes: List[str] = []
+        if isinstance(fed, str) and fed.strip():
+            default_codes = [x.strip() for x in fed.split(",") if x.strip()]
+        elif isinstance(fed, list):
+            default_codes = [str(x).strip() for x in fed if str(x).strip()]
+        if not default_codes:
+            default_codes = ["stl_binary", "obj"]
+        default_idx = {
+            i + 1
+            for i, (code, _desc) in enumerate(catalog)
+            if code in default_codes
+        }
+        default_hint = ",".join(str(i) for i in sorted(default_idx)) or "1,2"
+
+        self.ui.muted(
+            "indique os numeros dos formatos desejados, separados por virgula "
+            f"(ex: {default_hint}). enter vazio usa o padrao destacado."
+        )
+        self.ui.println()
+        opts = [f"{code} — {desc}" for code, desc in catalog]
+        rows: List[MenuRow] = []
+        for i, opt in enumerate(opts, start=1):
+            key = str(i)
+            if "—" in opt:
+                modo, rest = opt.split("—", 1)
+                rows.append((key, modo.strip(), rest.strip()))
+            else:
+                rows.append((key, opt[:24], opt))
+        self.ui.render_main_menu(rows, title="formatos de exportacao")
+        self.ui.println()
+
+        while True:
+            self._print_internal_field_aux(review=True)
+            self.ui.println()
+            raw = self.ui.ask_line(
+                f"numeros dos formatos [{default_hint}]: ", default=""
+            ).strip()
+            self._maybe_cancel(raw)
+            if raw == "?":
+                self.show_param_help("export.formats")
+                continue
+            if raw == "*":
+                self._param_review_and_edit_menu()
+                continue
+            pick = raw if raw else default_hint
+            indices: List[int] = []
+            ok_parse = True
+            for part in pick.replace(" ", "").split(","):
+                if not part:
+                    continue
+                try:
+                    n = int(part)
+                except ValueError:
+                    ok_parse = False
+                    break
+                if n < 1 or n > len(catalog):
+                    ok_parse = False
+                    break
+                indices.append(n)
+            if not ok_parse or not indices:
+                self.ui.warn(
+                    f"digite numeros entre 1 e {len(catalog)}, separados por virgula."
+                )
+                continue
+            chosen = []
+            seen: set[str] = set()
+            for n in indices:
+                code = catalog[n - 1][0]
+                if code not in seen:
+                    seen.add(code)
+                    chosen.append(code)
+            return chosen
+
     def _questionnaire_export_section(self) -> None:
         """mesma secao export do questionario completo — reutilizada pelo modo blender."""
         self.print_section("etapa 7: exportacao")
@@ -1926,17 +2012,7 @@ class BedWizard:
         fluid_modes = ["none", "cavity"]
         self.params.setdefault("export", {})
         e = self.params["export"]
-        got_fmt = self.get_list_input(
-            "formatos de exportacao", ",", "export.formats"
-        )
-        if got_fmt:
-            e["formats"] = got_fmt
-        else:
-            fed = self._default_from_loaded("export.formats", "")
-            if fed.strip():
-                e["formats"] = [x.strip() for x in fed.split(",") if x.strip()]
-            else:
-                e["formats"] = ["stl_binary", "obj"]
+        e["formats"] = self._pick_export_formats_interactive()
         e["units"] = self.get_input(
             "unidades de saida",
             self._default_from_loaded("export.units", "m"),
@@ -2044,21 +2120,21 @@ class BedWizard:
                 "neste menu (geracao 3d) o habitual e escolher blender; enter vazio mantem a "
                 "linha destacada (por defeito opcao 1 = blender se o ficheiro nao pedir python puro). "
                 "generation_backend e o metadado no .json que diz ao pipeline quem materializa a malha; "
-                "pure_python e para gerar stl em python sem leito_extracao."
+                "python_engine e para gerar stl com o motor em python (sem leito_extracao)."
             )
             self.ui.println()
         opts = [
             "blender — malha via blender",
-            "pure_python — malha sem abrir blender",
+            "python_engine — malha via motor feito em python",
         ]
         cur = normalize_generation_backend(
             self.params.get("generation_backend")
             or self._default_from_loaded("generation_backend", "blender")
         )
-        def_idx = 1 if cur == "pure_python" else 0
+        def_idx = 1 if cur == "python_engine" else 0
         pick = self.get_choice("generation_backend", opts, def_idx, "")
         self.params["generation_backend"] = (
-            "pure_python" if "pure" in pick.lower() else "blender"
+            "python_engine" if "python" in pick.lower() else "blender"
         )
 
     def _questionnaire_bed_and_lids(self) -> None:
@@ -2414,7 +2490,7 @@ class BedWizard:
                     # se ele for pure_python entao o pipeline pode gerar o stl em python puro
                     # isso evita depender de um passo extra dentro do blender
                     gb = str(self.params.get("generation_backend") or "")
-                    if gb == "pure_python" and self.ui.confirm(
+                    if normalize_generation_backend(gb) == "python_engine" and self.ui.confirm(
                         "gerar stl em python puro agora?",
                         default=True,
                         allow_empty_default=False,
@@ -2900,13 +2976,13 @@ cfd {
                 "motor para materializar a malha 3d",
                 [
                     "blender — leito_extracao em segundo plano (blend/stl conforme export)",
-                    "python puro — stl via scripts/python_modeling (sem motor blender)",
+                    "python engine — malha via motor feito em python",
                 ],
                 0,
                 "",
             )
             backend = (
-                "pure_python"
+                "python_engine"
                 if ("python" in motor.lower() or "puro" in motor.lower())
                 else "blender"
             )
@@ -2926,7 +3002,7 @@ cfd {
             self.ui.muted("parametros cfd nao sao pedidos neste modo.")
             self._hint_fluxo_blender()
             self.ui.println()
-            self._generation_3d_continue("pure_python")
+            self._generation_3d_continue("python_engine")
         except _WizardCancelled:
             self.ui.muted("cancelado.")
 

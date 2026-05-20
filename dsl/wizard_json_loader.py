@@ -294,15 +294,18 @@ def patch_compiled_json_metadata(
     # e essa gramatica nao necessariamente serializa campos novos como generation_backend
     # entao garantimos que os motores downstream tenham os metadados necessarios
     gb = wizard_params.get("generation_backend")
+    gm = wizard_params.get("geometry_mode")
     pm = wizard_params.get("packing_mode") or (wizard_params.get("packing") or {}).get(
         "method"
     )
-    if gb is None and not pm:
+    if gb is None and gm is None and not pm:
         return
     with json_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     if gb is not None:
         data["generation_backend"] = gb
+    if gm is not None:
+        data["geometry_mode"] = gm
     if pm:
         data["packing_mode"] = str(pm)
     with json_path.open("w", encoding="utf-8") as f:
