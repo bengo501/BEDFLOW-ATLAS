@@ -11,6 +11,7 @@ if str(_PM) not in sys.path:
 from geometry_modes import (  # noqa: E402
     GEOMETRY_STATISTICAL,
     GEOMETRY_THIN_SLICE,
+    validate_geometry_contract,
     collision_radius_for_particle_kind,
     compute_global_porosity_2d,
     compute_global_porosity_2d_formula,
@@ -27,6 +28,13 @@ from geometry_modes import (  # noqa: E402
 def test_geometry_mode_from_slice_fallback():
     data = {"slice": {"slice_enabled": True, "slice_axis": "y"}}
     assert geometry_mode_from_data(data) == GEOMETRY_THIN_SLICE
+
+
+def test_validate_contract_infers_statistical():
+    data = {"geometry_mode": "full_3d", "statistical_2d": {"target_porosity": 0.4}}
+    gm, _ = validate_geometry_contract(data, mutate=True)
+    assert gm == GEOMETRY_STATISTICAL
+    assert data["geometry_mode"] == GEOMETRY_STATISTICAL
 
 
 def test_resolve_slice_forces_enabled():

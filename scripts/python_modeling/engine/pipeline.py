@@ -20,8 +20,10 @@ from packed_bed_science.validation import validate_configuration  # noqa: E402
 
 from geometry_modes import (  # noqa: E402
     GEOMETRY_STATISTICAL,
+    compute_thin_slice_porosity,
     geometry_mode_from_data,
     resolve_slice_config,
+    validate_geometry_contract,
 )
 from pseudo_2d_statistical import generate_statistical_thin_3d_stl  # noqa: E402
 from pure_bed_mesh import build_packed_bed_model, export_model_data  # noqa: E402
@@ -191,6 +193,7 @@ def _build_and_export_mesh(
     tb = domain.bottom_cap_thickness
     tt = domain.top_cap_thickness
     seg = min(64, max(12, _to_int(p.get("mesh_segmentos"), 48)))
+    validate_geometry_contract(p, mutate=True)
     gm = geometry_mode_from_data(p)
     slice_cfg = resolve_slice_config(p)
 
@@ -253,6 +256,22 @@ def _build_and_export_mesh(
     }
     if slice_cfg_active(slice_cfg):
         extra["slice"] = slice_cfg
+        p_slice, slice_poro_meta = compute_thin_slice_porosity(
+            centers,
+            pk,
+            d_char,
+            slice_axis=str(slice_cfg.get("slice_axis", "y")),
+            slice_position=float(slice_cfg.get("slice_position", 0.0)),
+            slice_thickness=float(slice_cfg.get("slice_thickness", 0.002)),
+            r_int=r_int,
+            r_ext=r_ext,
+        )
+        extra["porosity_slice_plane"] = p_slice
+        extra["porosity_result"] = p_slice
+        extra["porosity_estimate"] = p_slice
+        extra["porosity_slice_meta"] = slice_poro_meta
+        if result.porosity is not None:
+            extra["porosity_packing_3d"] = result.porosity
 
     out_json = out_stl.parent / f"{out_stl.stem}_pure_bed.json"
     report_path = out_stl.parent / f"{out_stl.stem}_packing_report.json"
@@ -262,6 +281,7 @@ def _build_and_export_mesh(
 
 
 def generate_packed_bed(p: Dict[str, Any], out_stl: Path) -> PackingResult:
+    validate_geometry_contract(p, mutate=True)
     gm = geometry_mode_from_data(p)
     if gm == GEOMETRY_STATISTICAL:
         generate_statistical_thin_3d_stl(p, out_stl)

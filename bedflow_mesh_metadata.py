@@ -44,6 +44,8 @@ def _extract_geometry_fields(data: Dict[str, Any]) -> Dict[str, Any]:
         pt = st.get("target_porosity")
     pr = data.get("porosity_result")
     if pr is None:
+        pr = data.get("porosity_slice_plane")
+    if pr is None:
         pr = data.get("porosity_estimate")
     if pt is not None:
         try:

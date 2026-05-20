@@ -21,6 +21,61 @@ const LS_LAST_MESH = 'bedflow_last_mesh_id';
 
 const DESKTOP_OPEN3D_FORMATS = new Set(['stl', 'obj', 'ply']);
 
+function meshGeometrySummary(m, pt) {
+  if (!m?.geometry_mode) return null;
+  const parts = [m.geometry_mode];
+  if (m.porosity_result != null && !Number.isNaN(Number(m.porosity_result))) {
+    parts.push(`ε ${(Number(m.porosity_result) * 100).toFixed(1)}%`);
+  }
+  if (m.porosity_method) parts.push(m.porosity_method);
+  if (m.slice_axis) {
+    const t = m.slice_thickness != null ? `${Number(m.slice_thickness) * 1000}mm` : '';
+    parts.push(`fatia ${m.slice_axis}${t ? ` ${t}` : ''}`);
+  }
+  return parts.join(' · ');
+}
+
+function appendGeometryMetaRows(info, pt) {
+  if (!info) return null;
+  const rows = [];
+  if (info.geometry_mode) {
+    rows.push({ dt: pt ? 'geometria' : 'geometry', dd: info.geometry_mode });
+  }
+  if (info.generation_backend) {
+    rows.push({ dt: pt ? 'motor' : 'backend', dd: info.generation_backend });
+  }
+  if (info.packing_method) {
+    rows.push({ dt: pt ? 'empacotamento' : 'packing', dd: info.packing_method });
+  }
+  if (info.particle_kind) {
+    rows.push({ dt: pt ? 'partícula' : 'particle', dd: info.particle_kind });
+  }
+  if (info.porosity_result != null && !Number.isNaN(Number(info.porosity_result))) {
+    let dd = `${(Number(info.porosity_result) * 100).toFixed(2)}%`;
+    if (info.porosity_target != null) {
+      dd += pt
+        ? ` (alvo ${(Number(info.porosity_target) * 100).toFixed(0)}%)`
+        : ` (target ${(Number(info.porosity_target) * 100).toFixed(0)}%)`;
+    }
+    rows.push({ dt: pt ? 'porosidade' : 'porosity', dd });
+  }
+  if (info.porosity_method) {
+    rows.push({ dt: pt ? 'método ε' : 'porosity method', dd: info.porosity_method });
+  }
+  if (info.slice_axis) {
+    rows.push({
+      dt: pt ? 'fatia' : 'slice',
+      dd: `${info.slice_axis}${info.slice_thickness != null ? ` · ${info.slice_thickness} m` : ''}${
+        info.slice_position != null ? ` · pos ${info.slice_position}` : ''
+      }`,
+    });
+  }
+  if (info.sidecar_json) {
+    rows.push({ dt: 'sidecar', dd: info.sidecar_json });
+  }
+  return rows;
+}
+
 function IconRefresh({ className }) {
   return (
     <svg
@@ -312,7 +367,16 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           source_hint: info?.source_hint || '',
           recommended_modes: info?.recommended_modes || '',
           geometry_mode: info?.geometry_mode || '',
+          generation_backend: info?.generation_backend || '',
+          packing_method: info?.packing_method || '',
+          particle_kind: info?.particle_kind || '',
+          porosity_target: info?.porosity_target,
+          porosity_result: info?.porosity_result,
+          porosity_method: info?.porosity_method || '',
           slice_axis: info?.slice_axis || '',
+          slice_thickness: info?.slice_thickness,
+          slice_position: info?.slice_position,
+          sidecar_json: info?.sidecar_json || '',
         });
       }
       try {
@@ -590,6 +654,11 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
                     <span className="mesh-li-meta">
                       {m.format} · {Math.round(m.size_bytes / 1024)} kb
                     </span>
+                    {meshGeometrySummary(m, pt) ? (
+                      <span className="mesh-li-geom" title={meshGeometrySummary(m, pt)}>
+                        {meshGeometrySummary(m, pt)}
+                      </span>
+                    ) : null}
                     {m.recommended_modes ? (
                       <span className="mesh-li-rec" title={m.recommended_modes}>
                         {m.recommended_modes}
@@ -735,6 +804,12 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
                   <dd>{meta.recommended_modes}</dd>
                 </>
               ) : null}
+              {appendGeometryMetaRows(meta, pt)?.map((row) => (
+                <span key={row.dt}>
+                  <dt>{row.dt}</dt>
+                  <dd>{row.dd}</dd>
+                </span>
+              ))}
             </dl>
             </section>
           ) : null}

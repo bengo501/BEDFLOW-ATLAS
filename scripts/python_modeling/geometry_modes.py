@@ -75,15 +75,73 @@ def normalize_slice_axis(axis: Any, default: str = "y") -> str:
     return default
 
 
+def validate_geometry_contract(
+    data: Dict[str, Any],
+    *,
+    strict: bool = False,
+    mutate: bool = True,
+) -> Tuple[str, List[str]]:
+    """
+    normaliza geometry_mode e remove blocos conflituosos (slice vs statistical_2d).
+    devolve (modo_resolvido, avisos).
+    """
+    notes: List[str] = []
+    if not isinstance(data, dict):
+        return GEOMETRY_FULL_3D, notes
+
+    gm = normalize_geometry_mode(data.get("geometry_mode"), GEOMETRY_FULL_3D)
+    has_slice_block = isinstance(data.get("slice"), dict) and _to_bool(
+        (data.get("slice") or {}).get("slice_enabled"), False
+    )
+    has_stat_block = isinstance(data.get("statistical_2d"), dict) and bool(
+        data.get("statistical_2d")
+    )
+
+    if gm == GEOMETRY_FULL_3D:
+        if has_slice_block and has_stat_block:
+            msg = (
+                "geometry_mode full_3d com slice e statistical_2d: "
+                "prioridade thin_slice sobre statistical"
+            )
+            if strict:
+                raise ValueError(msg)
+            notes.append(msg)
+            gm = GEOMETRY_THIN_SLICE
+        elif has_slice_block:
+            gm = GEOMETRY_THIN_SLICE
+        elif has_stat_block:
+            gm = GEOMETRY_STATISTICAL
+
+    if gm == GEOMETRY_THIN_SLICE and has_stat_block:
+        msg = "statistical_2d ignorado em pseudo_2d_thin_slice"
+        if strict:
+            raise ValueError(msg)
+        notes.append(msg)
+        if mutate:
+            data.pop("statistical_2d", None)
+
+    if gm == GEOMETRY_STATISTICAL and has_slice_block:
+        msg = "slice ignorado em pseudo_2d_statistical"
+        if strict:
+            raise ValueError(msg)
+        notes.append(msg)
+        if mutate:
+            data.pop("slice", None)
+
+    if gm == GEOMETRY_FULL_3D and mutate:
+        data.pop("slice", None)
+        data.pop("statistical_2d", None)
+
+    if mutate and data.get("geometry_mode") != gm:
+        data["geometry_mode"] = gm
+
+    return gm, notes
+
+
 def geometry_mode_from_data(data: Dict[str, Any]) -> str:
     if not isinstance(data, dict):
         return GEOMETRY_FULL_3D
-    gm = normalize_geometry_mode(data.get("geometry_mode"), GEOMETRY_FULL_3D)
-    sl = data.get("slice")
-    if gm == GEOMETRY_FULL_3D and isinstance(sl, dict) and _to_bool(sl.get("slice_enabled"), False):
-        return GEOMETRY_THIN_SLICE
-    if data.get("statistical_2d") and gm == GEOMETRY_FULL_3D:
-        return GEOMETRY_STATISTICAL
+    gm, _ = validate_geometry_contract(data, mutate=True)
     return gm
 
 
@@ -309,6 +367,136 @@ def slice_footprint_center(
     if ax == "y":
         return (float(x), float(slice_position), float(z))
     return (float(x), float(y), float(slice_position))
+
+
+def _plane_uv_from_center(center: vec3, axis: str) -> Tuple[float, float]:
+    ax = normalize_slice_axis(axis)
+    if ax == "x":
+        return float(center[1]), float(center[2])
+    if ax == "y":
+        return float(center[0]), float(center[2])
+    return float(center[0]), float(center[1])
+
+
+def _cell_in_footprint(
+    u: float,
+    v: float,
+    cu: float,
+    cv: float,
+    spec: Dict[str, Any],
+) -> bool:
+    sh = spec.get("shape")
+    if sh == "disc":
+        r = float(spec.get("radius") or 0.0)
+        du = u - cu
+        dv = v - cv
+        return du * du + dv * dv <= r * r + 1e-18
+    if sh == "box":
+        sx = float(spec.get("size_x") or 0.0)
+        sy = float(spec.get("size_y") or 0.0)
+        sz = float(spec.get("size_z") or 0.0)
+        ax = normalize_slice_axis(spec.get("slice_axis", "y"))
+        if ax == "x":
+            a, b = sy, sz
+        elif ax == "y":
+            a, b = sx, sz
+        else:
+            a, b = sx, sy
+        return abs(u - cu) <= a / 2.0 + 1e-12 and abs(v - cv) <= b / 2.0 + 1e-12
+    return False
+
+
+def compute_thin_slice_porosity(
+    centers: Sequence[vec3],
+    particle_kind: str,
+    particle_diameter: float,
+    *,
+    slice_axis: str,
+    slice_position: float,
+    slice_thickness: float,
+    r_int: float,
+    r_ext: float,
+    cells_per_radius: int = 8,
+    max_cells_per_axis: int = 400,
+) -> Tuple[float, Dict[str, Any]]:
+    """
+    porosidade no plano da lamina (anular r_int..r_ext) por raster.
+    so conta celulas dentro do tubo no plano de corte; sólido = união das pegadas na fatia.
+    """
+    axis = normalize_slice_axis(slice_axis)
+    r_int = max(0.0, float(r_int))
+    r_ext = max(r_int, float(r_ext))
+    if r_ext <= 1e-12:
+        return 1.0, {"porosity_method": "slice_raster", "n_particles_in_slice": 0}
+
+    r_part = max(float(particle_diameter) * 0.5, 1e-12)
+    cell = r_part / max(4, int(cells_per_radius))
+    span = 2.0 * r_ext
+    nx = max(16, min(max_cells_per_axis, int(math.ceil(span / cell))))
+    ny = nx
+    r_int2 = r_int * r_int
+    r_ext2 = r_ext * r_ext
+
+    footprints: List[Tuple[float, float, Dict[str, Any]]] = []
+    for c in centers:
+        if not particle_intersects_slice(
+            c,
+            particle_kind=particle_kind,
+            particle_diameter=particle_diameter,
+            axis=axis,
+            slice_position=slice_position,
+            slice_thickness=slice_thickness,
+        ):
+            continue
+        ai = axis_index(axis)
+        d_plane = abs(c[ai] - slice_position)
+        spec = slice_footprint_spec(
+            particle_kind,
+            particle_diameter,
+            d_plane,
+            slice_axis=axis,
+            slice_thickness=slice_thickness,
+        )
+        if spec.get("shape") == "none":
+            continue
+        cu, cv = _plane_uv_from_center(c, axis)
+        footprints.append((cu, cv, spec))
+
+    annulus_cells = 0
+    solid_cells = 0
+    du = span / nx
+    u0 = -r_ext + du / 2.0
+    for j in range(ny):
+        v = -r_ext + (j + 0.5) * span / ny
+        for i in range(nx):
+            u = u0 + i * du
+            rr = u * u + v * v
+            if rr < r_int2 or rr > r_ext2:
+                continue
+            annulus_cells += 1
+            for cu, cv, spec in footprints:
+                if _cell_in_footprint(u, v, cu, cv, spec):
+                    solid_cells += 1
+                    break
+
+    if annulus_cells <= 0:
+        return 1.0, {
+            "porosity_method": "slice_raster",
+            "n_particles_in_slice": len(footprints),
+            "raster_nx": nx,
+            "raster_ny": ny,
+        }
+    solid_frac = solid_cells / annulus_cells
+    porosity = max(0.0, min(1.0, 1.0 - solid_frac))
+    return porosity, {
+        "porosity_method": "slice_raster",
+        "porosity_slice_plane": porosity,
+        "n_particles_in_slice": len(footprints),
+        "raster_nx": nx,
+        "raster_ny": ny,
+        "solid_fraction": solid_frac,
+        "slice_axis": axis,
+    }
 
 
 def compute_global_porosity_2d_formula(

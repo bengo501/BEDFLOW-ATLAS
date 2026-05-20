@@ -317,6 +317,23 @@ function ResultsModels3DPage({ onOpenInViewer }) {
                           </span>
                         </div>
                       )}
+                      {model.geometry_mode === 'pseudo_2d_thin_slice' && model.slice_axis && (
+                        <div className="info-row">
+                          <span className="info-label">{pt ? 'fatia:' : 'slice:'}</span>
+                          <span>
+                            {model.slice_axis}
+                            {model.slice_thickness != null
+                              ? ` · ${(model.slice_thickness * 1000).toFixed(2)} mm`
+                              : ''}
+                          </span>
+                        </div>
+                      )}
+                      {model.geometry_mode === 'pseudo_2d_statistical' && (
+                        <div className="info-row">
+                          <span className="info-label">{pt ? 'reconstrução:' : 'reconstruction:'}</span>
+                          <span>rsa 2d (motor python)</span>
+                        </div>
+                      )}
                       <div className="info-row">
                         <span className="info-label">{pt ? 'tamanho:' : 'size:'}</span>
                         <span>{formatBytes(model.size_bytes)}</span>

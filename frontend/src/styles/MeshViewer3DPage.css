@@ -311,6 +311,14 @@
   color: var(--text-muted);
 }
 
+.mesh-li-geom {
+  font-size: 0.64rem;
+  color: var(--primary);
+  line-height: 1.25;
+  display: block;
+  margin-top: 0.15rem;
+}
+
 .mesh-li-rec {
   font-size: 0.64rem;
   color: var(--text-muted);
