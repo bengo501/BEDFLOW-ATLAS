@@ -11,12 +11,9 @@ import {
   generateModel,
   postPipelineFullSimulation,
   getBedTemplateDefault,
-  postBedProcess,
-  pollJobUntilDone,
-  postCfdCreateCase,
-  postCfdCreateCaseOnly,
   parseApiError,
 } from '../services/api';
+import BedLoadModal from './bed/BedLoadModal';
 import '../styles/BedWizard.css';
 import '../styles/CasosCFD.css';
 import '../styles/TemplateEditor.css';
@@ -238,10 +235,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
   const [showHelp, setShowHelp] = useState(false);
   const [helpSection, setHelpSection] = useState(null);
   const [showDocs, setShowDocs] = useState(false);
-  const [showBedFileOptions, setShowBedFileOptions] = useState(false);
-  const [bedFileContent, setBedFileContent] = useState('');
-  const [bedFileName, setBedFileName] = useState('');
-  const [uploadedFile, setUploadedFile] = useState(null);
+  const [bedLoadOpen, setBedLoadOpen] = useState(null);
   const [wizardConnectionError, setWizardConnectionError] = useState(null);
   const [criarDock, setCriarDock] = useState(null);
   const [wizardCliBackend, setWizardCliBackend] = useState({ script_exists: true, offline: true });
@@ -646,15 +640,6 @@ const BedWizard = ({ onNavigateTab } = {}) => {
     </div>
   );
 
-  const bedProcessActionLabel = () => {
-    if (mode === 'interactive') return t('bedProcessBtnInteractive');
-    if (mode === 'blender' || mode === 'blender_interactive') return t('bedProcessBtnGen3d');
-    if (mode === 'pipeline_blender_cfd') return t('bedProcessBtnPipeBlenderCfd');
-    if (mode === 'cfd_only') return t('bedProcessBtnCfdOnly');
-    if (mode === 'pipeline_completo') return t('bedProcessBtnPipelineCompleto');
-    return t('bedProcessBtnPipelineCompleto');
-  };
-
   const renderModeSelection = () => {
     const bedFileButtons = (modeKey) => (
       <div className="mode-options">
@@ -664,7 +649,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           onClick={(e) => {
             e.stopPropagation();
             setMode(modeKey);
-            setShowBedFileOptions(true);
+            setBedLoadOpen({ hubMode: modeKey });
           }}
         >
           <ThemeIcon light="folderLight.png" dark="folderDark.png" alt="" className="btn-icon" />
@@ -676,8 +661,20 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           onClick={(e) => {
             e.stopPropagation();
             setMode(modeKey);
-            void loadDefaultBedTemplate();
-            setShowBedFileOptions(true);
+            void (async () => {
+              try {
+                setWizardConnectionError(null);
+                const data = await getBedTemplateDefault();
+                setBedLoadOpen({
+                  hubMode: modeKey,
+                  initialContent: data.content,
+                  initialFilename: data.filename || 'template_padrao.bed',
+                });
+              } catch (error) {
+                console.error('erro:', error);
+                setWizardConnectionError(t('backendConnectionError'));
+              }
+            })();
           }}
         >
           <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="" className="btn-icon" />
@@ -1867,119 +1864,6 @@ const BedWizard = ({ onNavigateTab } = {}) => {
 
 
 
-  // carregar arquivo .bed
-  const handleBedFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file && file.name.endsWith('.bed')) {
-      setUploadedFile(file);
-      setBedFileName(file.name);
-      
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setBedFileContent(e.target.result);
-      };
-      reader.readAsText(file);
-    } else {
-      alert('por favor, selecione um arquivo .bed válido');
-    }
-  };
-
-  // carregar template padrão
-  const loadDefaultBedTemplate = async () => {
-    try {
-      setWizardConnectionError(null);
-      const data = await getBedTemplateDefault();
-      setBedFileContent(data.content);
-      setBedFileName('template_padrao.bed');
-      setUploadedFile(null);
-    } catch (error) {
-      console.error('erro:', error);
-      alert(parseApiError(error) || 'erro ao carregar template padrão');
-      setWizardConnectionError(t('backendConnectionError'));
-    }
-  };
-
-  // processar arquivo .bed carregado
-  const processBedFile = async () => {
-    if (!bedFileContent.trim()) {
-      alert('arquivo .bed está vazio');
-      return;
-    }
-
-    try {
-      setWizardConnectionError(null);
-      const result = await postBedProcess({
-        content: bedFileContent,
-        filename: bedFileName || 'leito_custom.bed',
-        mode: mode || 'bed_editor',
-      });
-
-      if (mode === 'interactive') {
-        alert(
-          `${t('bedProcessAlertInteractive')}\njson: ${result.json_file}`,
-        );
-      }
-
-      if (mode === 'blender_interactive') {
-        await generateModel(
-          result.json_file,
-          true,
-          modelingProfileFromBackend(params.generation_backend),
-        );
-        alert('geração do modelo 3D iniciada (blender pode abrir no servidor)');
-      }
-
-      if (mode === 'pipeline_blender_cfd') {
-        const genStart = await generateModel(
-          result.json_file,
-          false,
-          modelingProfileFromBackend(params.generation_backend),
-        );
-        const jobFinal = await pollJobUntilDone(genStart.job_id);
-        const blendRel =
-          jobFinal.metadata?.blend_file ||
-          jobFinal.metadata?.geometry_file ||
-          (jobFinal.output_files && jobFinal.output_files[0]);
-        if (!blendRel) {
-          throw new Error('job de modelo não devolveu caminho blend/stl');
-        }
-        const cfdResult = await postCfdCreateCase({
-          blend_file: blendRel,
-          json_file: result.json_file,
-          case_name: `leito_${Date.now()}`
-        });
-        alert(`pipeline blender + CFD concluído!\nmodelo: ${blendRel}\ncaso CFD: ${cfdResult.case_dir}`);
-      }
-
-      if (mode === 'cfd_only') {
-        const cfdResult = await postCfdCreateCaseOnly({
-          json_file: result.json_file,
-          case_name: `leito_${Date.now()}`
-        });
-        alert(`caso CFD criado com sucesso!\ncaso: ${cfdResult.case_dir}`);
-      }
-
-      if (mode === 'pipeline_completo') {
-        const pipelineResult = await postPipelineFullSimulation({
-          json_file: result.json_file,
-          bed_file: result.bed_file || ''
-        });
-        alert(`pipeline completo iniciado!\njob_id: ${pipelineResult.job_id}`);
-      }
-
-      setStep(0);
-      setMode(null);
-      setShowBedFileOptions(false);
-      setBedFileContent('');
-      setBedFileName('');
-      setUploadedFile(null);
-    } catch (error) {
-      console.error('erro:', error);
-      alert(parseApiError(error) || 'erro ao processar arquivo .bed');
-      setWizardConnectionError(t('backendConnectionError'));
-    }
-  };
-
   return (
     <div className="bed-wizard">
       {wizardConnectionError && (
@@ -2037,78 +1921,19 @@ const BedWizard = ({ onNavigateTab } = {}) => {
         </div>
       )}
 
-      {showBedFileOptions && (
-        <div className="modal-overlay">
-          <div className="modal-content bed-file-options">
-            <div className="modal-header">
-              <h2>{t('bedFileModalTitle')}</h2>
-              <button 
-                className="btn-close" 
-                onClick={() => {
-                  setShowBedFileOptions(false);
-                  setBedFileContent('');
-                  setBedFileName('');
-                  setUploadedFile(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="bed-file-content">
-              <div className="file-upload-section">
-                <h3>carregar arquivo .bed</h3>
-                <input
-                  type="file"
-                  accept=".bed"
-                  onChange={handleBedFileUpload}
-                  className="file-input"
-                />
-                {uploadedFile && (
-                  <p className="file-info">arquivo carregado: {uploadedFile.name}</p>
-                )}
-              </div>
-              
-              <div className="file-editor-section">
-                <h3>{t('bedEditorSectionTitle')}</h3>
-                <div className="editor-controls">
-                  <button type="button" className="btn-load-template" onClick={() => void loadDefaultBedTemplate()}>
-                    {t('bedEditorLoadTemplateBtn')}
-                  </button>
-                </div>
-                <textarea
-                  value={bedFileContent}
-                  onChange={(e) => setBedFileContent(e.target.value)}
-                  placeholder="cole aqui o conteúdo do arquivo .bed ou carregue um arquivo..."
-                  className="bed-editor"
-                  rows={15}
-                />
-              </div>
-              
-              <div className="file-actions">
-                <button
-                  type="button"
-                  className="btn-process"
-                  onClick={() => void processBedFile()}
-                  disabled={!bedFileContent.trim()}
-                >
-                  {bedProcessActionLabel()}
-                </button>
-                <button 
-                  className="btn-cancel"
-                  onClick={() => {
-                    setShowBedFileOptions(false);
-                    setBedFileContent('');
-                    setBedFileName('');
-                    setUploadedFile(null);
-                  }}
-                >
-                  cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {bedLoadOpen && (
+        <BedLoadModal
+          hubMode={bedLoadOpen.hubMode}
+          initialContent={bedLoadOpen.initialContent || ''}
+          initialFilename={bedLoadOpen.initialFilename || ''}
+          onClose={() => setBedLoadOpen(null)}
+          onSuccess={() => {
+            setBedLoadOpen(null);
+            setStep(0);
+            setMode(null);
+          }}
+          onNavigateTab={onNavigateTab}
+        />
       )}
     
       {/* header com progresso */}

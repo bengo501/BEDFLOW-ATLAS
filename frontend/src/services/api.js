@@ -626,6 +626,16 @@ export const postBedProcess = async (body) => {
   return r.data;
 };
 
+export const postBedParse = async (body) => {
+  const r = await api.post('/api/bed/parse', body);
+  return r.data;
+};
+
+export const postBedCompileFromBed = async (body) => {
+  const r = await api.post('/api/bed/compile-from-bed', body);
+  return r.data;
+};
+
 export const getBedTemplateDefault = async () => {
   const r = await api.get('/api/bed/template/default');
   return r.data;

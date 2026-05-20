@@ -13,6 +13,7 @@ import { useLanguage } from '../../context/LanguageContext'
 import { useActiveUser } from '../../context/UserContext'
 import '../../styles/CasosCFD.css'
 import '../../styles/MeshViewer3DPage.css'
+import '../../styles/BedLoadModal.css'
 import '../SimulationHistory.css'
 import { IconRefresh, formatBytes, isConnectionError } from './resultsShared'
 
@@ -427,7 +428,7 @@ export default function ResultsBedCodePage() {
           onClick={() => setSelected(null)}
         >
           <div
-            className="modal-content bed-file-options"
+            className="modal-content bed-code-modal"
             role="dialog"
             aria-labelledby="bed-code-modal-title"
             onClick={(e) => e.stopPropagation()}
@@ -453,16 +454,16 @@ export default function ResultsBedCodePage() {
                 ? ` · json: ${selected.json_relative_path}`
                 : ''}
             </p>
-            <div className="file-editor-section">
+            <div className="bed-code-editor-section">
               <textarea
-                className="bed-editor"
+                className="bed-code-textarea"
                 readOnly
                 value={selected.content}
                 rows={22}
                 spellCheck={false}
               />
             </div>
-            <div className="file-actions">
+            <div className="bed-code-actions">
               <button type="button" className="btn-mode-option" onClick={() => void copyContent()}>
                 <ThemeIcon
                   light="textEditorLight.png"
@@ -474,7 +475,7 @@ export default function ResultsBedCodePage() {
               </button>
               <button
                 type="button"
-                className="btn-process"
+                className="btn-primary"
                 onClick={() => {
                   const url = buildBedFileDownloadUrl(selected.relative_path)
                   if (url) window.open(url, '_blank', 'noopener,noreferrer')

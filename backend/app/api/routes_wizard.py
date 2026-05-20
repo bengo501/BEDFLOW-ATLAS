@@ -1,8 +1,13 @@
 # gera bed a partir do wizard compila template e ajuda cli local
 # tambem tenta abrir terminal do sistema com comandos uteis em dev
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
+from sqlalchemy.orm import Session
+
+from backend.app.database.connection import get_db
+from backend.app.api.deps_user import get_active_user_id
+from backend.app.services.bed_parse_service import compile_from_bed, parse_bed_content
 from pathlib import Path
 import json
 import os
@@ -143,6 +148,73 @@ class WizardRequest(BaseModel):
     mode: str  # interactive, blender, blender_interactive
     fileName: str
     params: WizardParams
+
+
+class BedParseRequest(BaseModel):
+    content: str
+    filename: str = "parse.bed"
+
+
+class BedCompileFromBedRequest(BaseModel):
+    content: Optional[str] = None
+    bed_path: Optional[str] = None
+    filename: str = "leito_custom.bed"
+    overrides: Dict[str, Any] = Field(default_factory=dict)
+    hub_mode: str = "bed_editor"
+    save_to_db: bool = False
+
+
+@router.post("/bed/parse", tags=["bed"])
+async def parse_bed_file(request: BedParseRequest):
+    """analisa .bed sem gravar em beds_dir (temp); devolve resumo estruturado."""
+    try:
+        out = parse_bed_content(request.content, request.filename)
+        if not out.get("valid"):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "erro na compilação",
+                    "errors": out.get("errors"),
+                    "stderr": out.get("stderr"),
+                },
+            )
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bed/compile-from-bed", tags=["bed"])
+async def compile_bed_from_upload(
+    request: BedCompileFromBedRequest,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_active_user_id),
+):
+    """grava .bed, compila, aplica overrides/patches, opcionalmente sqlite."""
+    try:
+        if not request.content and not request.bed_path:
+            raise HTTPException(status_code=400, detail="content ou bed_path obrigatório")
+        result = compile_from_bed(
+            content=request.content,
+            bed_path=request.bed_path,
+            filename=request.filename,
+            overrides=request.overrides or None,
+            hub_mode=request.hub_mode,
+            save_to_db=request.save_to_db,
+            user_id=user_id,
+            db_session=db,
+        )
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/bed/wizard")
 async def create_bed_from_wizard(request: WizardRequest):
@@ -570,68 +642,33 @@ export {
 @router.post("/bed/process", tags=["bed"])
 async def process_bed_file(request: Dict[str, Any]):
     """
-    processa um arquivo .bed carregado (grava em local_data/beds e regista metadados)
+    retrocompat: delega em compile-from-bed sem overrides.
     """
     try:
         content = request.get("content", "")
         filename = request.get("filename", "leito_custom.bed")
         mode = request.get("mode") or "bed_editor"
-        
-        if not content.strip():
+        if not str(content).strip():
             raise HTTPException(status_code=400, detail="conteúdo do arquivo .bed está vazio")
-
-        project_root = Path(__file__).parent.parent.parent.parent
-        dsl_dir = project_root / "dsl"
-        safe_name = Path(filename).name if filename else "leito_custom.bed"
-        if not safe_name.lower().endswith(".bed"):
-            safe_name = f"{safe_name}.bed"
-        bed_file_path = beds_dir() / safe_name
-        bed_file_path.write_text(content, encoding="utf-8")
-        json_file_path = Path(f"{bed_file_path}.json")
-        
-        compiler_script = dsl_dir / "compiler" / "bed_compiler_antlr_standalone.py"
-        
-        if not compiler_script.exists():
-            raise HTTPException(status_code=500, detail="compilador não encontrado")
-        
-        result = subprocess.run([
-            sys.executable,
-            str(compiler_script),
-            str(bed_file_path),
-            "-o",
-            str(json_file_path),
-            "-v",
-        ], capture_output=True, text=True, timeout=30, cwd=str(dsl_dir))
-        
-        if result.returncode == 0:
-            try:
-                from bedflow_bed_registry import register_bed_file
-
-                rel_bed = str(bed_file_path.relative_to(project_root)).replace("\\", "/")
-                register_bed_file(
-                    rel_bed,
-                    source="web",
-                    creation_mode=mode,
-                    filename=safe_name,
-                )
-            except ImportError:
-                pass
-            
-            return {
-                "success": True,
-                "message": "arquivo .bed processado com sucesso",
-                "bed_file": str(bed_file_path.relative_to(project_root)),
-                "json_file": str(json_file_path.relative_to(project_root)),
-                "filename": safe_name
-            }
-        else:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"erro na compilação: {result.stderr}"
-            )
-            
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=408, detail="timeout na compilação")
+        result = compile_from_bed(
+            content=content,
+            filename=filename,
+            overrides=None,
+            hub_mode=mode,
+            save_to_db=False,
+        )
+        return {
+            "success": True,
+            "message": result.get("message", "arquivo .bed processado com sucesso"),
+            "bed_file": result["bed_file"],
+            "json_file": result["json_file"],
+            "filename": result.get("filename", filename),
+            "parsed": result.get("parsed"),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"erro: {str(e)}")
 

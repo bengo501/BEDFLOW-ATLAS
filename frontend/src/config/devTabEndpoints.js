@@ -20,6 +20,8 @@ export const TAB_DEV_INFO = {
     api: [
       'POST /api/bed/wizard',
       'POST /api/bed/process',
+      'POST /api/bed/parse',
+      'POST /api/bed/compile-from-bed',
       'POST /api/bed/template',
       'GET /api/bed/template/default',
       'GET /api/bed/wizard/help/{section}',

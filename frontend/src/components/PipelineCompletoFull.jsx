@@ -4,61 +4,11 @@ import ThemeIcon from './ThemeIcon';
 import BackendConnectionError from './BackendConnectionError';
 import '../styles/PipelineCompletoFull.css';
 import { postPipelineFullSimulation, getPipelineJob, parseApiError } from '../services/api';
-
-function buildNestedPipelineBody(p) {
-  const packing =
-    p.geometry_mode === 'pseudo_2d_statistical'
-      ? { method: 'statistical_reconstruction' }
-      : {
-          method: p.packing_method,
-          gravity: p.gravity,
-          substeps: p.substeps,
-          friction: p.friction,
-        };
-  const body = {
-    bed: {
-      diameter: p.diameter,
-      height: p.height,
-      wall_thickness: p.wall_thickness,
-      clearance: 0.01,
-      material: 'steel',
-    },
-    lids: {
-      top_type: p.lid_top,
-      bottom_type: p.lid_bottom,
-      top_thickness: p.lid_thickness,
-      bottom_thickness: p.lid_thickness,
-    },
-    particles: {
-      kind: p.particle_type,
-      count: p.particle_count,
-      diameter: p.particle_diameter,
-      target_porosity: p.target_porosity ?? 0.4,
-      seed: p.seed ?? 42,
-    },
-    packing,
-    export: { formats: ['stl_binary'], units: 'm' },
-    geometry_mode: p.geometry_mode,
-    generation_backend: p.generation_backend,
-    cfd: {
-      regime: p.cfd_regime,
-      inlet_velocity: p.inlet_velocity,
-      fluid_density: p.fluid_density,
-      fluid_viscosity: p.fluid_viscosity,
-    },
-  };
-  if (p.geometry_mode === 'pseudo_2d_thin_slice' && p.slice) {
-    body.slice = { ...p.slice, slice_enabled: true };
-  }
-  if (p.geometry_mode === 'pseudo_2d_statistical' && p.statistical_2d) {
-    body.statistical_2d = p.statistical_2d;
-  }
-  return body;
-}
-
-function modelingProfileFromBackend(generationBackend) {
-  return generationBackend === 'python_engine' ? 'python_engine' : 'blender';
-}
+import {
+  buildNestedPipelineBody,
+  defaultPipelineCompactParams,
+  modelingProfileFromBackend,
+} from '../lib/pipelineParams';
 
 /**
  * pipeline completo end-to-end com execucao cfd
@@ -81,45 +31,9 @@ const PipelineCompletoFull = () => {
   const [jobId, setJobId] = useState(null);
   const [jobData, setJobData] = useState(null);
   const [connectionError, setConnectionError] = useState(null);
-  const [parametros, setParametros] = useState({
-    diameter: 0.05,
-    height: 0.1,
-    wall_thickness: 0.002,
-    lid_top: 'flat',
-    lid_bottom: 'flat',
-    lid_thickness: 0.003,
-    particle_count: 100,
-    particle_type: 'sphere',
-    particle_diameter: 0.005,
-    packing_method: 'rigid_body',
-    gravity: -9.81,
-    friction: 0.5,
-    substeps: 10,
-    geometry_mode: 'full_3d',
-    generation_backend: 'blender',
-    target_porosity: 0.4,
-    seed: 42,
-    slice: {
-      slice_enabled: true,
-      slice_thickness: 0.002,
-      slice_axis: 'y',
-      slice_position: 0,
-      keep_only_intersecting_particles: true,
-      preserve_original_packing: true,
-    },
-    statistical_2d: {
-      domain_width: 0.05,
-      domain_height: 0.1,
-      target_porosity: 0.38,
-      tolerance: 0.02,
-      max_attempts: 30,
-      slice_thickness: 0.002,
-      seed: 7,
-    },
-    cfd_regime: 'laminar',
-    inlet_velocity: 0.1,
-    fluid_density: 1000,
-    fluid_viscosity: 0.001
+  const [parametros, setParametros] = useState(() => {
+    const { fileName: _fn, includeCfd: _ic, ...rest } = defaultPipelineCompactParams();
+    return rest;
   });
 
   // polling para monitorar job

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import ThemeIcon from './ThemeIcon';
 import '../styles/PipelineCompleto.css';
+import '../styles/PipelineCompletoFull.css';
 import {
   getJobStatus,
   postBedWizard,
@@ -9,20 +10,19 @@ import {
   getCfdStatus,
   parseApiError,
 } from '../services/api';
+import {
+  defaultPipelineCompactParams,
+  toBedWizardRequest,
+  modelingProfileFromBackend,
+  validatePipelineGeometryBackend,
+} from '../lib/pipelineParams';
 
 /**
- * pipeline completo web - replica bed_wizard.py
- *
- * fluxo:
- * 1. criar parametros → .bed
- * 2. compilar dsl → .json
- * 3. gerar modelo 3d → .blend, .glb, etc
- * 4. criar caso cfd → openfoam
- * 5. executar simulacao → resultados
- * 6. visualizar → paraview/web
+ * pipeline completo web (fluxo curto): bed wizard → modelo 3d → cfd opcional
  */
 const PipelineCompleto = () => {
-  const [etapaAtual, setEtapaAtual] = useState('inicio'); // inicio, params, compilando, gerando3d, cfd, executando, concluido
+  const [etapaAtual, setEtapaAtual] = useState('inicio');
+  const [parametros, setParametros] = useState(defaultPipelineCompactParams);
   const [dadosPipeline, setDadosPipeline] = useState(null);
   const [log, setLog] = useState([]);
   const [erro, setErro] = useState(null);
@@ -30,7 +30,7 @@ const PipelineCompleto = () => {
 
   const adicionarLog = (mensagem, tipo = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
-    setLog(prev => [...prev, { timestamp, mensagem, tipo }]);
+    setLog((prev) => [...prev, { timestamp, mensagem, tipo }]);
   };
 
   const aguardarJobModelo = (jobId) =>
@@ -46,7 +46,9 @@ const PipelineCompleto = () => {
             reject(new Error(job.error_message || 'falha na geração do modelo 3d'));
             return;
           }
-          adicionarLog(`  job modelo: ${job.status} (${job.progress ?? 0}%)`, 'info');
+          const pct = job.progress ?? 0;
+          setProgresso(25 + Math.round(pct * 0.25));
+          adicionarLog(`  job modelo: ${job.status} (${pct}%)`, 'info');
           setTimeout(poll, 2000);
         } catch (e) {
           reject(e);
@@ -55,29 +57,41 @@ const PipelineCompleto = () => {
       poll();
     });
 
-  // etapa 1: criar arquivo .bed
-  const iniciarPipeline = async (parametros) => {
+  const iniciarPipeline = async () => {
+    const validationErr = validatePipelineGeometryBackend(parametros);
+    if (validationErr) {
+      setErro(validationErr);
+      setEtapaAtual('erro');
+      return;
+    }
+
     setErro(null);
     setLog([]);
     setProgresso(0);
 
+    const wizardPayload = toBedWizardRequest(parametros, {
+      mode: 'pipeline_completo',
+    });
+
     try {
-      // 1. compilar dsl
       setEtapaAtual('compilando');
       setProgresso(10);
       adicionarLog('compilando arquivo .bed com antlr...', 'info');
 
-      const dadosCompilacao = await postBedWizard(parametros);
+      const dadosCompilacao = await postBedWizard(wizardPayload);
       adicionarLog(`arquivo .bed compilado: ${dadosCompilacao.bed_file}`, 'success');
       adicionarLog(`arquivo .json gerado: ${dadosCompilacao.json_file}`, 'success');
       setProgresso(25);
 
-      // 2. gerar modelo 3d
       setEtapaAtual('gerando3d');
-      adicionarLog('gerando modelo 3d no blender (com física)...', 'info');
-      adicionarLog('executando animação de queda das partículas (20s)...', 'info');
+      adicionarLog('gerando modelo 3d...', 'info');
 
-      const jobInicio = await generateModel(dadosCompilacao.json_file, false);
+      const profile = modelingProfileFromBackend(parametros.generation_backend);
+      const jobInicio = await generateModel(
+        dadosCompilacao.json_file,
+        false,
+        profile,
+      );
       const jobId = jobInicio.job_id;
       if (!jobId) {
         throw new Error('api não devolveu job_id para o modelo 3d');
@@ -89,34 +103,29 @@ const PipelineCompleto = () => {
         jobFinal.metadata?.geometry_file ||
         (jobFinal.output_files && jobFinal.output_files[0]) ||
         '(ver output_files no job)';
-      adicionarLog('animação de física e exportação concluídas no backend', 'success');
+      adicionarLog('modelo 3d concluído', 'success');
       adicionarLog(`modelo 3d: ${caminhoModelo}`, 'success');
       setProgresso(50);
 
-      // 3. criar caso cfd (se incluir cfd)
-      if (parametros.params.cfd) {
+      if (wizardPayload.params.cfd) {
         setEtapaAtual('cfd');
         adicionarLog('criando caso openfoam...', 'info');
 
         const dadosCFD = await postCfdRunFromWizard({
-          fileName: parametros.fileName,
-          runSimulation: true
+          fileName: wizardPayload.fileName,
+          runSimulation: true,
         });
         adicionarLog(`caso cfd criado: ${dadosCFD.simulation_id}`, 'success');
         setProgresso(75);
 
-        // 4. monitorar execução
         setEtapaAtual('executando');
         adicionarLog('executando simulação cfd...', 'info');
-        adicionarLog('isso pode levar vários minutos...', 'warning');
 
-        // polling do status
-        const monitorarSimulacao = async () => {
+        await new Promise((resolve, reject) => {
           const intervalo = setInterval(async () => {
             try {
               const status = await getCfdStatus(dadosCFD.simulation_id);
-
-              setProgresso(status.progress);
+              setProgresso(75 + Math.round((status.progress || 0) * 0.25));
 
               if (status.status === 'completed') {
                 clearInterval(intervalo);
@@ -128,31 +137,32 @@ const PipelineCompleto = () => {
                   jsonFile: dadosCompilacao.json_file,
                   modelFile: caminhoModelo,
                   cfdCase: status.case_dir,
-                  simulationId: dadosCFD.simulation_id
+                  simulationId: dadosCFD.simulation_id,
                 });
+                resolve();
               } else if (status.status === 'error') {
                 clearInterval(intervalo);
-                throw new Error(status.error || 'erro na simulação');
+                reject(new Error(status.error || 'erro na simulação'));
               } else {
-                adicionarLog(`  ${status.message} (${status.progress}%)`, 'info');
+                adicionarLog(
+                  `  ${status.message} (${status.progress}%)`,
+                  'info',
+                );
               }
             } catch (err) {
               clearInterval(intervalo);
-              setErro(err.message);
+              reject(err);
             }
-          }, 3000); // verificar a cada 3s
-        };
-
-        monitorarSimulacao();
+          }, 3000);
+        });
       } else {
-        // sem cfd, concluir
         setEtapaAtual('concluido');
         setProgresso(100);
         adicionarLog('pipeline concluído (sem simulação cfd)', 'success');
         setDadosPipeline({
           bedFile: dadosCompilacao.bed_file,
           jsonFile: dadosCompilacao.json_file,
-          modelFile: caminhoModelo
+          modelFile: caminhoModelo,
         });
       }
     } catch (err) {
@@ -163,7 +173,226 @@ const PipelineCompleto = () => {
     }
   };
 
-  // renderizar interface baseada na etapa
+  const renderParams = () => (
+    <div className="pipeline-config">
+      <h2>parâmetros do pipeline</h2>
+      <p className="pipeline-description">
+        configure o leito e o motor antes de compilar .bed e gerar o modelo 3d
+      </p>
+
+      <label>
+        nome do ficheiro .bed
+        <input
+          type="text"
+          value={parametros.fileName}
+          onChange={(e) =>
+            setParametros({ ...parametros, fileName: e.target.value })
+          }
+        />
+      </label>
+
+      <div className="config-section">
+        <h3>leito e partículas</h3>
+        <div className="config-grid">
+          <label>
+            diâmetro (m)
+            <input
+              type="number"
+              step="0.001"
+              value={parametros.diameter}
+              onChange={(e) =>
+                setParametros({
+                  ...parametros,
+                  diameter: parseFloat(e.target.value),
+                })
+              }
+            />
+          </label>
+          <label>
+            altura (m)
+            <input
+              type="number"
+              step="0.001"
+              value={parametros.height}
+              onChange={(e) =>
+                setParametros({
+                  ...parametros,
+                  height: parseFloat(e.target.value),
+                })
+              }
+            />
+          </label>
+          <label>
+            partículas (n)
+            <input
+              type="number"
+              value={parametros.particle_count}
+              onChange={(e) =>
+                setParametros({
+                  ...parametros,
+                  particle_count: parseInt(e.target.value, 10),
+                })
+              }
+            />
+          </label>
+          <label>
+            ø partícula (m)
+            <input
+              type="number"
+              step="0.0001"
+              value={parametros.particle_diameter}
+              onChange={(e) =>
+                setParametros({
+                  ...parametros,
+                  particle_diameter: parseFloat(e.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="config-section">
+        <h3>geometria e motor</h3>
+        <div className="config-grid">
+          <label>
+            geometry_mode
+            <select
+              value={parametros.geometry_mode}
+              onChange={(e) => {
+                const gm = e.target.value;
+                setParametros((prev) => ({
+                  ...prev,
+                  geometry_mode: gm,
+                  generation_backend:
+                    gm === 'pseudo_2d_statistical'
+                      ? 'python_engine'
+                      : prev.generation_backend,
+                  statistical_2d: {
+                    ...prev.statistical_2d,
+                    domain_width: prev.diameter,
+                    domain_height: prev.height,
+                  },
+                }));
+              }}
+            >
+              <option value="full_3d">full_3d</option>
+              <option value="pseudo_2d_thin_slice">pseudo_2d_thin_slice</option>
+              <option value="pseudo_2d_statistical">
+                pseudo_2d_statistical
+              </option>
+            </select>
+          </label>
+          <label>
+            generation_backend
+            <select
+              value={parametros.generation_backend}
+              disabled={parametros.geometry_mode === 'pseudo_2d_statistical'}
+              onChange={(e) =>
+                setParametros({
+                  ...parametros,
+                  generation_backend: e.target.value,
+                })
+              }
+            >
+              <option value="blender">blender</option>
+              <option value="python_engine">python_engine</option>
+            </select>
+          </label>
+        </div>
+        {parametros.geometry_mode === 'pseudo_2d_thin_slice' && (
+          <div className="config-grid">
+            <label>
+              slice_axis
+              <select
+                value={parametros.slice?.slice_axis || 'y'}
+                onChange={(e) =>
+                  setParametros({
+                    ...parametros,
+                    slice: { ...parametros.slice, slice_axis: e.target.value },
+                  })
+                }
+              >
+                <option value="x">x</option>
+                <option value="y">y</option>
+                <option value="z">z</option>
+              </select>
+            </label>
+            <label>
+              slice_thickness (m)
+              <input
+                type="number"
+                step="0.0001"
+                value={parametros.slice?.slice_thickness ?? 0.002}
+                onChange={(e) =>
+                  setParametros({
+                    ...parametros,
+                    slice: {
+                      ...parametros.slice,
+                      slice_thickness: parseFloat(e.target.value),
+                    },
+                  })
+                }
+              />
+            </label>
+          </div>
+        )}
+        {parametros.geometry_mode === 'pseudo_2d_statistical' && (
+          <div className="config-grid">
+            <label>
+              target_porosity
+              <input
+                type="number"
+                step="0.01"
+                value={parametros.statistical_2d?.target_porosity ?? 0.38}
+                onChange={(e) =>
+                  setParametros({
+                    ...parametros,
+                    statistical_2d: {
+                      ...parametros.statistical_2d,
+                      target_porosity: parseFloat(e.target.value),
+                    },
+                  })
+                }
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
+      <div className="config-section">
+        <h3>cfd (opcional)</h3>
+        <label className="pipeline-cfd-toggle">
+          <input
+            type="checkbox"
+            checked={parametros.includeCfd}
+            onChange={(e) =>
+              setParametros({ ...parametros, includeCfd: e.target.checked })
+            }
+          />
+          incluir simulação cfd após o modelo 3d
+        </label>
+      </div>
+
+      <div className="config-actions">
+        <button
+          type="button"
+          className="btn-voltar"
+          onClick={() => setEtapaAtual('inicio')}
+        >
+          voltar
+        </button>
+        <button
+          type="button"
+          className="btn-executar"
+          onClick={() => void iniciarPipeline()}
+        >
+          iniciar pipeline
+        </button>
+      </div>
+    </div>
+  );
+
   const renderConteudo = () => {
     switch (etapaAtual) {
       case 'inicio':
@@ -171,7 +400,7 @@ const PipelineCompleto = () => {
           <div className="pipeline-inicio">
             <h2>pipeline completo - leitos empacotados</h2>
             <p className="descricao">
-              execute o pipeline completo end-to-end: dsl → blender → openfoam
+              execute o pipeline: compilar .bed → gerar 3d → cfd (opcional)
             </p>
 
             <div className="fluxo-visual">
@@ -187,44 +416,29 @@ const PipelineCompleto = () => {
               <div className="fluxo-seta">→</div>
               <div className="fluxo-etapa">
                 <span className="fluxo-numero">3</span>
-                <span className="fluxo-texto">gerar 3d (blender)</span>
+                <span className="fluxo-texto">gerar 3d</span>
               </div>
               <div className="fluxo-seta">→</div>
               <div className="fluxo-etapa">
                 <span className="fluxo-numero">4</span>
                 <span className="fluxo-texto">simular (openfoam)</span>
               </div>
-              <div className="fluxo-seta">→</div>
-              <div className="fluxo-etapa">
-                <span className="fluxo-numero">5</span>
-                <span className="fluxo-texto">visualizar</span>
-              </div>
             </div>
 
             <div className="opcoes-inicio">
-              <button className="btn btn-primary btn-large" onClick={() => setEtapaAtual('params')}>
-                iniciar pipeline completo
+              <button
+                type="button"
+                className="btn btn-primary btn-large"
+                onClick={() => setEtapaAtual('params')}
+              >
+                configurar e iniciar
               </button>
-              <p className="hint">
-                ou use as outras abas para executar etapas individuais
-              </p>
             </div>
           </div>
         );
 
       case 'params':
-        return (
-          <div className="pipeline-params">
-            <h2>parâmetros do pipeline</h2>
-            <p>use o wizard interativo para configurar o leito</p>
-            <div className="redirect-info">
-              <p>redirecionando para o wizard...</p>
-              <button className="btn btn-secondary" onClick={() => setEtapaAtual('inicio')}>
-                voltar
-              </button>
-            </div>
-          </div>
-        );
+        return renderParams();
 
       case 'compilando':
       case 'gerando3d':
@@ -248,21 +462,32 @@ const PipelineCompleto = () => {
       <h2>executando pipeline</h2>
 
       <div className="etapas-status">
-        <div className={`etapa-item ${etapaAtual === 'compilando' ? 'ativa' : progresso > 25 ? 'concluida' : ''}`}>
-          <ThemeIcon light="textEditorLight.png" dark="textEditor.png" alt="editor" className="etapa-icone" />
+        <div
+          className={`etapa-item ${etapaAtual === 'compilando' ? 'ativa' : progresso > 25 ? 'concluida' : ''}`}
+        >
+          <ThemeIcon
+            light="textEditorLight.png"
+            dark="textEditor.png"
+            alt=""
+            className="etapa-icone"
+          />
           <span className="etapa-nome">compilando dsl</span>
         </div>
-        <div className={`etapa-item ${etapaAtual === 'gerando3d' ? 'ativa' : progresso > 50 ? 'concluida' : ''}`}>
-          <span className="etapa-icone etapa-marcador" aria-hidden="true">3d</span>
+        <div
+          className={`etapa-item ${etapaAtual === 'gerando3d' ? 'ativa' : progresso > 50 ? 'concluida' : ''}`}
+        >
+          <span className="etapa-icone etapa-marcador" aria-hidden="true">
+            3d
+          </span>
           <span className="etapa-nome">gerando modelo 3d</span>
         </div>
-        <div className={`etapa-item ${etapaAtual === 'cfd' ? 'ativa' : progresso > 75 ? 'concluida' : ''}`}>
-          <span className="etapa-icone etapa-marcador" aria-hidden="true">cfd</span>
-          <span className="etapa-nome">preparando cfd</span>
-        </div>
-        <div className={`etapa-item ${etapaAtual === 'executando' ? 'ativa' : progresso === 100 ? 'concluida' : ''}`}>
-          <span className="etapa-icone etapa-marcador" aria-hidden="true">run</span>
-          <span className="etapa-nome">simulando</span>
+        <div
+          className={`etapa-item ${etapaAtual === 'cfd' || etapaAtual === 'executando' ? 'ativa' : progresso > 75 ? 'concluida' : ''}`}
+        >
+          <span className="etapa-icone etapa-marcador" aria-hidden="true">
+            cfd
+          </span>
+          <span className="etapa-nome">cfd</span>
         </div>
       </div>
 
@@ -290,29 +515,27 @@ const PipelineCompleto = () => {
   const renderConcluido = () => (
     <div className="pipeline-concluido">
       <div className="success-header">
-        <span className="success-icon" aria-hidden="true">ok</span>
-        <h2>pipeline executado com sucesso!</h2>
+        <span className="success-icon" aria-hidden="true">
+          ok
+        </span>
+        <h2>pipeline executado com sucesso</h2>
       </div>
 
       {dadosPipeline && (
         <div className="resultados">
           <h3>arquivos gerados</h3>
-
           <div className="resultado-item">
             <strong>arquivo .bed:</strong>
             <code>{dadosPipeline.bedFile}</code>
           </div>
-
           <div className="resultado-item">
             <strong>parâmetros json:</strong>
             <code>{dadosPipeline.jsonFile}</code>
           </div>
-
           <div className="resultado-item">
             <strong>modelo 3d:</strong>
             <code>{dadosPipeline.modelFile}</code>
           </div>
-
           {dadosPipeline.cfdCase && (
             <div className="resultado-item">
               <strong>caso cfd:</strong>
@@ -322,39 +545,19 @@ const PipelineCompleto = () => {
         </div>
       )}
 
-      <div className="proximos-passos">
-        <h3>próximos passos</h3>
-        <ul>
-          <li>visualizar modelo 3d na aba "resultados"</li>
-          {dadosPipeline?.cfdCase && (
-            <>
-              <li>abrir caso openfoam no wsl: <code>cd {dadosPipeline.cfdCase}</code></li>
-              <li>executar simulação: <code>./Allrun</code></li>
-              <li>visualizar no paraview: <code>paraview caso.foam</code></li>
-            </>
-          )}
-          <li>ou executar novo pipeline</li>
-        </ul>
-      </div>
-
       <div className="acoes-final">
-        <button className="btn btn-primary" onClick={() => window.location.reload()}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            setEtapaAtual('inicio');
+            setParametros(defaultPipelineCompactParams());
+            setDadosPipeline(null);
+            setLog([]);
+          }}
+        >
           executar novo pipeline
         </button>
-        <button className="btn btn-secondary" onClick={() => setEtapaAtual('inicio')}>
-          voltar ao início
-        </button>
-      </div>
-
-      <div className="log-final">
-        <h4>log completo</h4>
-        <div className="log-content-small">
-          {log.map((entrada, idx) => (
-            <div key={idx} className={`log-entry-small log-${entrada.tipo}`}>
-              <span>{entrada.timestamp}</span> - {entrada.mensagem}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -362,27 +565,20 @@ const PipelineCompleto = () => {
   const renderErro = () => (
     <div className="pipeline-erro">
       <div className="erro-header">
-        <span className="erro-icon" aria-hidden="true">!</span>
+        <span className="erro-icon" aria-hidden="true">
+          !
+        </span>
         <h2>erro no pipeline</h2>
       </div>
-
       <div className="erro-message">
         <strong>erro:</strong> {erro}
       </div>
-
-      <div className="log-erro">
-        <h4>log de execução</h4>
-        <div className="log-content-small">
-          {log.map((entrada, idx) => (
-            <div key={idx} className={`log-entry-small log-${entrada.tipo}`}>
-              <span>{entrada.timestamp}</span> - {entrada.mensagem}
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="acoes-erro">
-        <button className="btn btn-primary" onClick={() => setEtapaAtual('inicio')}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => setEtapaAtual('params')}
+        >
           tentar novamente
         </button>
       </div>
@@ -392,12 +588,11 @@ const PipelineCompleto = () => {
   return (
     <div className="pipeline-completo">
       <div className="pipeline-header">
-        <h1>pipeline completo end-to-end</h1>
+        <h1>pipeline completo (fluxo curto)</h1>
         <p className="subtitle">
-          automatize todo o processo: desde a criação até a simulação cfd
+          compilar .bed, gerar modelo 3d e opcionalmente simular cfd
         </p>
       </div>
-
       {renderConteudo()}
     </div>
   );
