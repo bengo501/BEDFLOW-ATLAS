@@ -1,9 +1,10 @@
 # este ficheiro e a fonte unica de nomes canonicos para modos de empacotamento
 # o blender o script stl offline e o bed wizard importam daqui para nao divergirem
-# tres modos existem no produto
-# rigid_body usa fisica no blender com queda e colisao aproximada
+# quatro modos existem no produto
+# rigid_body: blender usa fisica nativa; python_engine usa preset dem simplificado
 # spherical_packing usa sorteio e rejeicao ver packing_spherical
 # hexagonal_3d usa grade regular filtrada ver packing_hexagonal
+# dem usa solver de elementos discretos no motor python
 from __future__ import annotations
 
 from typing import Any, Dict, FrozenSet, Optional
@@ -11,15 +12,15 @@ from typing import Any, Dict, FrozenSet, Optional
 # conjunto imutavel com os tres nomes oficiais usados em if e validacao
 # frozen set impede alteracao acidental em tempo de execucao
 SUPPORTED_PACKING_MODES: FrozenSet[str] = frozenset(
-    ("rigid_body", "spherical_packing", "hexagonal_3d")
+    ("rigid_body", "spherical_packing", "hexagonal_3d", "dem")
 )
 
 # tupla com ordem fixa para menus no terminal e mensagens de ajuda
-# a ordem coloca rigid_body primeiro por ser o modo historico padrao
 PACKING_MODE_CHOICES: tuple[str, ...] = (
     "rigid_body",
     "spherical_packing",
     "hexagonal_3d",
+    "dem",
 )
 
 
@@ -50,6 +51,9 @@ def normalize_packing_mode(raw: Optional[Any], default: str = "rigid_body") -> s
         "hexagonal": "hexagonal_3d",
         "spherical": "spherical_packing",
         "sphericalpacking": "spherical_packing",
+        "discrete_element": "dem",
+        "discrete_element_method": "dem",
+        "elements_discretos": "dem",
     }
     s = aliases.get(s, s)
     # passo seis se bate com um modo oficial devolve esse nome

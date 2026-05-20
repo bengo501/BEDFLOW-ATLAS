@@ -1,0 +1,15 @@
+{
+  "geometry_mode": "full_3d",
+  "generation_backend": "python_engine",
+  "bed": { "diameter": 0.04, "height": 0.06, "wall_thickness": 0.002 },
+  "lids": { "bottom_thickness": 0.002, "top_thickness": 0.002 },
+  "particles": { "kind": "sphere", "count": 20, "diameter": 0.005 },
+  "packing": {
+    "method": "spherical_packing",
+    "gap": 0.0001,
+    "random_seed": 3,
+    "max_placement_attempts": 10000,
+    "strict_validation": false
+  },
+  "export": { "formats": ["stl_binary"] }
+}

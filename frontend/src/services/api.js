@@ -82,11 +82,15 @@ export const compileBed = async (parameters) => {
 
 // pede geracao de modelo 3d a partir do json
 // open blender quando true pode abrir gui no servidor se o backend permitir
-export const generateModel = async (jsonFile, openBlender = false) => {
-  const response = await api.post('/api/model/generate', {
+export const generateModel = async (jsonFile, openBlender = false, modelingProfile = null) => {
+  const body = {
     json_file: jsonFile,
-    open_blender: openBlender
-  });
+    open_blender: openBlender,
+  };
+  if (modelingProfile) {
+    body.modeling_profile = modelingProfile;
+  }
+  const response = await api.post('/api/model/generate', body);
   return response.data;
 };
 

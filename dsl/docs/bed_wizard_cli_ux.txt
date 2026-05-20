@@ -142,7 +142,10 @@ persistencia:
 documentacao completa: docs/PSEUDO_2D_GEOMETRY.md
 modos: full_3d, pseudo_2d_thin_slice, pseudo_2d_statistical (rsa + extrusao 3d fina)
 -----------------------------------------------
-packing.method continua a ser apenas um dos tres valores canonicos definidos em
+packing.method: rigid_body, spherical_packing, hexagonal_3d, dem (ver docs/PACKING_AND_DEM_ENGINE.md).
+documentacao dem e separacao de backends: docs/PACKING_AND_DEM_ENGINE.md
+
+packing.method (historico) referia tres valores canonicos definidos em
 packed_bed_science.packing_modes: spherical_packing, hexagonal_3d, rigid_body.
 
 geometria de saida em fatia fina nao e packing: e um recorte pos-packing guardado na

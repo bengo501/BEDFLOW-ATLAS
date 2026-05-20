@@ -50,6 +50,19 @@ class ParticlesParams(BaseModel):
     angular_damping: str = "0.1"
     seed: str = "42"
 
+class DemParams(BaseModel):
+    time_step: str = "0.0001"
+    steps: str = "30000"
+    gravity: str = "9.81"
+    stiffness: str = "5000"
+    damping: str = "0.2"
+    friction: str = "0.2"
+    restitution: str = "0.3"
+    settle_threshold: str = "0.001"
+    max_velocity_threshold: str = "0.01"
+    seed: str = "42"
+
+
 class PackingParams(BaseModel):
     method: str
     gravity: str
@@ -64,6 +77,8 @@ class PackingParams(BaseModel):
     max_placement_attempts: Optional[str] = None
     strict_validation: Optional[bool] = True
     step_x: Optional[str] = None
+    dem: Optional[DemParams] = None
+    use_legacy_drop: Optional[bool] = False
 
 class ExportParams(BaseModel):
     formats: List[str]
@@ -196,6 +211,25 @@ def _wizard_params_for_json_patch(params: WizardParams) -> Dict[str, Any]:
         pack.pop("step_x", None)
     else:
         pack["step_x"] = float(pack["step_x"])
+    dem = pack.get("dem")
+    if isinstance(dem, dict):
+        dem_out: Dict[str, Any] = {}
+        for k in (
+            "time_step",
+            "steps",
+            "gravity",
+            "stiffness",
+            "damping",
+            "friction",
+            "restitution",
+            "settle_threshold",
+            "max_velocity_threshold",
+            "seed",
+        ):
+            if dem.get(k) not in (None, ""):
+                v = dem[k]
+                dem_out[k] = int(v) if k in ("steps", "seed") else float(v)
+        pack["dem"] = dem_out
     data["packing"] = pack
     data["geometry_mode"] = data.get("geometry_mode") or "full_3d"
     data["generation_backend"] = data.get("generation_backend") or "blender"

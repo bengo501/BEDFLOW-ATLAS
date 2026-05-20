@@ -23,6 +23,12 @@ import '../styles/TemplateEditor.css';
 
 const REPO_PLACEHOLDER = '<raiz-do-repositorio>';
 
+function modelingProfileFromBackend(generationBackend) {
+  const gb = String(generationBackend || '').toLowerCase();
+  if (gb.includes('python') || gb === 'pure_python') return 'python';
+  return 'blender';
+}
+
 const MODES_WITH_OPTIONAL_CFD = ['interactive', 'pipeline_completo'];
 
 const DEFAULT_CFD_PARAMS = {
@@ -160,6 +166,17 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       max_placement_attempts: '500000',
       strict_validation: true,
       step_x: '',
+      dem: {
+        time_step: '0.0001',
+        steps: '30000',
+        gravity: '9.81',
+        stiffness: '5000',
+        damping: '0.2',
+        friction: '0.2',
+        settle_threshold: '0.001',
+        max_velocity_threshold: '0.01',
+        seed: '42',
+      },
     },
     export: {
       formats: ['stl_binary', 'blend'],
@@ -399,6 +416,29 @@ const BedWizard = ({ onNavigateTab } = {}) => {
     }));
   };
 
+  const handleDemChange = (field, value) => {
+    setParams((prev) => ({
+      ...prev,
+      packing: {
+        ...prev.packing,
+        dem: {
+          ...(prev.packing.dem || {
+            time_step: '0.0001',
+            steps: '30000',
+            gravity: '9.81',
+            stiffness: '5000',
+            damping: '0.2',
+            friction: '0.2',
+            settle_threshold: '0.001',
+            max_velocity_threshold: '0.01',
+            seed: '42',
+          }),
+          [field]: value,
+        },
+      },
+    }));
+  };
+
   const handleNext = () => {
     if (step < steps.length - 1) {
       // sempre ir para próximo passo sequencialmente
@@ -431,7 +471,11 @@ const BedWizard = ({ onNavigateTab } = {}) => {
 
       if (mode === 'blender' || mode === 'blender_interactive') {
         if (confirm('deseja gerar o modelo 3D agora?')) {
-          await generateModel(result.json_file, mode === 'blender_interactive');
+          await generateModel(
+            result.json_file,
+            mode === 'blender_interactive',
+            modelingProfileFromBackend(params.generation_backend),
+          );
           alert('geração do modelo 3D iniciada (acompanhe em jobs)');
         }
       }
@@ -1044,6 +1088,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             <option value="rigid_body">corpo rígido (física)</option>
               <option value="spherical_packing">empacotamento esférico</option>
               <option value="hexagonal_3d">grade hexagonal 3d</option>
+              <option value="dem">dem (elementos discretos)</option>
           </select>
         </div>
 
@@ -1112,6 +1157,83 @@ const BedWizard = ({ onNavigateTab } = {}) => {
                 onChange={(e) => handleInputChange('packing', 'collision_margin', e.target.value)}
               />
             </div>
+          </>
+        )}
+
+        {params.packing.method === 'dem' && (
+          <>
+            <div className="form-group">
+              <label>passo de tempo (s)</label>
+              <input
+                type="number"
+                step="0.00001"
+                value={params.packing.dem?.time_step || '0.0001'}
+                onChange={(e) => handleDemChange('time_step', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>passos de simulação</label>
+              <input
+                type="number"
+                value={params.packing.dem?.steps || '30000'}
+                onChange={(e) => handleDemChange('steps', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>gravidade (m/s²)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={params.packing.dem?.gravity || '9.81'}
+                onChange={(e) => handleDemChange('gravity', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>rigidez normal</label>
+              <input
+                type="number"
+                value={params.packing.dem?.stiffness || '5000'}
+                onChange={(e) => handleDemChange('stiffness', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>amortecimento</label>
+              <input
+                type="number"
+                step="0.01"
+                value={params.packing.dem?.damping || '0.2'}
+                onChange={(e) => handleDemChange('damping', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>atrito</label>
+              <input
+                type="number"
+                step="0.01"
+                value={params.packing.dem?.friction || '0.2'}
+                onChange={(e) => handleDemChange('friction', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>limiar de repouso (m/s)</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={params.packing.dem?.settle_threshold || '0.001'}
+                onChange={(e) => handleDemChange('settle_threshold', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>seed dem</label>
+              <input
+                type="number"
+                value={params.packing.dem?.seed || '42'}
+                onChange={(e) => handleDemChange('seed', e.target.value)}
+              />
+            </div>
+            <p className="form-hint">
+              dem requer motor python_engine. no blender use spherical_packing ou rigid_body.
+            </p>
           </>
         )}
 
@@ -1690,12 +1812,20 @@ const BedWizard = ({ onNavigateTab } = {}) => {
       }
 
       if (mode === 'blender_interactive') {
-        await generateModel(result.json_file, true);
+        await generateModel(
+          result.json_file,
+          true,
+          modelingProfileFromBackend(params.generation_backend),
+        );
         alert('geração do modelo 3D iniciada (blender pode abrir no servidor)');
       }
 
       if (mode === 'pipeline_blender_cfd') {
-        const genStart = await generateModel(result.json_file, false);
+        const genStart = await generateModel(
+          result.json_file,
+          false,
+          modelingProfileFromBackend(params.generation_backend),
+        );
         const jobFinal = await pollJobUntilDone(genStart.job_id);
         const blendRel =
           jobFinal.metadata?.blend_file ||

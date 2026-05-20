@@ -168,6 +168,8 @@ def json_to_wizard_params(data: Dict[str, Any]) -> Dict[str, Any]:
         "mesh_segmentos",
         "sphere_lat",
         "sphere_lon",
+        "dem",
+        "use_legacy_drop",
     ):
         if key in packing:
             params["packing"][key] = packing[key]
@@ -286,6 +288,8 @@ def patch_compiled_json_packing(
         "mesh_segmentos",
         "sphere_lat",
         "sphere_lon",
+        "dem",
+        "use_legacy_drop",
     ):
         if key in wpack and wpack[key] is not None:
             pack[key] = wpack[key]

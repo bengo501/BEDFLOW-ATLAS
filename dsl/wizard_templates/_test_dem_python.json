@@ -1,0 +1,36 @@
+{
+  "geometry_mode": "full_3d",
+  "generation_backend": "python_engine",
+  "bed": {
+    "diameter": 0.04,
+    "height": 0.06,
+    "wall_thickness": 0.002
+  },
+  "lids": {
+    "bottom_thickness": 0.002,
+    "top_thickness": 0.002
+  },
+  "particles": {
+    "kind": "sphere",
+    "count": 12,
+    "diameter": 0.005
+  },
+  "packing": {
+    "method": "dem",
+    "gap": 0.0,
+    "strict_validation": false,
+    "dem": {
+      "time_step": 0.0002,
+      "steps": 2000,
+      "gravity": 9.81,
+      "stiffness": 5000,
+      "damping": 0.25,
+      "friction": 0.2,
+      "settle_threshold": 0.002,
+      "seed": 11
+    }
+  },
+  "export": {
+    "formats": ["stl_binary"]
+  }
+}

@@ -1,5 +1,6 @@
 # corre blender ou script python conforme MODELING_PROFILE para gerar geometria
 # atualiza objeto job mutavel partilhado pelo router e pela tarefa em background
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,26 @@ from bedflow_local_paths import models_3d_dir, resolve_existing_artifact
 
 from backend.app.api.models import JobStatus
 from backend.app import config as app_config
+
+
+def _profile_from_bed_json(json_path: Path, modeling_profile: Optional[str]) -> str:
+    if modeling_profile not in (None, ""):
+        return _normalize_modeling_profile(modeling_profile)
+    try:
+        with json_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        gb = str(data.get("generation_backend") or "").strip().lower()
+        if gb in ("python_engine", "pure_python", "python"):
+            profile = "python"
+        else:
+            profile = _normalize_modeling_profile(None)
+        packing = data.get("packing") if isinstance(data.get("packing"), dict) else {}
+        method = str(packing.get("method") or data.get("packing_mode") or "").lower()
+        if method == "dem" and profile == "blender":
+            profile = "python"
+        return profile
+    except (OSError, json.JSONDecodeError, ValueError):
+        return _normalize_modeling_profile(modeling_profile)
 
 
 def _normalize_modeling_profile(modeling_profile: Optional[str]) -> str:
@@ -108,23 +129,20 @@ class BlenderService:
         job = jobs_store[job_id]
         
         try:
-            profile = _normalize_modeling_profile(modeling_profile)
-
-            # atualizar status
             job.status = JobStatus.RUNNING
             job.progress = 10
             job.updated_at = datetime.now()
-            job.metadata["modeling_profile"] = profile
-            
-            # preparar caminhos
+
             json_path = self.project_root / json_file
             if not json_path.exists():
                 alt = resolve_existing_artifact(str(json_file).replace("\\", "/").lstrip("/"))
                 if alt and alt.is_file():
                     json_path = alt
-
             if not json_path.exists():
                 raise FileNotFoundError(f"arquivo json não encontrado: {json_file}")
+
+            profile = _profile_from_bed_json(json_path, modeling_profile)
+            job.metadata["modeling_profile"] = profile
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -209,12 +227,37 @@ class BlenderService:
                     session = own_session
 
                 geom_rel = job.metadata.get("geometry_file") or job.metadata.get("blend_file")
-                update_kwargs = {}
+                update_kwargs: Dict[str, Any] = {}
                 if geom_rel:
                     if str(geom_rel).lower().endswith(".stl"):
                         update_kwargs["stl_file_path"] = geom_rel
                     else:
                         update_kwargs["blend_file_path"] = geom_rel
+                if geom_rel and str(geom_rel).lower().endswith(".stl"):
+                    geom_path = self.project_root / geom_rel
+                    sidecar = geom_path.parent / f"{geom_path.stem}_pure_bed.json"
+                    report = geom_path.parent / f"{geom_path.stem}_packing_report.json"
+                    meta_extra: Dict[str, Any] = {}
+                    if sidecar.is_file():
+                        try:
+                            meta_extra = json.loads(sidecar.read_text(encoding="utf-8"))
+                        except json.JSONDecodeError:
+                            meta_extra = {}
+                    porosity = meta_extra.get("porosity_estimate")
+                    if porosity is not None:
+                        update_kwargs["porosity"] = float(porosity)
+                    bed_row = crud.BedCRUD.get(session, bed_id)
+                    params = dict(bed_row.parameters_json or {}) if bed_row else {}
+                    params["porosity_result"] = porosity
+                    params["packing_report_path"] = (
+                        str(report.relative_to(self.project_root))
+                        if report.is_file()
+                        else meta_extra.get("packing_report_path")
+                    )
+                    params["geometry_mode"] = meta_extra.get("geometry_mode")
+                    params["generation_backend"] = meta_extra.get("generation_backend")
+                    params["packing_method"] = meta_extra.get("packing_method")
+                    update_kwargs["parameters_json"] = params
                 if update_kwargs:
                     update_data = schemas.BedUpdate(**update_kwargs)
                     crud.BedCRUD.update(session, bed_id, update_data)

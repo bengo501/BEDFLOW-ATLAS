@@ -342,30 +342,27 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
     preview_n = 12
     # json lateral para o modo testes rapidos e para inspecao humana sem abrir stl
     # report legacy vem de validate configuration que compara pares e limites do dominio
-    # sphere centers preview sao poucas linhas para tabela id x y z no terminal
-    # sphere centers histogram sao ate quinhentos pontos para barras de altura aproximadas
-    # isto nao repete a lista completa de centros para poupar tamanho em leitos grandes
     sidecar: Dict[str, Any] = {
         "packing_method": "rigid_body",
         "particle_kind": pk,
+        "particle_type": pk,
         "collision_model": "circumscribed_sphere",
         "collision_radius_equiv": r_pack,
         "validation": report_legacy,
         "generation_wall_time_sec": elapsed,
         "n_particles_requested": p["particle_count"],
         "n_particles_placed": len(centers_chk),
-        "n_spheres_requested": p["particle_count"],
-        "n_spheres_placed": len(centers_chk),
-        "sphere_centers_preview": [
+        "particle_centers_preview": [
             [float(c[0]), float(c[1]), float(c[2])] for c in centers_chk[:preview_n]
         ],
-        "sphere_centers_histogram": [
+        "particle_centers_histogram": [
             [float(c[0]), float(c[1]), float(c[2])]
             for c in centers_chk[: min(len(centers_chk), 500)]
         ],
         "generation": {
-            "mode": "legacy_python_rigid",
+            "mode": "legacy_python_drop",
             "max_passos": max_passos,
+            "warning": "sem contacto partícula-partícula; use dem ou rigid_body sem use_legacy_drop",
         },
         "pair_violations": report_legacy.get("pair_violations"),
         "domain_violations": report_legacy.get("domain_violations"),
@@ -596,18 +593,16 @@ def generate_packed_bed_stl(
     bed_json: Path, out_stl: Path, max_passos: int = 12000
 ) -> None:
     # entrada publica unica para testes e para o servico fastapi
-    # bed json e o ficheiro de parametros
-    # out stl e o destino do triangulos
-    # max passos so entra no fluxo legacy
     p = load_bed_json(bed_json)
-    gm = str(p.get("geometry_mode") or "full_3d")
-    if gm == GEOMETRY_STATISTICAL:
-        generate_statistical_thin_3d_stl(p, out_stl)
-        return
-    if p["packing_method"] in ("spherical_packing", "hexagonal_3d"):
-        _science_generate_stl(p, out_stl)
-    else:
+    packing = p.get("packing") or {}
+    use_legacy = _coerce_bool(packing.get("use_legacy_drop"), False)
+    method = str(p.get("packing_method") or "rigid_body")
+    if method == "rigid_body" and use_legacy:
         _legacy_generate_stl(p, out_stl, max_passos)
+        return
+    from engine.pipeline import generate_packed_bed
+
+    generate_packed_bed(p, out_stl)
 
 
 # resumo final para quem le o ficheiro inteiro

@@ -1925,7 +1925,54 @@ class BedWizard:
                 "validacao estrita da grade (strict_validation)?",
                 self._default_bool_from_loaded("packing.strict_validation", True),
             )
+        elif method == "dem":
+            pack["dem"] = self._collect_dem_params_interactive(ph)
         return pack
+
+    def _collect_dem_params_interactive(self, ph) -> Dict[str, Any]:
+        """parametros do solver dem (python_engine)."""
+        loaded = self._default_from_loaded("packing.dem", {}) or {}
+        if not isinstance(loaded, dict):
+            loaded = {}
+
+        def _num(key: str, default: str, unit: str = "") -> float:
+            return float(
+                self.get_number_input(
+                    key,
+                    str(loaded.get(key, default)),
+                    unit,
+                    False,
+                    ph(f"packing.dem.{key}"),
+                )
+            )
+
+        return {
+            "time_step": _num("time_step", "0.0001", "s"),
+            "steps": int(
+                self.get_number_input(
+                    "passos de simulacao dem",
+                    str(loaded.get("steps", "30000")),
+                    "",
+                    False,
+                    ph("packing.dem.steps"),
+                )
+            ),
+            "gravity": _num("gravity", "9.81", "m/s2"),
+            "stiffness": _num("stiffness", "5000", ""),
+            "damping": _num("damping", "0.2", ""),
+            "friction": _num("friction", "0.2", ""),
+            "settle_threshold": _num("settle_threshold", "0.001", "m/s"),
+            "max_velocity_threshold": _num("max_velocity_threshold", "0.01", "m/s"),
+            "seed": int(
+                self.get_number_input(
+                    "seed dem",
+                    str(loaded.get("seed", "42")),
+                    "",
+                    False,
+                    ph("packing.dem.seed"),
+                )
+            ),
+        }
 
     _EXPORT_FORMAT_CATALOG: List[Tuple[str, str]] = [
         ("stl_binary", "stl binario (impressao 3d / openfoam)"),
@@ -2334,7 +2381,7 @@ class BedWizard:
             )
         )
         pm = normalize_packing_mode(str(packing_method or ""))
-        if pm == "rigid_body":
+        if pm in ("rigid_body", "dem"):
             pt["restitution"] = float(
                 self.get_number_input(
                     "coeficiente de restituicao",
