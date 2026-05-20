@@ -334,6 +334,22 @@ function ResultsModels3DPage({ onOpenInViewer }) {
                           <span>rsa 2d (motor python)</span>
                         </div>
                       )}
+                      {model.internal_cylinder_mode && (
+                        <div className="info-row">
+                          <span className="info-label">{pt ? 'cilindro interno:' : 'internal cylinder:'}</span>
+                          <span>{model.internal_cylinder_mode}</span>
+                        </div>
+                      )}
+                      {(model.boolean_outer_shell || model.boolean_inner_core) && (
+                        <div className="info-row">
+                          <span className="info-label">{pt ? 'booleanas:' : 'booleans:'}</span>
+                          <span>
+                            {[model.boolean_outer_shell, model.boolean_inner_core, model.boolean_particle_tools]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        </div>
+                      )}
                       <div className="info-row">
                         <span className="info-label">{pt ? 'tamanho:' : 'size:'}</span>
                         <span>{formatBytes(model.size_bytes)}</span>

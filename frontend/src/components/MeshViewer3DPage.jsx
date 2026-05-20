@@ -32,6 +32,9 @@ function meshGeometrySummary(m, pt) {
     const t = m.slice_thickness != null ? `${Number(m.slice_thickness) * 1000}mm` : '';
     parts.push(`fatia ${m.slice_axis}${t ? ` ${t}` : ''}`);
   }
+  if (m.internal_cylinder_mode) {
+    parts.push(m.internal_cylinder_mode.replace(/_/g, ' '));
+  }
   return parts.join(' · ');
 }
 
@@ -61,6 +64,26 @@ function appendGeometryMetaRows(info, pt) {
   }
   if (info.porosity_method) {
     rows.push({ dt: pt ? 'método ε' : 'porosity method', dd: info.porosity_method });
+  }
+  if (info.internal_cylinder_mode) {
+    rows.push({
+      dt: pt ? 'cilindro interno' : 'internal cylinder',
+      dd: info.internal_cylinder_mode,
+    });
+  }
+  if (info.boolean_outer_shell || info.boolean_inner_core) {
+    const bits = [
+      info.boolean_outer_shell,
+      info.boolean_inner_core,
+      info.boolean_particle_tools,
+    ].filter(Boolean);
+    rows.push({
+      dt: pt ? 'booleanas' : 'booleans',
+      dd: bits.join(' · ') || '—',
+    });
+  }
+  if (info.boolean_warnings) {
+    rows.push({ dt: pt ? 'avisos' : 'warnings', dd: info.boolean_warnings });
   }
   if (info.slice_axis) {
     rows.push({
@@ -374,6 +397,11 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           porosity_result: info?.porosity_result,
           porosity_method: info?.porosity_method || '',
           slice_axis: info?.slice_axis || '',
+          internal_cylinder_mode: info?.internal_cylinder_mode || '',
+          boolean_outer_shell: info?.boolean_outer_shell || '',
+          boolean_inner_core: info?.boolean_inner_core || '',
+          boolean_particle_tools: info?.boolean_particle_tools || '',
+          boolean_warnings: info?.boolean_warnings || '',
           slice_thickness: info?.slice_thickness,
           slice_position: info?.slice_position,
           sidecar_json: info?.sidecar_json || '',

@@ -106,3 +106,23 @@ def test_blender_smoke_thin_slice_script():
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert "BEDFLOW_THIN_SLICE_SMOKE_OK" in proc.stdout
+
+
+@pytest.mark.skipif(
+    os.environ.get("BEDFLOW_BLENDER_SMOKE") != "1",
+    reason="defina BEDFLOW_BLENDER_SMOKE=1 para executar smoke bed modes",
+)
+def test_blender_smoke_bed_modes_script():
+    blender = shutil.which("blender")
+    if not blender:
+        pytest.skip("blender nao esta no PATH")
+    script = _ROOT / "scripts" / "blender_scripts" / "smoke_bed_modes.py"
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=str(_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "smoke_bed_modes: ok" in proc.stdout

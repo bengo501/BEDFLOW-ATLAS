@@ -688,6 +688,24 @@ def _salvar_relatorio_packing(output_path: Path, relatorio: dict):
         print(f"aviso: nao foi possivel salvar relatorio json: {e}")
 
 
+def _prepare_export_visibility(params: dict) -> None:
+    """remove ou oculta ferramentas booleanas conforme bed.visibility."""
+    try:
+        _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+        if str(_pm) not in sys.path:
+            sys.path.insert(0, str(_pm))
+        from bed_internal_modes import resolve_bed_internal_config  # noqa: E402
+
+        _, vis, _ = resolve_bed_internal_config(params)
+    except Exception:
+        return
+    if vis.get("export_boolean_tools", False):
+        return
+    for obj in list(bpy.data.objects):
+        if obj.name.startswith("boolean_tool_"):
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
 def export_outputs(args, output_path: Path):
     # centraliza exportacao para nao repetir o mesmo codigo em cada ramo do main
     print(f"\nsalvando arquivo em: {output_path}")
@@ -1062,6 +1080,21 @@ def main_com_parametros():
 
         else:
             # fluxo legado com corpos rigidos para quem ainda quer queda e bake
+            _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+            if str(_pm) not in sys.path:
+                sys.path.insert(0, str(_pm))
+            try:
+                from bed_internal_modes import resolve_bed_internal_config  # noqa: E402
+
+                _icm, _, _ = resolve_bed_internal_config(params)
+                if _icm != "hollow_boolean_applied":
+                    print(
+                        "aviso: internal_cylinder_mode",
+                        _icm,
+                        "ignorado no fluxo rigid_body (usa criar_cilindro_oco legado)",
+                    )
+            except ImportError:
+                pass
             print("criando geometria fluxo rigid_body")
             leito = criar_cilindro_oco(altura, diametro, espessura)
             print(f"leito criado: altura={altura}m, diametro={diametro}m")
@@ -1190,6 +1223,7 @@ def main_com_parametros():
 
         # ambos os ramos chegam aqui com objetos na cena prontos para salvar
         if args.output:
+            _prepare_export_visibility(params)
             export_outputs(args, Path(args.output))
         else:
             print("\naviso caminho saida nao especificado arquivo nao salvo")

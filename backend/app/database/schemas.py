@@ -193,6 +193,13 @@ class Model3DResponse(BaseModel):
     porosity_result: Optional[float] = None
     slice_axis: Optional[str] = None
     slice_thickness: Optional[float] = None
+    internal_cylinder_mode: Optional[str] = None
+    boolean_operation_status: Optional[Dict[str, Any]] = None
+    boolean_outer_shell: Optional[str] = None
+    boolean_inner_core: Optional[str] = None
+    boolean_particle_tools: Optional[str] = None
+    boolean_backend: Optional[str] = None
+    boolean_warnings: Optional[str] = None
     bed_file_path: Optional[str] = None
     json_file_path: Optional[str] = None
     blend_file_path: Optional[str] = None

@@ -301,6 +301,56 @@ export {{
 }}
 """
         
+        icm = bed_params.get("internal_cylinder_mode")
+        if icm:
+            content = content.replace(
+                "    roughness = ",
+                f'    internal_cylinder_mode = "{icm}";\n    roughness = ',
+                1,
+            )
+        vis = bed_params.get("visibility")
+        if isinstance(vis, dict) and vis:
+            vis_lines = "    visibility {\n"
+            for k, v in vis.items():
+                if v is not None:
+                    vis_lines += f"        {k} = {str(bool(v)).lower()};\n"
+            vis_lines += "    }\n"
+            content = content.replace("}\n\nlids", vis_lines + "}\n\nlids", 1)
+        gm = params.get("geometry_mode")
+        gb = params.get("generation_backend")
+        extra = ""
+        if gm:
+            extra += f'\ngeometry {{\n    mode = "{gm}";\n}}\n'
+        if gb:
+            extra += f'\ngeneration {{\n    backend = "{gb}";\n}}\n'
+        sl = params.get("slice")
+        if isinstance(sl, dict) and sl:
+            extra += "\nslice {\n"
+            if sl.get("slice_enabled") is not None:
+                extra += f"    enabled = {str(bool(sl['slice_enabled'])).lower()};\n"
+            if sl.get("slice_thickness") is not None:
+                extra += f"    thickness = {sl['slice_thickness']} m;\n"
+            if sl.get("slice_axis"):
+                extra += f'    axis = "{sl["slice_axis"]}";\n'
+            if sl.get("slice_position") is not None:
+                extra += f"    position = {sl['slice_position']} m;\n"
+            extra += "}\n"
+        st = params.get("statistical_2d")
+        if isinstance(st, dict) and st:
+            extra += "\nstatistical_2d {\n"
+            for sk in ("domain_width", "domain_height", "slice_thickness"):
+                if st.get(sk) is not None:
+                    extra += f"    {sk} = {st[sk]} m;\n"
+            for sk in ("target_porosity", "tolerance"):
+                if st.get(sk) is not None:
+                    extra += f"    {sk} = {st[sk]};\n"
+            for sk in ("max_attempts", "seed"):
+                if st.get(sk) is not None:
+                    extra += f"    {sk} = {st[sk]};\n"
+            extra += "}\n"
+        if extra:
+            content = content.rstrip() + "\n" + extra
+
         # adicionar seção cfd se parâmetros fornecidos
         if 'cfd_regime' in params:
             content += f"""

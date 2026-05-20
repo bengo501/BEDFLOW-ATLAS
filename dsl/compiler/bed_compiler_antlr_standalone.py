@@ -12,7 +12,7 @@ import argparse  # para processar argumentos da linha de comando
 import sys  # para acessar informacoes do sistema e sair do programa
 from pathlib import Path  # para trabalhar com caminhos de arquivos de forma moderna
 from typing import Dict, Any, Optional, List  # para tipagem de variaveis
-from dataclasses import dataclass, asdict  # para criar classes de dados e converter para dicionario
+from dataclasses import dataclass, asdict, field  # para criar classes de dados e converter para dicionario
 
 # tentar importar bibliotecas do antlr
 # o antlr e um gerador de parsers que cria codigo python a partir da gramatica
@@ -57,6 +57,21 @@ class BedGeometry:
     clearance: float = 0.01  # espaco livre entre particulas e parede em metros
     material: str = "steel"  # material da parede do leito
     roughness: float = 0.0  # rugosidade da superficie em metros
+    internal_cylinder_mode: Optional[str] = None
+    visibility: Dict[str, bool] = field(default_factory=dict)
+
+@dataclass
+class DemParams:
+    time_step: Optional[float] = None
+    steps: Optional[int] = None
+    gravity: Optional[float] = None
+    stiffness: Optional[float] = None
+    damping: Optional[float] = None
+    friction: Optional[float] = None
+    restitution: Optional[float] = None
+    settle_threshold: Optional[float] = None
+    max_velocity_threshold: Optional[float] = None
+    seed: Optional[int] = None
 
 @dataclass
 class Lids:
@@ -94,6 +109,35 @@ class Packing:
     rest_velocity: float = 0.01  # velocidade de repouso em m/s (quando parar a simulacao)
     max_time: float = 5.0  # tempo maximo de simulacao em segundos
     collision_margin: float = 0.001  # margem de colisao entre objetos em metros
+    gap: Optional[float] = None
+    random_seed: Optional[int] = None
+    max_placement_attempts: Optional[int] = None
+    strict_validation: Optional[bool] = None
+    step_x: Optional[float] = None
+    mesh_segmentos: Optional[int] = None
+    sphere_lat: Optional[int] = None
+    sphere_lon: Optional[int] = None
+    use_legacy_drop: Optional[bool] = None
+    dem: Optional[DemParams] = None
+
+@dataclass
+class SliceConfig:
+    slice_enabled: bool = True
+    slice_thickness: float = 0.002
+    slice_axis: str = "y"
+    slice_position: float = 0.0
+    keep_only_intersecting_particles: bool = True
+    preserve_original_packing: bool = True
+
+@dataclass
+class Statistical2D:
+    domain_width: float = 0.05
+    domain_height: float = 0.1
+    target_porosity: float = 0.4
+    tolerance: float = 0.02
+    max_attempts: int = 50
+    slice_thickness: float = 0.002
+    seed: int = 42
 
 @dataclass
 class Export:
@@ -132,6 +176,10 @@ class BedParameters:
     packing: Packing = None  # parametros do empacotamento
     export: Export = None  # parametros de exportacao
     cfd: CFD = None  # parametros de simulacao cfd
+    geometry_mode: Optional[str] = None
+    generation_backend: Optional[str] = None
+    slice: Optional[SliceConfig] = None
+    statistical_2d: Optional[Statistical2D] = None
     
     def __post_init__(self):
         """metodo chamado apos a inicializacao da classe"""
@@ -254,6 +302,24 @@ class BedCompilerListener(BedListener):
         unit = ctx.UNIT().getText()  # extrair unidade do contexto
         number = ctx.NUMBER().getText()  # extrair numero do contexto
         self.params.bed.roughness = self._parse_number_with_unit(number, unit)  # converter e armazenar
+
+    def exitBedInternalCylinderMode(self, ctx):
+        self.params.bed.internal_cylinder_mode = ctx.STRING().getText().strip('"')
+
+    def exitVisShowOuter(self, ctx):
+        self.params.bed.visibility["show_outer_cylinder"] = ctx.BOOLEAN().getText() == "true"
+
+    def exitVisShowInternal(self, ctx):
+        self.params.bed.visibility["show_internal_cylinder"] = ctx.BOOLEAN().getText() == "true"
+
+    def exitVisShowParticles(self, ctx):
+        self.params.bed.visibility["show_particles"] = ctx.BOOLEAN().getText() == "true"
+
+    def exitVisShowBooleanTools(self, ctx):
+        self.params.bed.visibility["show_boolean_tools"] = ctx.BOOLEAN().getText() == "true"
+
+    def exitVisExportBooleanTools(self, ctx):
+        self.params.bed.visibility["export_boolean_tools"] = ctx.BOOLEAN().getText() == "true"
     
     # metodos para processar propriedades da secao lids (tampas do leito)
     def exitLidsTopType(self, ctx):
@@ -405,6 +471,149 @@ class BedCompilerListener(BedListener):
         unit = ctx.UNIT().getText()  # extrair unidade do contexto
         number = ctx.NUMBER().getText()  # extrair numero do contexto
         self.params.packing.collision_margin = self._parse_number_with_unit(number, unit)  # converter e armazenar
+
+    def _ensure_dem(self) -> DemParams:
+        if self.params.packing.dem is None:
+            self.params.packing.dem = DemParams()
+        return self.params.packing.dem
+
+    def exitPackingGap(self, ctx):
+        unit = ctx.UNIT().getText()
+        self.params.packing.gap = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitPackingRandomSeed(self, ctx):
+        self.params.packing.random_seed = int(float(ctx.NUMBER().getText()))
+
+    def exitPackingMaxAttempts(self, ctx):
+        self.params.packing.max_placement_attempts = int(float(ctx.NUMBER().getText()))
+
+    def exitPackingStrictValidation(self, ctx):
+        self.params.packing.strict_validation = ctx.BOOLEAN().getText() == "true"
+
+    def exitPackingStepX(self, ctx):
+        unit = ctx.UNIT().getText()
+        self.params.packing.step_x = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitPackingMeshSegmentos(self, ctx):
+        self.params.packing.mesh_segmentos = int(float(ctx.NUMBER().getText()))
+
+    def exitPackingSphereLat(self, ctx):
+        self.params.packing.sphere_lat = int(float(ctx.NUMBER().getText()))
+
+    def exitPackingSphereLon(self, ctx):
+        self.params.packing.sphere_lon = int(float(ctx.NUMBER().getText()))
+
+    def exitPackingUseLegacyDrop(self, ctx):
+        self.params.packing.use_legacy_drop = ctx.BOOLEAN().getText() == "true"
+
+    def exitDemTimeStep(self, ctx):
+        d = self._ensure_dem()
+        unit = ctx.UNIT().getText()
+        d.time_step = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitDemSteps(self, ctx):
+        self._ensure_dem().steps = int(float(ctx.NUMBER().getText()))
+
+    def exitDemGravity(self, ctx):
+        d = self._ensure_dem()
+        unit = ctx.UNIT().getText()
+        d.gravity = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitDemStiffness(self, ctx):
+        self._ensure_dem().stiffness = float(ctx.NUMBER().getText())
+
+    def exitDemDamping(self, ctx):
+        self._ensure_dem().damping = float(ctx.NUMBER().getText())
+
+    def exitDemFriction(self, ctx):
+        self._ensure_dem().friction = float(ctx.NUMBER().getText())
+
+    def exitDemRestitution(self, ctx):
+        self._ensure_dem().restitution = float(ctx.NUMBER().getText())
+
+    def exitDemSettleThreshold(self, ctx):
+        d = self._ensure_dem()
+        unit = ctx.UNIT().getText()
+        d.settle_threshold = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitDemMaxVelocity(self, ctx):
+        d = self._ensure_dem()
+        unit = ctx.UNIT().getText()
+        d.max_velocity_threshold = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitDemSeed(self, ctx):
+        self._ensure_dem().seed = int(float(ctx.NUMBER().getText()))
+
+    def exitGeometryModeProp(self, ctx):
+        if hasattr(ctx, "STRING") and ctx.STRING():
+            self.params.geometry_mode = ctx.STRING().getText().strip('"')
+        else:
+            self.params.geometry_mode = ctx.geometryMode().getText().strip('"')
+
+    def exitGenerationBackendProp(self, ctx):
+        if hasattr(ctx, "STRING") and ctx.STRING():
+            self.params.generation_backend = ctx.STRING().getText().strip('"')
+        else:
+            self.params.generation_backend = ctx.generationBackend().getText().strip('"')
+
+    def _ensure_slice(self) -> SliceConfig:
+        if self.params.slice is None:
+            self.params.slice = SliceConfig()
+        return self.params.slice
+
+    def exitSliceEnabled(self, ctx):
+        self._ensure_slice().slice_enabled = ctx.BOOLEAN().getText() == "true"
+
+    def exitSliceThickness(self, ctx):
+        s = self._ensure_slice()
+        unit = ctx.UNIT().getText()
+        s.slice_thickness = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitSliceAxis(self, ctx):
+        self._ensure_slice().slice_axis = ctx.STRING().getText().strip('"')
+
+    def exitSlicePosition(self, ctx):
+        s = self._ensure_slice()
+        unit = ctx.UNIT().getText()
+        s.slice_position = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitSliceKeepOnly(self, ctx):
+        self._ensure_slice().keep_only_intersecting_particles = ctx.BOOLEAN().getText() == "true"
+
+    def exitSlicePreservePacking(self, ctx):
+        self._ensure_slice().preserve_original_packing = ctx.BOOLEAN().getText() == "true"
+
+    def _ensure_statistical(self) -> Statistical2D:
+        if self.params.statistical_2d is None:
+            self.params.statistical_2d = Statistical2D()
+        return self.params.statistical_2d
+
+    def exitStatDomainWidth(self, ctx):
+        s = self._ensure_statistical()
+        unit = ctx.UNIT().getText()
+        s.domain_width = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitStatDomainHeight(self, ctx):
+        s = self._ensure_statistical()
+        unit = ctx.UNIT().getText()
+        s.domain_height = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitStatTargetPorosity(self, ctx):
+        self._ensure_statistical().target_porosity = float(ctx.NUMBER().getText())
+
+    def exitStatTolerance(self, ctx):
+        self._ensure_statistical().tolerance = float(ctx.NUMBER().getText())
+
+    def exitStatMaxAttempts(self, ctx):
+        self._ensure_statistical().max_attempts = int(float(ctx.NUMBER().getText()))
+
+    def exitStatSliceThickness(self, ctx):
+        s = self._ensure_statistical()
+        unit = ctx.UNIT().getText()
+        s.slice_thickness = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
+
+    def exitStatSeed(self, ctx):
+        self._ensure_statistical().seed = int(float(ctx.NUMBER().getText()))
     
     # metodos para processar propriedades da secao export (exportacao da geometria)
     def exitExportFormats(self, ctx):
@@ -498,6 +707,32 @@ class BedCompilerListener(BedListener):
         # converter string "true"/"false" para boolean
         self.params.cfd.write_fields = ctx.BOOLEAN().getText() == "true"
 
+def _drop_none(d: Any) -> Any:
+    if isinstance(d, dict):
+        return {k: _drop_none(v) for k, v in d.items() if v is not None and v != {}}
+    if isinstance(d, list):
+        return [_drop_none(x) for x in d]
+    return d
+
+
+def flatten_compiled_bed_json(params_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """json de saida alinhado ao contrato dos motores (raiz geometry_mode, slice, etc.)."""
+    out = _drop_none(dict(params_dict))
+    bed = out.get("bed") or {}
+    if not bed.get("visibility"):
+        bed.pop("visibility", None)
+    packing = out.get("packing") or {}
+    dem = packing.pop("dem", None)
+    if dem:
+        packing["dem"] = dem
+    out["packing"] = packing
+    if out.get("slice"):
+        sl = out["slice"]
+        if sl.get("slice_enabled") is False:
+            sl["slice_enabled"] = False
+    return out
+
+
 def compile_bed_file(input_file: str, output_file: str = None, verbose: bool = False) -> str:
     """funcao principal para compilar arquivo .bed para params.json usando antlr"""
     
@@ -537,7 +772,7 @@ def compile_bed_file(input_file: str, output_file: str = None, verbose: bool = F
     walker.walk(listener, tree)  # percorrer a arvore e extrair dados
     
     # converter objeto de parametros para dicionario
-    params_dict = asdict(listener.params)
+    params_dict = flatten_compiled_bed_json(asdict(listener.params))
     
     # gerar hash sha256 dos parametros para versionamento
     params_json = json.dumps(params_dict, indent=2, ensure_ascii=False)

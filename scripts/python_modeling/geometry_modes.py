@@ -120,6 +120,13 @@ def validate_geometry_contract(
         if mutate:
             data.pop("statistical_2d", None)
 
+    try:
+        from bed_internal_modes import validate_bed_geometry_mode
+
+        notes.extend(validate_bed_geometry_mode(data, gm))
+    except ImportError:
+        pass
+
     if gm == GEOMETRY_STATISTICAL and has_slice_block:
         msg = "slice ignorado em pseudo_2d_statistical"
         if strict:

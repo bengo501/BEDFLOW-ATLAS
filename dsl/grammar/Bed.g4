@@ -1,27 +1,37 @@
 // gramatica para arquivos .bed
 grammar Bed;
 
-// regra principal: um arquivo .bed
 bedFile: section+ EOF;
 
-// secoes principais do arquivo .bed
-section: bedSection 
-       | lidsSection 
-       | particlesSection 
-       | packingSection 
-       | exportSection 
-       | cfdSection;
+section: bedSection
+       | lidsSection
+       | particlesSection
+       | packingSection
+       | exportSection
+       | cfdSection
+       | geometrySection
+       | generationSection
+       | sliceSection
+       | statistical2dSection;
 
-// secao bed: define geometria do leito cilindrico
 bedSection: 'bed' '{' bedProperty+ '}';
-bedProperty: 'diameter' '=' NUMBER UNIT ';'         # bedDiameter
-           | 'height' '=' NUMBER UNIT ';'           # bedHeight  
-           | 'wall_thickness' '=' NUMBER UNIT ';'   # bedWallThickness
-           | 'clearance' '=' NUMBER UNIT ';'        # bedClearance
-           | 'material' '=' STRING ';'              # bedMaterial
-           | 'roughness' '=' NUMBER UNIT ';'        # bedRoughness;
+bedProperty: 'diameter' '=' NUMBER UNIT ';'                    # bedDiameter
+           | 'height' '=' NUMBER UNIT ';'                      # bedHeight
+           | 'wall_thickness' '=' NUMBER UNIT ';'              # bedWallThickness
+           | 'clearance' '=' NUMBER UNIT ';'                   # bedClearance
+           | 'material' '=' STRING ';'                          # bedMaterial
+           | 'roughness' '=' NUMBER UNIT ';'                    # bedRoughness
+           | 'internal_cylinder_mode' '=' STRING ';'            # bedInternalCylinderMode
+           | 'visibility' '{' visibilityProperty+ '}'           # bedVisibilityBlock
+           ;
 
-// secao lids: define tampas superior e inferior
+visibilityProperty: 'show_outer_cylinder' '=' BOOLEAN ';'       # visShowOuter
+                  | 'show_internal_cylinder' '=' BOOLEAN ';'    # visShowInternal
+                  | 'show_particles' '=' BOOLEAN ';'            # visShowParticles
+                  | 'show_boolean_tools' '=' BOOLEAN ';'        # visShowBooleanTools
+                  | 'export_boolean_tools' '=' BOOLEAN ';'      # visExportBooleanTools
+                  ;
+
 lidsSection: 'lids' '{' lidsProperty+ '}';
 lidsProperty: 'top_type' '=' lidType ';'            # lidsTopType
             | 'bottom_type' '=' lidType ';'         # lidsBottomType
@@ -31,7 +41,6 @@ lidsProperty: 'top_type' '=' lidType ';'            # lidsTopType
 
 lidType: 'flat' | 'hemispherical' | 'none' | STRING;
 
-// secao particles: define particulas e suas propriedades
 particlesSection: 'particles' '{' particlesProperty+ '}';
 particlesProperty: 'kind' '=' particleKind ';'          # particlesKind
                  | 'diameter' '=' NUMBER UNIT ';'       # particlesDiameter
@@ -48,7 +57,6 @@ particlesProperty: 'kind' '=' particleKind ';'          # particlesKind
 
 particleKind: 'sphere' | 'cube' | 'cylinder' | STRING;
 
-// secao packing: controle do empacotamento fisico
 packingSection: 'packing' '{' packingProperty+ '}';
 packingProperty: 'method' '=' packingMethod ';'        # packingMethodProp
                | 'gravity' '=' NUMBER UNIT ';'         # packingGravity
@@ -57,11 +65,33 @@ packingProperty: 'method' '=' packingMethod ';'        # packingMethodProp
                | 'damping' '=' NUMBER ';'              # packingDamping
                | 'rest_velocity' '=' NUMBER UNIT ';'   # packingRestVelocity
                | 'max_time' '=' NUMBER UNIT ';'        # packingMaxTime
-               | 'collision_margin' '=' NUMBER UNIT ';' # packingCollisionMargin;
+               | 'collision_margin' '=' NUMBER UNIT ';' # packingCollisionMargin
+               | 'gap' '=' NUMBER UNIT ';'              # packingGap
+               | 'random_seed' '=' NUMBER ';'          # packingRandomSeed
+               | 'max_placement_attempts' '=' NUMBER ';' # packingMaxAttempts
+               | 'strict_validation' '=' BOOLEAN ';'   # packingStrictValidation
+               | 'step_x' '=' NUMBER UNIT ';'           # packingStepX
+               | 'mesh_segmentos' '=' NUMBER ';'        # packingMeshSegmentos
+               | 'sphere_lat' '=' NUMBER ';'            # packingSphereLat
+               | 'sphere_lon' '=' NUMBER ';'            # packingSphereLon
+               | 'use_legacy_drop' '=' BOOLEAN ';'     # packingUseLegacyDrop
+               | 'dem' '{' demProperty+ '}'             # packingDemBlock
+               ;
+
+demProperty: 'time_step' '=' NUMBER UNIT ';'             # demTimeStep
+           | 'steps' '=' NUMBER ';'                      # demSteps
+           | 'gravity' '=' NUMBER UNIT ';'               # demGravity
+           | 'stiffness' '=' NUMBER ';'                  # demStiffness
+           | 'damping' '=' NUMBER ';'                    # demDamping
+           | 'friction' '=' NUMBER ';'                   # demFriction
+           | 'restitution' '=' NUMBER ';'               # demRestitution
+           | 'settle_threshold' '=' NUMBER UNIT ';'      # demSettleThreshold
+           | 'max_velocity_threshold' '=' NUMBER UNIT ';' # demMaxVelocity
+           | 'seed' '=' NUMBER ';'                       # demSeed
+           ;
 
 packingMethod: 'rigid_body' | STRING;
 
-// secao export: configuracao de exportacao
 exportSection: 'export' '{' exportProperty+ '}';
 exportProperty: 'formats' '=' '[' formatList ']' ';'   # exportFormats
               | 'units' '=' STRING ';'                 # exportUnits
@@ -69,34 +99,62 @@ exportProperty: 'formats' '=' '[' formatList ']' ';'   # exportFormats
               | 'wall_mode' '=' wallMode ';'           # exportWallMode
               | 'fluid_mode' '=' fluidMode ';'         # exportFluidMode
               | 'manifold_check' '=' BOOLEAN ';'       # exportManifoldCheck
-              | 'merge_distance' '=' NUMBER UNIT ';'   # exportMergeDistance;
+              | 'merge_distance' '=' NUMBER UNIT ';'    # exportMergeDistance
+              ;
 
-formatList: STRING (',' STRING)*; // lista de formatos de saida
-wallMode: 'surface' | 'solid' | STRING; // superfice ou solido
-fluidMode: 'none' | 'cavity' | STRING; // sem cavidade ou com cavidade
+formatList: STRING (',' STRING)*;
+wallMode: 'surface' | 'solid' | STRING;
+fluidMode: 'none' | 'cavity' | STRING;
 
-// secao cfd: parametros opcionais para CFD
-cfdSection: 'cfd' '{' cfdProperty+ '}'; // secao cfd
-cfdProperty: 'regime' '=' cfdRegime ';'                # cfdRegimeProp // regime laminar ou turbulento
-           | 'inlet_velocity' '=' NUMBER UNIT ';'      # cfdInletVelocity // velocidade de entrada
-           | 'fluid_density' '=' NUMBER UNIT ';'       # cfdFluidDensity // densidade do fluido
-           | 'fluid_viscosity' '=' NUMBER UNIT ';'     # cfdFluidViscosity // viscosidade do fluido
-           | 'max_iterations' '=' NUMBER ';'           # cfdMaxIterations // iteracoes maximas
-           | 'convergence_criteria' '=' NUMBER ';'     # cfdConvergenceCriteria // criterio de convergencia
-           | 'write_fields' '=' BOOLEAN ';'            # cfdWriteFields; // escrever campos
+cfdSection: 'cfd' '{' cfdProperty+ '}';
+cfdProperty: 'regime' '=' cfdRegime ';'                # cfdRegimeProp
+           | 'inlet_velocity' '=' NUMBER UNIT ';'      # cfdInletVelocity
+           | 'fluid_density' '=' NUMBER UNIT ';'       # cfdFluidDensity
+           | 'fluid_viscosity' '=' NUMBER UNIT ';'     # cfdFluidViscosity
+           | 'max_iterations' '=' NUMBER ';'           # cfdMaxIterations
+           | 'convergence_criteria' '=' NUMBER ';'     # cfdConvergenceCriteria
+           | 'write_fields' '=' BOOLEAN ';'             # cfdWriteFields
+           ;
 
-cfdRegime: 'laminar' | 'turbulent_rans' | STRING; // regime laminar ou turbulento
+cfdRegime: 'laminar' | 'turbulent_rans' | STRING;
 
-// tokens lexicos: numeros, unidades, strings e booleanos
-// notacao cientifica opcional ex 1.8e-5 1e-6
+geometrySection: 'geometry' '{' geometryProperty+ '}';
+geometryProperty: 'mode' '=' geometryMode ';'         # geometryModeProp
+           ;
+
+geometryMode: 'full_3d' | 'pseudo_2d_thin_slice' | 'pseudo_2d_statistical' | STRING;
+
+generationSection: 'generation' '{' generationProperty+ '}';
+generationProperty: 'backend' '=' generationBackend ';' # generationBackendProp
+           ;
+
+generationBackend: 'python_engine' | 'blender' | STRING;
+
+sliceSection: 'slice' '{' sliceProperty+ '}';
+sliceProperty: 'enabled' '=' BOOLEAN ';'               # sliceEnabled
+            | 'thickness' '=' NUMBER UNIT ';'          # sliceThickness
+            | 'axis' '=' STRING ';'                    # sliceAxis
+            | 'position' '=' NUMBER UNIT ';'           # slicePosition
+            | 'keep_only_intersecting_particles' '=' BOOLEAN ';' # sliceKeepOnly
+            | 'preserve_original_packing' '=' BOOLEAN ';' # slicePreservePacking
+            ;
+
+statistical2dSection: 'statistical_2d' '{' statistical2dProperty+ '}';
+statistical2dProperty: 'domain_width' '=' NUMBER UNIT ';'   # statDomainWidth
+                      | 'domain_height' '=' NUMBER UNIT ';'   # statDomainHeight
+                      | 'target_porosity' '=' NUMBER ';'      # statTargetPorosity
+                      | 'tolerance' '=' NUMBER ';'            # statTolerance
+                      | 'max_attempts' '=' NUMBER ';'           # statMaxAttempts
+                      | 'slice_thickness' '=' NUMBER UNIT ';' # statSliceThickness
+                      | 'seed' '=' NUMBER ';'                # statSeed
+                      ;
+
 NUMBER: '-'? [0-9]+ ('.' [0-9]+)? ([eE] [+-]? [0-9]+)?;
-INTEGER: '-'? [0-9]+; // numeros inteiros (incluindo negativos)
-UNIT: 'm' | 'cm' | 'mm' | 'kg' | 'g' | 's' | 'Pa' | 'N' | 'm/s' | 'kg/m3' | 'Pa.s' | 'm/s2' | 'm/s²'; // unidades de medida
-STRING: '"' (~["\r\n])* '"'; // strings entre aspas
-BOOLEAN: 'true' | 'false'; // booleanos
+INTEGER: '-'? [0-9]+;
+UNIT: 'm' | 'cm' | 'mm' | 'kg' | 'g' | 's' | 'Pa' | 'N' | 'm/s' | 'kg/m3' | 'Pa.s' | 'm/s2' | 'm/s²';
+STRING: '"' (~["\r\n])* '"';
+BOOLEAN: 'true' | 'false';
 
-// ignorar espacos e comentarios
 WS: [ \t\r\n]+ -> skip;
 COMMENT: '//' ~[\r\n]* -> skip;
-// comentario bloco multilinha (c-style)
 BLOCK_COMMENT: '/*' ( ~'*' | '*' ~'/' )* '*/' -> skip;

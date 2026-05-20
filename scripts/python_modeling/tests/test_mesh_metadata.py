@@ -27,6 +27,14 @@ def test_load_sidecar_pure_bed(tmp_path):
                     "slice_thickness": 0.002,
                     "slice_position": 0.0,
                 },
+                "internal_cylinder_mode": "internal_cylinder_visible_no_boolean",
+                "boolean_operation_status": {
+                    "outer_shell": "fallback_separate_meshes",
+                    "inner_core": "visible_separate",
+                    "particle_tools": "n/a",
+                    "backend": "python_engine",
+                    "warnings": [],
+                },
             }
         ),
         encoding="utf-8",
@@ -36,3 +44,6 @@ def test_load_sidecar_pure_bed(tmp_path):
     assert meta["slice_axis"] == "y"
     assert abs(meta["slice_thickness"] - 0.002) < 1e-9
     assert meta["sidecar_json"] == "leito_pure_bed.json"
+    assert meta["internal_cylinder_mode"] == "internal_cylinder_visible_no_boolean"
+    assert meta["boolean_outer_shell"] == "fallback_separate_meshes"
+    assert meta["boolean_inner_core"] == "visible_separate"

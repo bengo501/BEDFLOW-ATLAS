@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -55,6 +56,8 @@ class UnifiedDataService:
             "target_porosity"
         )
         porosity_result = pj.get("porosity_result")
+        bed = pj.get("bed") if isinstance(pj.get("bed"), dict) else {}
+        icm = bed.get("internal_cylinder_mode") or pj.get("internal_cylinder_mode")
         out: Dict[str, Any] = {
             "geometry_mode": str(gm) if gm else None,
             "generation_backend": str(gb) if gb else None,
@@ -64,13 +67,40 @@ class UnifiedDataService:
             "slice_thickness": float(sl["slice_thickness"])
             if sl.get("slice_thickness") is not None
             else None,
+            "internal_cylinder_mode": str(icm) if icm else None,
         }
         return out
+
+    @staticmethod
+    def _sidecar_meta_for_stl(stl_file_path: Optional[str]) -> Dict[str, Any]:
+        if not stl_file_path:
+            return {}
+        try:
+            root = Path(__file__).resolve().parents[3]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from bedflow_mesh_metadata import load_mesh_geometry_metadata  # noqa: WPS433
+
+            rel = str(stl_file_path).replace("\\", "/").lstrip("/")
+            if rel.startswith("local_data/"):
+                rel = rel[len("local_data/") :]
+            candidates = [
+                root / "local_data" / rel,
+                root / rel,
+            ]
+            for cand in candidates:
+                if cand.is_file():
+                    return load_mesh_geometry_metadata(cand)
+        except Exception:
+            pass
+        return {}
 
     def _bed_to_model_3d(self, bed: models.Bed) -> schemas.Model3DResponse:
         blend_url = self._to_public_file_url(bed.blend_file_path)
         stl_url = self._to_public_file_url(bed.stl_file_path)
         gmeta = self._geometry_meta_from_parameters(bed.parameters_json)
+        smeta = self._sidecar_meta_for_stl(bed.stl_file_path)
+        bos = smeta.get("boolean_operation_status")
         return schemas.Model3DResponse(
             id=bed.id,
             user_id=bed.user_id,
@@ -90,6 +120,14 @@ class UnifiedDataService:
             porosity_result=gmeta.get("porosity_result"),
             slice_axis=gmeta.get("slice_axis"),
             slice_thickness=gmeta.get("slice_thickness"),
+            internal_cylinder_mode=gmeta.get("internal_cylinder_mode")
+            or smeta.get("internal_cylinder_mode"),
+            boolean_operation_status=bos if isinstance(bos, dict) else None,
+            boolean_outer_shell=smeta.get("boolean_outer_shell"),
+            boolean_inner_core=smeta.get("boolean_inner_core"),
+            boolean_particle_tools=smeta.get("boolean_particle_tools"),
+            boolean_backend=smeta.get("boolean_backend"),
+            boolean_warnings=smeta.get("boolean_warnings"),
             bed_file_path=bed.bed_file_path,
             json_file_path=bed.json_file_path,
             blend_file_path=bed.blend_file_path,

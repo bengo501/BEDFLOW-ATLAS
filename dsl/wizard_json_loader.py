@@ -277,20 +277,45 @@ def apply_quick_test_overrides(
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+def _load_compiled_json(json_path: Path) -> Dict[str, Any]:
+    with json_path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_compiled_json(json_path: Path, data: Dict[str, Any]) -> None:
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def patch_compiled_json_bed(json_path: Path, wizard_params: Dict[str, Any]) -> None:
+    wbed = wizard_params.get("bed") or {}
+    if not wbed:
+        return
+    data = _load_compiled_json(json_path)
+    bed = dict(data.get("bed") or {})
+    if not bed.get("internal_cylinder_mode") and wbed.get("internal_cylinder_mode"):
+        bed["internal_cylinder_mode"] = wbed["internal_cylinder_mode"]
+    wvis = wbed.get("visibility")
+    if isinstance(wvis, dict) and wvis:
+        cur = bed.get("visibility") if isinstance(bed.get("visibility"), dict) else {}
+        for k, v in wvis.items():
+            if k not in cur and v is not None:
+                cur[k] = v
+        if cur:
+            bed["visibility"] = cur
+    data["bed"] = bed
+    _save_compiled_json(json_path, data)
+
+
 def patch_compiled_json_packing(
     json_path: Path, wizard_params: Dict[str, Any]
 ) -> None:
-    # le o json que o antlr acabou de escrever
-    # copia do wizard params para packing as chaves que o antlr nao conhece
-    # grava o mesmo ficheiro de volta
-    # sem isto o blender nao recebia gap nem random seed apos usar apenas bed
     wpack = wizard_params.get("packing") or {}
     if not wpack:
         return
-    with json_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = _load_compiled_json(json_path)
     pack = dict(data.get("packing") or {})
-    if wpack.get("method"):
+    if not pack.get("method") and wpack.get("method"):
         pack["method"] = str(wpack["method"])
     for key in (
         "gap",
@@ -304,11 +329,10 @@ def patch_compiled_json_packing(
         "dem",
         "use_legacy_drop",
     ):
-        if key in wpack and wpack[key] is not None:
+        if key in wpack and wpack[key] is not None and pack.get(key) is None:
             pack[key] = wpack[key]
     data["packing"] = pack
-    with json_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _save_compiled_json(json_path, data)
 
 
 def patch_compiled_json_export(
@@ -319,16 +343,15 @@ def patch_compiled_json_export(
     wexp = wizard_params.get("export")
     if not wexp or "formats" not in wexp:
         return
-    with json_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = _load_compiled_json(json_path)
     exp = dict(data.get("export") or {})
-    exp["formats"] = wexp["formats"]
+    if not exp.get("formats"):
+        exp["formats"] = wexp["formats"]
     for key in ("units", "scale", "wall_mode", "fluid_mode", "manifold_check", "merge_distance"):
-        if key in wexp:
+        if key in wexp and exp.get(key) is None:
             exp[key] = wexp[key]
     data["export"] = exp
-    with json_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _save_compiled_json(json_path, data)
 
 
 def patch_compiled_json_metadata(
@@ -346,16 +369,14 @@ def patch_compiled_json_metadata(
     )
     if gb is None and gm is None and not pm:
         return
-    with json_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    if gb is not None:
+    data = _load_compiled_json(json_path)
+    if gb is not None and not data.get("generation_backend"):
         data["generation_backend"] = gb
-    if gm is not None:
+    if gm is not None and not data.get("geometry_mode"):
         data["geometry_mode"] = gm
-    if pm:
+    if pm and not data.get("packing_mode"):
         data["packing_mode"] = str(pm)
-    with json_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _save_compiled_json(json_path, data)
 
 
 def patch_compiled_json_slice(json_path: Path, wizard_params: Dict[str, Any]) -> None:
@@ -364,27 +385,25 @@ def patch_compiled_json_slice(json_path: Path, wizard_params: Dict[str, Any]) ->
     ws = wizard_params.get("slice")
     if not isinstance(ws, dict) or not ws:
         return
-    with json_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    data["slice"] = ws
-    with json_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    data = _load_compiled_json(json_path)
+    if not data.get("slice"):
+        data["slice"] = ws
+    _save_compiled_json(json_path, data)
 
 
 def patch_compiled_json_statistical(json_path: Path, wizard_params: Dict[str, Any]) -> None:
     ws = wizard_params.get("statistical_2d")
     gm = wizard_params.get("geometry_mode")
-    with json_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    if gm is not None:
+    data = _load_compiled_json(json_path)
+    if gm is not None and not data.get("geometry_mode"):
         data["geometry_mode"] = gm
-    if isinstance(ws, dict) and ws:
+    if isinstance(ws, dict) and ws and not data.get("statistical_2d"):
         data["statistical_2d"] = ws
-        data.pop("slice", None)
-    elif gm == "full_3d":
-        data.pop("statistical_2d", None)
-    with json_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+        if gm == "pseudo_2d_statistical":
+            data.pop("slice", None)
+    elif gm == "full_3d" and "statistical_2d" not in (wizard_params.get("statistical_2d") or {}):
+        pass
+    _save_compiled_json(json_path, data)
 
 
 def export_formats_for_blender(export_section: Dict[str, Any]) -> str:

@@ -81,6 +81,26 @@ def _extract_geometry_fields(data: Dict[str, Any]) -> Dict[str, Any]:
     prast = data.get("porosity_raster")
     if isinstance(prast, dict) and prast.get("nx"):
         out["porosity_method"] = out.get("porosity_method") or "raster"
+    icm = data.get("internal_cylinder_mode")
+    bed = data.get("bed") if isinstance(data.get("bed"), dict) else {}
+    if icm is None:
+        icm = bed.get("internal_cylinder_mode")
+    if icm:
+        out["internal_cylinder_mode"] = str(icm)
+    bos = data.get("boolean_operation_status")
+    if isinstance(bos, dict) and bos:
+        out["boolean_operation_status"] = dict(bos)
+        for flat_key in (
+            "outer_shell",
+            "inner_core",
+            "particle_tools",
+            "backend",
+        ):
+            if bos.get(flat_key) is not None:
+                out[f"boolean_{flat_key}"] = str(bos.get(flat_key))
+        warns = bos.get("warnings")
+        if isinstance(warns, list) and warns:
+            out["boolean_warnings"] = "; ".join(str(w) for w in warns[:5])
     return out
 
 

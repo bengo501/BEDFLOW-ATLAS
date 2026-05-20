@@ -56,6 +56,7 @@ from wizard_json_loader import (
     json_to_wizard_params,
     load_wizard_json,
     normalize_loaded_dict,
+    patch_compiled_json_bed,
     patch_compiled_json_export,
     patch_compiled_json_slice,
     patch_compiled_json_statistical,
@@ -2602,7 +2603,7 @@ class BedWizard:
             patch_compiled_json_metadata(jpath, self.params)
             patch_compiled_json_slice(jpath, self.params)
             patch_compiled_json_statistical(jpath, self.params)
-            patch_compiled_json_statistical(jpath, self.params)
+            patch_compiled_json_bed(jpath, self.params)
         except Exception as exc:
             self.ui.warn(f"aviso ao aplicar metadados no json: {exc}")
 
@@ -2909,6 +2910,16 @@ cfd {
         # adicionar rugosidade apenas se especificada
         if bed['roughness']:
             lines.append(f"    roughness = {bed['roughness']} m;")
+        icm = bed.get('internal_cylinder_mode')
+        if icm:
+            lines.append(f'    internal_cylinder_mode = "{icm}";')
+        vis = bed.get('visibility')
+        if isinstance(vis, dict) and vis:
+            lines.append("    visibility {")
+            for vk, vv in vis.items():
+                if vv is not None:
+                    lines.append(f"        {vk} = {str(bool(vv)).lower()};")
+            lines.append("    }")
         lines.append("}")
         lines.append("")
         
@@ -2970,8 +2981,94 @@ cfd {
             lines.append(f"    max_time = {packing['max_time']} s;")
         if packing['collision_margin']:
             lines.append(f"    collision_margin = {packing['collision_margin']} m;")
+        for pk, unit in (
+            ('gap', 'm'),
+            ('step_x', 'm'),
+        ):
+            if packing.get(pk) not in (None, ''):
+                lines.append(f"    {pk} = {packing[pk]} {unit};")
+        for pk in (
+            'random_seed',
+            'max_placement_attempts',
+            'mesh_segmentos',
+            'sphere_lat',
+            'sphere_lon',
+        ):
+            if packing.get(pk) not in (None, ''):
+                lines.append(f"    {pk} = {packing[pk]};")
+        if packing.get('strict_validation') is not None:
+            lines.append(f"    strict_validation = {str(bool(packing['strict_validation'])).lower()};")
+        if packing.get('use_legacy_drop') is not None:
+            lines.append(f"    use_legacy_drop = {str(bool(packing['use_legacy_drop'])).lower()};")
+        dem = packing.get('dem')
+        if isinstance(dem, dict) and dem:
+            lines.append("    dem {")
+            for dk, du in (
+                ('time_step', 's'),
+                ('gravity', 'm/s2'),
+                ('settle_threshold', 'm'),
+                ('max_velocity_threshold', 'm/s'),
+            ):
+                if dem.get(dk) not in (None, ''):
+                    lines.append(f"        {dk} = {dem[dk]} {du};")
+            for dk in ('steps', 'stiffness', 'damping', 'friction', 'restitution', 'seed'):
+                if dem.get(dk) not in (None, ''):
+                    lines.append(f"        {dk} = {dem[dk]};")
+            lines.append("    }")
         lines.append("}")
         lines.append("")
+
+        gm = self.params.get('geometry_mode')
+        if gm:
+            lines.append("geometry {")
+            lines.append(f'    mode = "{gm}";')
+            lines.append("}")
+            lines.append("")
+        gb = self.params.get('generation_backend')
+        if gb:
+            lines.append("generation {")
+            lines.append(f'    backend = "{gb}";')
+            lines.append("}")
+            lines.append("")
+        sl = self.params.get('slice')
+        if isinstance(sl, dict) and sl:
+            lines.append("slice {")
+            if sl.get('slice_enabled') is not None:
+                lines.append(f"    enabled = {str(bool(sl['slice_enabled'])).lower()};")
+            if sl.get('slice_thickness') not in (None, ''):
+                lines.append(f"    thickness = {sl['slice_thickness']} m;")
+            if sl.get('slice_axis'):
+                lines.append(f'    axis = "{sl["slice_axis"]}";')
+            if sl.get('slice_position') not in (None, ''):
+                lines.append(f"    position = {sl['slice_position']} m;")
+            if sl.get('keep_only_intersecting_particles') is not None:
+                lines.append(
+                    f"    keep_only_intersecting_particles = {str(bool(sl['keep_only_intersecting_particles'])).lower()};"
+                )
+            if sl.get('preserve_original_packing') is not None:
+                lines.append(
+                    f"    preserve_original_packing = {str(bool(sl['preserve_original_packing'])).lower()};"
+                )
+            lines.append("}")
+            lines.append("")
+        st = self.params.get('statistical_2d')
+        if isinstance(st, dict) and st:
+            lines.append("statistical_2d {")
+            for sk, su in (
+                ('domain_width', 'm'),
+                ('domain_height', 'm'),
+                ('slice_thickness', 'm'),
+            ):
+                if st.get(sk) not in (None, ''):
+                    lines.append(f"    {sk} = {st[sk]} {su};")
+            for sk in ('target_porosity', 'tolerance'):
+                if st.get(sk) not in (None, ''):
+                    lines.append(f"    {sk} = {st[sk]};")
+            for sk in ('max_attempts', 'seed'):
+                if st.get(sk) not in (None, ''):
+                    lines.append(f"    {sk} = {st[sk]};")
+            lines.append("}")
+            lines.append("")
         
         # secao export - parametros de exportacao
         lines.append("export {")
@@ -3228,6 +3325,8 @@ cfd {
         patch_compiled_json_export(jpath, self.params)
         patch_compiled_json_metadata(jpath, self.params)
         patch_compiled_json_slice(jpath, self.params)
+        patch_compiled_json_statistical(jpath, self.params)
+        patch_compiled_json_bed(jpath, self.params)
         self.ui.section("executando blender")
         open_after = open_policy == "always"
         ok, blend_path = self.execute_blender(open_after=open_after)
@@ -3288,6 +3387,8 @@ cfd {
         patch_compiled_json_export(jpath, self.params)
         patch_compiled_json_metadata(jpath, self.params)
         patch_compiled_json_slice(jpath, self.params)
+        patch_compiled_json_statistical(jpath, self.params)
+        patch_compiled_json_bed(jpath, self.params)
         self.ui.section("gerando stl em python puro")
         ok, stl_path = self.run_pure_python_with_json_path(jpath, out_stl=out_stl)
         if not ok or not stl_path:
@@ -3771,6 +3872,7 @@ cfd {
         patch_compiled_json_metadata(json_path, self.params)
         patch_compiled_json_slice(json_path, self.params)
         patch_compiled_json_statistical(json_path, self.params)
+        patch_compiled_json_bed(json_path, self.params)
         self.ui.ok(f"arquivo compilado: {json_path}")
 
         # gerar modelo 3d no blender

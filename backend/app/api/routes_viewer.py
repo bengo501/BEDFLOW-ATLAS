@@ -50,6 +50,18 @@ class MeshInfo(BaseModel):
     slice_thickness: Optional[float] = Field(None, description="espessura da lamina (m)")
     slice_position: Optional[float] = Field(None, description="posicao do plano de corte (m)")
     sidecar_json: Optional[str] = Field(None, description="nome do ficheiro json lido")
+    internal_cylinder_mode: Optional[str] = Field(
+        None,
+        description="hollow_boolean_applied | internal_cylinder_visible_no_boolean | solid_internal_cylinder_with_particle_holes",
+    )
+    boolean_operation_status: Optional[Dict[str, Any]] = Field(
+        None, description="estado de booleanas no sidecar (outer_shell, inner_core, ...)"
+    )
+    boolean_outer_shell: Optional[str] = None
+    boolean_inner_core: Optional[str] = None
+    boolean_particle_tools: Optional[str] = None
+    boolean_backend: Optional[str] = None
+    boolean_warnings: Optional[str] = None
 
 
 class MeshListResponse(BaseModel):
@@ -104,6 +116,15 @@ def _to_mesh_info(row: Dict[str, Any]) -> MeshInfo:
         slice_thickness=_opt_float("slice_thickness"),
         slice_position=_opt_float("slice_position"),
         sidecar_json=row.get("sidecar_json"),
+        internal_cylinder_mode=row.get("internal_cylinder_mode"),
+        boolean_operation_status=row.get("boolean_operation_status")
+        if isinstance(row.get("boolean_operation_status"), dict)
+        else None,
+        boolean_outer_shell=row.get("boolean_outer_shell"),
+        boolean_inner_core=row.get("boolean_inner_core"),
+        boolean_particle_tools=row.get("boolean_particle_tools"),
+        boolean_backend=row.get("boolean_backend"),
+        boolean_warnings=row.get("boolean_warnings"),
     )
 
 

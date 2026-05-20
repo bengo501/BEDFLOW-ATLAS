@@ -1,0 +1,64 @@
+// exemplo: pseudo-2d thin slice + cilindro interno (gramatica estendida)
+bed {
+    diameter = 0.05 m;
+    height = 0.1 m;
+    wall_thickness = 0.002 m;
+    clearance = 0.01 m;
+    material = "steel";
+    internal_cylinder_mode = "hollow_boolean_applied";
+    visibility {
+        show_outer_cylinder = true;
+        show_internal_cylinder = false;
+        show_particles = true;
+        show_boolean_tools = false;
+        export_boolean_tools = false;
+    }
+}
+
+lids {
+    top_type = flat;
+    bottom_type = flat;
+    top_thickness = 0.003 m;
+    bottom_thickness = 0.003 m;
+}
+
+particles {
+    kind = "sphere";
+    diameter = 0.002 m;
+    count = 40;
+    target_porosity = 0.4;
+    density = 2500.0 kg/m3;
+    seed = 1;
+}
+
+packing {
+    method = "hexagonal_3d";
+    gravity = -9.81 m/s2;
+    gap = 0.0001 m;
+    strict_validation = true;
+    mesh_segmentos = 24;
+}
+
+geometry {
+    mode = pseudo_2d_thin_slice;
+}
+
+generation {
+    backend = python_engine;
+}
+
+slice {
+    enabled = true;
+    thickness = 0.002 m;
+    axis = "y";
+    position = 0.0 m;
+    keep_only_intersecting_particles = true;
+    preserve_original_packing = true;
+}
+
+export {
+    formats = ["stl_binary"];
+    units = "m";
+    wall_mode = "surface";
+    fluid_mode = "none";
+}
