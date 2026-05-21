@@ -40,6 +40,29 @@ def _profile_from_bed_json(json_path: Path, modeling_profile: Optional[str]) -> 
     return profile
 
 
+def _export_formats_cli_from_json(json_path: Path) -> str:
+    try:
+        with json_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return "blend,stl,obj"
+    exp = data.get("export") if isinstance(data, dict) else None
+    if not isinstance(exp, dict):
+        return "blend,stl,obj"
+    raw = exp.get("formats")
+    tokens: list[str] = []
+    if isinstance(raw, list):
+        for item in raw:
+            s = str(item).strip().lower()
+            if s in ("stl_binary", "stl"):
+                tokens.append("stl")
+            elif s in ("blend", "obj", "gltf", "glb", "fbx"):
+                tokens.append(s)
+    if not tokens:
+        return "blend,stl,obj"
+    return ",".join(dict.fromkeys(tokens))
+
+
 def _normalize_modeling_profile(modeling_profile: Optional[str]) -> str:
     # converte texto da api ou do config para um de dois motores internos
     # modeling profile pode ser none entao cai no default global
@@ -178,12 +201,13 @@ class BlenderService:
                     raise Exception(f"erro na geracao python/stl: {result.stderr or result.stdout}")
                 if not stl_path.exists():
                     raise Exception("arquivo .stl nao foi gerado")
-                rel = str(stl_path.relative_to(self.project_root))
+                rel = str(stl_path.relative_to(self.project_root)).replace("\\", "/")
                 job.status = JobStatus.COMPLETED
                 job.progress = 100
                 job.updated_at = datetime.now()
                 job.output_files = [rel]
                 job.metadata["geometry_file"] = rel
+                job.metadata["stl_path"] = rel
                 job.metadata["blend_file"] = rel
             else:
                 if not self.check_availability():
@@ -235,10 +259,13 @@ class BlenderService:
 
                 geom_rel = job.metadata.get("geometry_file") or job.metadata.get("blend_file")
                 update_kwargs: Dict[str, Any] = {}
+                stl_rel = job.metadata.get("stl_path")
+                if stl_rel and str(stl_rel).lower().endswith(".stl"):
+                    update_kwargs["stl_file_path"] = stl_rel
                 if geom_rel:
                     if str(geom_rel).lower().endswith(".stl"):
                         update_kwargs["stl_file_path"] = geom_rel
-                    else:
+                    elif str(geom_rel).lower().endswith(".blend"):
                         update_kwargs["blend_file_path"] = geom_rel
                 if geom_rel and str(geom_rel).lower().endswith(".stl"):
                     geom_path = self.project_root / geom_rel

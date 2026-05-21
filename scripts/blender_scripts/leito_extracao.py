@@ -512,13 +512,19 @@ def aplicar_thin_slice(
         sys.path.insert(0, str(_pm))
     from bed_reference_frame import blender_cutter_spec, frame_from_slice_cfg  # noqa: E402
     from geometry_modes import (  # noqa: E402
-        SLICE_POLICY_INTERSECTING,
+        axis_index,
         particle_passes_policy,
         particle_slice_metrics,
-        slice_footprint_center,
-        slice_footprint_spec,
+        snap_center_radial_to_util_wall,
     )
     from slice_debug_export import empty_slice_summary, write_slice_debug_json  # noqa: E402
+    from thin_slice_particles import (  # noqa: E402
+        SliceParticleConfig,
+        align_center_to_slice_plane,
+        blender_cylinder_rotation,
+        compute_slice_radius,
+        sphere_intersects_slice,
+    )
 
     frame = frame_from_slice_cfg(
         slice_cfg, r_int=raio_int, r_ext=raio_ext, height=altura
@@ -529,11 +535,14 @@ def aplicar_thin_slice(
     policy = frame.slice_particle_policy
     keep_only = _coerce_bool(slice_cfg.get("keep_only_intersecting_particles"), True)
     preserve = _coerce_bool(slice_cfg.get("preserve_original_packing"), True)
+    pcfg = SliceParticleConfig.from_slice_cfg(slice_cfg, r_int=raio_int)
+    pcfg.preserve_original_packing = preserve
+    pcfg.keep_only_intersecting = keep_only
 
     pk = (particle_kind or "sphere").strip().lower()
     d_char = float(particle_diameter)
     r_ax = d_char * 0.5
-    ai = 0 if axis == "x" else (1 if axis == "y" else 2)
+    euler_rot = blender_cylinder_rotation(axis)
 
     loc, scale = blender_cutter_spec(frame)
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=tuple(loc))
@@ -549,20 +558,6 @@ def aplicar_thin_slice(
     ]
     for obj in bed_targets:
         _boolean_intersect_apply(obj, cutter, label="thin_slice_bed")
-
-    slice_volume = None
-    if policy == SLICE_POLICY_INTERSECTING:
-        bpy.ops.mesh.primitive_cylinder_add(
-            radius=float(raio_int),
-            depth=float(altura),
-            location=(0.0, 0.0, float(altura) / 2.0),
-        )
-        cyl_vol = bpy.context.active_object
-        cyl_vol.name = "slice_volume_cylinder"
-        slab = cutter
-        _boolean_intersect_apply(cyl_vol, slab, label="thin_slice_volume")
-        slice_volume = cyl_vol
-        slice_volume.display_type = "WIRE"
 
     parts = [
         o
@@ -602,24 +597,22 @@ def aplicar_thin_slice(
         pass
     cutter = None
 
-    if axis == "z":
-        rot = Euler((0.0, 0.0, 0.0), "XYZ")
-    elif axis == "y":
-        rot = Euler((math.pi / 2.0, 0.0, 0.0), "XYZ")
-    else:
-        rot = Euler((0.0, math.pi / 2.0, 0.0), "XYZ")
-
     disc_verts = 24
     n_slice_parts = 0
     n_full_parts = 0
     summary = empty_slice_summary()
     summary["slice_particle_policy"] = policy
+    summary["slice_thickness"] = thickness
+    summary["slice_axis"] = axis
+    summary["slice_position"] = pos
+    summary["n_snapped_to_wall"] = 0
     summary["n_centers"] = len(centers_final)
+    summary["n_discarded_by_radius_threshold"] = 0
+    radii_kept: List[float] = []
     particle_logs: List[dict] = []
 
     for idx, (x, y, z) in enumerate(centers_final, start=1):
         center = (float(x), float(y), float(z))
-        d_plane = abs(center[ai] - pos)
         metrics = particle_slice_metrics(
             center,
             particle_kind=pk,
@@ -671,69 +664,71 @@ def aplicar_thin_slice(
         ):
             summary["n_dropped_policy"] += 1
             if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
-                metrics["action"] = "dropped_policy"
+                metrics["action"] = "outside_slice_plane"
                 particle_logs.append(metrics)
             continue
 
-        spec = slice_footprint_spec(
-            pk,
-            d_char,
-            d_plane,
+        if not sphere_intersects_slice(
+            center,
+            particle_kind=pk,
+            particle_diameter=d_char,
             slice_axis=axis,
+            slice_position=pos,
             slice_thickness=thickness,
-        )
-        if spec.get("shape") == "none":
+        ):
             continue
-        cx, cy, cz = slice_footprint_center(
+
+        d_plane = abs(center[axis_index(axis)] - pos)
+        rs = compute_slice_radius(pk, d_char, d_plane, slice_axis=axis)
+        if rs < pcfg.min_slice_particle_radius:
+            summary["n_discarded_by_radius_threshold"] += 1
+            continue
+
+        cx, cy, cz = align_center_to_slice_plane(
             center,
             slice_axis=axis,
             slice_position=pos,
-            preserve_original_packing=preserve,
+            preserve_other_coords=pcfg.preserve_original_packing,
         )
+        if pcfg.snap_radial_to_wall:
+            rho = math.hypot(cx, cy)
+            if rho + rs > frame.r_util + 1e-9:
+                cx, cy, cz = snap_center_radial_to_util_wall(
+                    (cx, cy, cz), frame.r_util, rs
+                )
+                summary["n_snapped_to_wall"] += 1
+
         loc3 = (cx, cy, cz)
-        if spec.get("shape") == "box":
+        rot = Euler(euler_rot, "XYZ")
+
+        if pk == "cube":
             bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc3)
             obj = bpy.context.active_object
-            obj.dimensions = (
-                float(spec["size_x"]),
-                float(spec["size_y"]),
-                float(spec["size_z"]),
-            )
+            obj.dimensions = (d_char, d_char, thickness)
             obj.name = f"slice_box_{idx:04d}"
         else:
-            rs = float(spec.get("radius") or 0.0)
-            if rs <= 1e-9:
-                continue
             bpy.ops.mesh.primitive_cylinder_add(
                 vertices=disc_verts,
-                radius=rs,
-                depth=float(spec.get("thickness") or thickness),
+                radius=max(rs, r_ax * 0.25),
+                depth=thickness,
                 location=loc3,
                 rotation=rot,
             )
             obj = bpy.context.active_object
             obj.name = f"slice_disc_{idx:04d}"
 
-        if policy == SLICE_POLICY_INTERSECTING and slice_volume is not None:
-            if not _boolean_intersect_apply(obj, slice_volume, label="thin_slice_particle"):
-                try:
-                    bpy.data.objects.remove(obj, do_unlink=True)
-                except Exception:
-                    pass
-                summary["n_clipped"] += 1
-                continue
-
         n_slice_parts += 1
         summary["n_kept"] += 1
+        radii_kept.append(rs)
         if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
             metrics["action"] = "kept"
             particle_logs.append(metrics)
 
-    if slice_volume is not None:
-        try:
-            bpy.data.objects.remove(slice_volume, do_unlink=True)
-        except Exception:
-            pass
+    if radii_kept:
+        summary["min_slice_radius"] = min(radii_kept)
+        summary["max_slice_radius"] = max(radii_kept)
+        summary["average_slice_radius"] = sum(radii_kept) / len(radii_kept)
+    summary["slice_particle_summary"] = dict(summary)
 
     if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
         summary["particles"] = particle_logs
@@ -742,10 +737,11 @@ def aplicar_thin_slice(
             write_slice_debug_json(dbg, summary, frame)
 
     print(
-        f"fatia pseudo-2d ({policy}): leito/tampas cortados; "
-        f"{n_slice_parts} seccoes, {n_full_parts} particulas 3d fora, "
-        f"removidas_por_politica={summary.get('n_dropped_policy', 0)}, "
-        f"clipadas={summary.get('n_clipped', 0)}"
+        f"fatia pseudo-2d: leito/tampas cortados; "
+        f"{n_slice_parts} discos (espessura={thickness:.4f} m, eixo={axis}), "
+        f"{n_full_parts} particulas 3d fora, "
+        f"snap_parede={summary.get('n_snapped_to_wall', 0)}, "
+        f"fora_plano_fatia={summary.get('n_dropped_policy', 0)}"
     )
 
 
@@ -780,12 +776,38 @@ def _prepare_export_visibility(params: dict) -> None:
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
-def export_outputs(args, output_path: Path):
+def export_formats_from_params(params: dict, default: str = "blend") -> str:
+    """mapeia export.formats do json para lista cli (stl_binary -> stl)."""
+    exp = params.get("export") if isinstance(params, dict) else None
+    if not isinstance(exp, dict):
+        return default
+    raw = exp.get("formats")
+    tokens: List[str] = []
+    if isinstance(raw, list):
+        for item in raw:
+            s = str(item).strip().lower()
+            if s in ("stl_binary", "stl"):
+                tokens.append("stl")
+            elif s in ("blend", "obj", "gltf", "glb", "fbx"):
+                tokens.append(s)
+    elif isinstance(raw, str) and raw.strip():
+        for part in raw.split(","):
+            s = part.strip().lower()
+            if s in ("stl_binary", "stl"):
+                tokens.append("stl")
+            elif s:
+                tokens.append(s)
+    return ",".join(dict.fromkeys(tokens)) if tokens else default
+
+
+def export_outputs(args, output_path: Path, *, formats_override: Optional[str] = None):
     # centraliza exportacao para nao repetir o mesmo codigo em cada ramo do main
     print(f"\nsalvando arquivo em: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    # args formats e uma string separada por virgula tipo blend gltf glb
-    formats = [f.strip().lower() for f in args.formats.split(",")]
+    fmt_raw = formats_override if formats_override is not None else getattr(args, "formats", "blend")
+    if isinstance(fmt_raw, list):
+        fmt_raw = ",".join(str(x) for x in fmt_raw)
+    formats = [f.strip().lower() for f in str(fmt_raw).split(",") if f.strip()]
     print(f"formatos selecionados: {', '.join(formats)}")
     # cada bloco abaixo tenta exportar e imprime erro sem derrubar o script inteiro
     # se o destino for .blend, gravar sempre o ficheiro principal (json pode pedir so stl/obj)
@@ -1300,7 +1322,8 @@ def main_com_parametros():
         # ambos os ramos chegam aqui com objetos na cena prontos para salvar
         if args.output:
             _prepare_export_visibility(params)
-            export_outputs(args, Path(args.output))
+            fmt_cli = export_formats_from_params(params, getattr(args, "formats", "blend,stl,obj"))
+            export_outputs(args, Path(args.output), formats_override=fmt_cli)
         else:
             print("\naviso caminho saida nao especificado arquivo nao salvo")
 

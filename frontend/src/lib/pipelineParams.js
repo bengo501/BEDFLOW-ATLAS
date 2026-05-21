@@ -186,6 +186,7 @@ export function toBedWizardRequest(p, options = {}) {
       slice_thickness: str(sl.slice_thickness ?? 0.002),
       slice_axis: sl.slice_axis || 'y',
       slice_position: str(sl.slice_position ?? 0),
+      min_slice_particle_radius: str(sl.min_slice_particle_radius ?? 0.00001),
       keep_only_intersecting_particles:
         sl.keep_only_intersecting_particles !== false,
       preserve_original_packing: sl.preserve_original_packing !== false,

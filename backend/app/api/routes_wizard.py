@@ -118,6 +118,7 @@ class SliceParams(BaseModel):
     slice_thickness: str = "0.002"
     slice_axis: str = "y"
     slice_position: str = "0.0"
+    min_slice_particle_radius: str = "0.00001"
     keep_only_intersecting_particles: bool = True
     preserve_original_packing: bool = True
 

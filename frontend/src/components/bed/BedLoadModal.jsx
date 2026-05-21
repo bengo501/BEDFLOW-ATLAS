@@ -6,7 +6,7 @@ import {
   buildOverridesPayload,
   hubModeToDefaultRunType,
 } from './bedLoadReducer';
-import { getBedTemplateDefault } from '../../services/api';
+import { getBedTemplateDefault, resolveMeshIdForRelativePath } from '../../services/api';
 import {
   parseBedFile,
   compileBedWithOverrides,
@@ -27,6 +27,7 @@ export default function BedLoadModal({
   onClose,
   onSuccess,
   onNavigateTab,
+  onOpenMeshViewer,
 }) {
   const { t } = useLanguage();
   const [state, dispatch] = useReducer(bedLoadReducer, {
@@ -154,12 +155,18 @@ export default function BedLoadModal({
         });
       }
 
-      if (
-        runResult.open_viewer &&
-        state.runConfig.viewerTarget === 'web_viewer' &&
-        onNavigateTab
-      ) {
-        onNavigateTab('viewer');
+      if (runResult.open_viewer && state.runConfig.viewerTarget === 'web_viewer') {
+        const rel = runResult.stl_path;
+        if (rel && onOpenMeshViewer) {
+          const meshId = await resolveMeshIdForRelativePath(rel);
+          if (meshId) {
+            onOpenMeshViewer(meshId);
+          } else if (onNavigateTab) {
+            onNavigateTab('mesh-viewer');
+          }
+        } else if (onNavigateTab) {
+          onNavigateTab('mesh-viewer');
+        }
       }
     } catch (err) {
       dispatch({
@@ -301,7 +308,7 @@ export default function BedLoadModal({
                   <button
                     type="button"
                     className="btn-secondary"
-                    onClick={() => onNavigateTab('viewer')}
+                    onClick={() => onNavigateTab('mesh-viewer')}
                   >
                     {t('bedLoadGoViewer')}
                   </button>

@@ -202,6 +202,19 @@ export const buildMeshStreamUrl = (meshId) => {
   return `${getApiBase()}/api/viewer/mesh-stream?mesh_id=${encodeURIComponent(meshId)}`;
 };
 
+/** resolve mesh_id a partir de caminho relativo (ex.: local_data/models_3d/leito.stl) */
+export async function resolveMeshIdForRelativePath(relativePath) {
+  const rel = String(relativePath || '').replace(/\\/g, '/').trim();
+  if (!rel) return null;
+  const base = rel.split('/').pop() || rel;
+  const data = await listViewerMeshes({ q: base, limit: 80 });
+  const meshes = data?.meshes || [];
+  const exact = meshes.find((m) => m.relative_path === rel);
+  if (exact?.mesh_id) return exact.mesh_id;
+  const loose = meshes.find((m) => m.relative_path?.endsWith(base));
+  return loose?.mesh_id || null;
+}
+
 export const launchMeshDesktopViewer = async (meshId) => {
   const response = await api.post('/api/viewer/launch-desktop', { mesh_id: meshId });
   return response.data;

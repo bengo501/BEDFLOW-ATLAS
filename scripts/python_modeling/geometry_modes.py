@@ -156,6 +156,9 @@ SLICE_POLICY_CONTAINED = "contained"
 SLICE_POLICY_INTERSECTING = "intersecting"
 VALID_SLICE_PARTICLE_POLICIES = (SLICE_POLICY_CONTAINED, SLICE_POLICY_INTERSECTING)
 
+DEFAULT_SLICE_THICKNESS = 0.002
+DEFAULT_MIN_SLICE_PARTICLE_RADIUS = 1e-5
+
 
 def normalize_slice_particle_policy(raw: Any, default: str = SLICE_POLICY_CONTAINED) -> str:
     s = str(raw or default).strip().lower().replace("-", "_")
@@ -185,24 +188,31 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
         "preserve_original_packing",
         "slice_particle_policy",
         "debug_export_gizmos",
+        "min_slice_particle_radius",
+        "snap_radial_to_wall",
     ):
         if isinstance(data, dict) and k in data and k not in cfg:
             cfg[k] = data[k]
 
     axis = normalize_slice_axis(cfg.get("slice_axis"), "y")
-    thickness = _to_float(cfg.get("slice_thickness"), 0.002)
+    thickness = _to_float(cfg.get("slice_thickness"), DEFAULT_SLICE_THICKNESS)
     if thickness <= 0:
-        thickness = 0.002
+        thickness = DEFAULT_SLICE_THICKNESS
     pos = _to_float(cfg.get("slice_position"), 0.0)
     policy = normalize_slice_particle_policy(
         cfg.get("slice_particle_policy"), SLICE_POLICY_CONTAINED
     )
+    min_r = _to_float(cfg.get("min_slice_particle_radius"), DEFAULT_MIN_SLICE_PARTICLE_RADIUS)
+    if min_r < 0:
+        min_r = 0.0
 
     return {
         "slice_enabled": True,
         "slice_axis": axis,
         "slice_thickness": thickness,
         "slice_position": pos,
+        "min_slice_particle_radius": min_r,
+        "snap_radial_to_wall": _to_bool(cfg.get("snap_radial_to_wall"), True),
         "keep_only_intersecting_particles": _to_bool(
             cfg.get("keep_only_intersecting_particles"), True
         ),
@@ -285,9 +295,52 @@ def particle_intersects_slice(
     return abs(coord - slice_position) <= r_eq + half
 
 
+def bed_height_from_data(data: Dict[str, Any]) -> float:
+    bed = data.get("bed") if isinstance(data.get("bed"), dict) else {}
+    return max(_to_float(bed.get("height"), 0.1), 1e-6)
+
+
 def rho_from_center_xy(center: vec3) -> float:
     """distância ao eixo z do leito (plano xy), alinhado a AnnulusBedDomain."""
     return math.hypot(float(center[0]), float(center[1]))
+
+
+def snap_center_radial_to_util_wall(
+    center: vec3,
+    r_util: float,
+    margin_radius: float,
+) -> vec3:
+    """
+    move o centro para a linha da parede interna (rho = r_util - margem)
+    quando a partícula vazaria para fora do cilindro util.
+    """
+    x, y, z = float(center[0]), float(center[1]), float(center[2])
+    rho = math.hypot(x, y)
+    margin = max(float(margin_radius), 0.0)
+    limit = max(0.0, float(r_util) - margin)
+    if rho <= limit + 1e-12:
+        return (x, y, z)
+    if rho < 1e-12:
+        return (limit, 0.0, z)
+    scale = limit / rho
+    return (x * scale, y * scale, z)
+
+
+def prepare_particle_center_for_slice(
+    center: vec3,
+    *,
+    r_util: float,
+    margin_radius: float,
+    bed_height: float,
+    preserve_original_z: bool,
+) -> vec3:
+    """snap radial à parede; z centrado na altura do leito ou preservado do packing."""
+    sx, sy, sz = snap_center_radial_to_util_wall(center, r_util, margin_radius)
+    if preserve_original_z:
+        z = max(0.0, min(float(center[2]), float(bed_height)))
+    else:
+        z = float(bed_height) * 0.5
+    return (sx, sy, z)
 
 
 def particle_slice_metrics(
@@ -364,12 +417,8 @@ def particle_passes_policy(
         slice_thickness=slice_thickness,
         r_util=r_util,
     )
-    pol = normalize_slice_particle_policy(policy, SLICE_POLICY_CONTAINED)
-    if pol == SLICE_POLICY_CONTAINED:
-        # radial: esfera inteira dentro do cilindro util
-        # eixo da fatia: interseção com a lâmina (a pegada 2d não exige esfera contida na espessura)
-        return bool(m["passes_contained_radial"] and m["passes_intersecting_slice"])
-    return bool(m["passes_intersecting_radial"] and m["passes_intersecting_slice"])
+    # inclusão: cruza o plano da fatia; vazamento radial é corrigido por snap à parede
+    return bool(m["passes_intersecting_slice"])
 
 
 def footprint_vertices_leak_util(

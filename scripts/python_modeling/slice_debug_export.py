@@ -28,7 +28,10 @@ def empty_slice_summary() -> SliceSummary:
         "n_leak_footprint_before_clip": 0,
         "n_clipped": 0,
         "n_full_3d_outside": 0,
+        "n_snapped_to_wall": 0,
         "leak_count": 0,
+        "slice_thickness": 0.002,
+        "slice_particle_summary": {},
         "slice_particle_policy": "contained",
         "particles": [],
     }

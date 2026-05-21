@@ -720,7 +720,11 @@ function App() {
           {devMode && <DevModePanel activeTab={activeTab} />}
           {activeTab === 'wizard' && (
             <div className="tab-content">
-              <BedWizard key={wizardResetKey} onNavigateTab={navigateToTab} />
+              <BedWizard
+                key={wizardResetKey}
+                onNavigateTab={navigateToTab}
+                onOpenMeshViewer={openMeshInViewer}
+              />
             </div>
           )}
 

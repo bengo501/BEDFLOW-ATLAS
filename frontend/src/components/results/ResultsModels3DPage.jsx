@@ -19,13 +19,20 @@ import { IconRefresh, formatBytes, isConnectionError } from './resultsShared'
 
 function getModelPreviewPath(model) {
   if (model.mesh_id) return buildMeshStreamUrl(model.mesh_id)
+  if (
+    model.blend_file_path &&
+    String(model.blend_file_path).toLowerCase().endsWith('.blend') &&
+    !model.stl_file_path
+  ) {
+    return null
+  }
   return model.preview_model_url
     ? buildGeneratedFileUrl(model.preview_model_url.replace(/^\/files\//, ''))
-    : buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
+    : buildGeneratedFileUrl(model.stl_file_path || model.blend_file_path)
 }
 
 function getModelDownloadPath(model) {
-  return buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
+  return buildGeneratedFileUrl(model.stl_file_path || model.blend_file_path)
 }
 
 function ResultsModels3DPage({ onOpenInViewer }) {

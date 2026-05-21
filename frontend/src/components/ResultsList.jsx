@@ -213,13 +213,17 @@ function ResultsList() {
 
   const getModelPreviewPath = (model) => {
     if (model.mesh_id) return buildMeshStreamUrl(model.mesh_id)
+    const fileRel = model.stl_file_path || model.blend_file_path
+    if (fileRel && String(fileRel).toLowerCase().endsWith('.blend') && !model.stl_file_path) {
+      return null
+    }
     return model.preview_model_url
       ? buildGeneratedFileUrl(model.preview_model_url.replace(/^\/files\//, ''))
-      : buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
+      : buildGeneratedFileUrl(model.stl_file_path || model.blend_file_path)
   }
 
   const getModelDownloadPath = (model) => {
-    return buildGeneratedFileUrl(model.blend_file_path || model.stl_file_path)
+    return buildGeneratedFileUrl(model.stl_file_path || model.blend_file_path)
   }
 
   return (

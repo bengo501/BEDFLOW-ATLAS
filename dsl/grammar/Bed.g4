@@ -139,6 +139,7 @@ sliceProperty: 'enabled' '=' BOOLEAN ';'               # sliceEnabled
             | 'preserve_original_packing' '=' BOOLEAN ';' # slicePreservePacking
             | 'slice_particle_policy' '=' STRING ';' # sliceParticlePolicy
             | 'debug_export_gizmos' '=' BOOLEAN ';' # sliceDebugGizmos
+            | 'min_slice_particle_radius' '=' NUMBER UNIT ';' # sliceMinParticleRadius
             ;
 
 statistical2dSection: 'statistical_2d' '{' statistical2dProperty+ '}';

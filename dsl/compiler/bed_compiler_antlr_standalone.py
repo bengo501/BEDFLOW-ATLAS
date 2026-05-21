@@ -130,6 +130,7 @@ class SliceConfig:
     preserve_original_packing: bool = True
     slice_particle_policy: str = "contained"
     debug_export_gizmos: bool = False
+    min_slice_particle_radius: float = 1e-5
 
 @dataclass
 class Statistical2D:
@@ -590,6 +591,11 @@ class BedCompilerListener(BedListener):
 
     def exitSliceDebugGizmos(self, ctx):
         self._ensure_slice().debug_export_gizmos = ctx.BOOLEAN().getText() == "true"
+
+    def exitSliceMinParticleRadius(self, ctx):
+        s = self._ensure_slice()
+        unit = ctx.UNIT().getText()
+        s.min_slice_particle_radius = self._parse_number_with_unit(ctx.NUMBER().getText(), unit)
 
     def _ensure_statistical(self) -> Statistical2D:
         if self.params.statistical_2d is None:

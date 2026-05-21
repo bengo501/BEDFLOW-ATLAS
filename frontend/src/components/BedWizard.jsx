@@ -125,7 +125,7 @@ function IconArrowRight({ className }) {
   );
 }
 
-const BedWizard = ({ onNavigateTab } = {}) => {
+const BedWizard = ({ onNavigateTab, onOpenMeshViewer } = {}) => {
   const { language, t } = useLanguage();
   const pt = language === 'pt';
   const [step, setStep] = useState(0);
@@ -380,9 +380,9 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             slice_thickness: '0.002',
             slice_axis: 'y',
             slice_position: '0.0',
+            min_slice_particle_radius: '0.00001',
             keep_only_intersecting_particles: true,
             preserve_original_packing: true,
-            slice_particle_policy: 'contained',
             debug_export_gizmos: false,
           };
           next.statistical_2d = null;
@@ -421,9 +421,9 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           slice_thickness: '0.002',
           slice_axis: 'z',
           slice_position: '0.0',
+          min_slice_particle_radius: '0.00001',
           keep_only_intersecting_particles: true,
           preserve_original_packing: true,
-          slice_particle_policy: 'contained',
           debug_export_gizmos: false,
         }),
         [field]: value,
@@ -1565,10 +1565,28 @@ const BedWizard = ({ onNavigateTab } = {}) => {
               <input
                 type="number"
                 step="0.0001"
-                value={params.slice.slice_thickness}
+                min="0.0001"
+                value={params.slice.slice_thickness ?? '0.002'}
                 onChange={(e) => handleSliceChange('slice_thickness', e.target.value)}
               />
             </div>
+            <div className="form-group">
+              <label>{pt ? 'raio mínimo na secção (m)' : 'min slice radius (m)'}</label>
+              <input
+                type="number"
+                step="0.000001"
+                min="0"
+                value={params.slice.min_slice_particle_radius ?? '0.00001'}
+                onChange={(e) =>
+                  handleSliceChange('min_slice_particle_radius', e.target.value)
+                }
+              />
+            </div>
+            <p className="field-hint">
+              {pt
+                ? 'casco e partículas usam a mesma espessura; discos finos no eixo do corte. perto da parede o centro pode ser encostado a r_int.'
+                : 'shell and particles share slice thickness; thin discs along the cut axis. near the wall centers may snap to r_int.'}
+            </p>
             <div className="form-group">
               <label>{pt ? 'posição central (m)' : 'slice position (m)'}</label>
               <input
@@ -1601,20 +1619,6 @@ const BedWizard = ({ onNavigateTab } = {}) => {
                 />
                 {pt ? 'preservar coordenadas originais' : 'preserve original coordinates'}
               </label>
-            </div>
-            <div className="form-group">
-              <label>{pt ? 'política de partículas na fatia' : 'slice particle policy'}</label>
-              <select
-                value={params.slice.slice_particle_policy || 'contained'}
-                onChange={(e) => handleSliceChange('slice_particle_policy', e.target.value)}
-              >
-                <option value="contained">
-                  {pt ? 'contida (sem vazamento)' : 'contained (no leak)'}
-                </option>
-                <option value="intersecting">
-                  {pt ? 'intersecta + clip' : 'intersecting + clip'}
-                </option>
-              </select>
             </div>
             <div className="form-group checkbox-group">
               <label>
@@ -2073,6 +2077,7 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             setMode(null);
           }}
           onNavigateTab={onNavigateTab}
+          onOpenMeshViewer={onOpenMeshViewer}
         />
       )}
     

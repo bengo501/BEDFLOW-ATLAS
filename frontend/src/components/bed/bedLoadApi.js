@@ -20,7 +20,11 @@ function pathsFromJobFinal(jobFinal) {
     meta.geometry_file ||
     (jobFinal?.output_files && jobFinal.output_files[0]) ||
     null;
-  const stl_path = meta.stl_path || meta.stl_file || null;
+  const geom = meta.geometry_file || null;
+  const stl_path =
+    meta.stl_path ||
+    meta.stl_file ||
+    (geom && String(geom).toLowerCase().endsWith('.stl') ? geom : null);
   return { blend_file, stl_path };
 }
 

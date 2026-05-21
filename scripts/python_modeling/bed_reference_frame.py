@@ -88,11 +88,14 @@ def frame_from_slice_cfg(
     r_ext: float,
     height: float,
 ) -> BedReferenceFrame:
+    bed_h = float(height)
+    if bed_h <= 0:
+        bed_h = 0.1
     return BedReferenceFrame(
         bed_axis=BED_AXIS,
         r_util=float(r_int),
         r_ext=float(r_ext),
-        height=float(height),
+        height=bed_h,
         slice_axis=normalize_slice_axis(slice_cfg.get("slice_axis"), "y"),
         slice_center=_to_float(slice_cfg.get("slice_position"), 0.0),
         slice_thickness=max(_to_float(slice_cfg.get("slice_thickness"), 0.002), 1e-9),
