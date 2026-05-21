@@ -128,6 +128,8 @@ class SliceConfig:
     slice_position: float = 0.0
     keep_only_intersecting_particles: bool = True
     preserve_original_packing: bool = True
+    slice_particle_policy: str = "contained"
+    debug_export_gizmos: bool = False
 
 @dataclass
 class Statistical2D:
@@ -582,6 +584,12 @@ class BedCompilerListener(BedListener):
 
     def exitSlicePreservePacking(self, ctx):
         self._ensure_slice().preserve_original_packing = ctx.BOOLEAN().getText() == "true"
+
+    def exitSliceParticlePolicy(self, ctx):
+        self._ensure_slice().slice_particle_policy = ctx.STRING().getText().strip('"')
+
+    def exitSliceDebugGizmos(self, ctx):
+        self._ensure_slice().debug_export_gizmos = ctx.BOOLEAN().getText() == "true"
 
     def _ensure_statistical(self) -> Statistical2D:
         if self.params.statistical_2d is None:

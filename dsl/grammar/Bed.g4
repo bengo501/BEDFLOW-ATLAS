@@ -137,6 +137,8 @@ sliceProperty: 'enabled' '=' BOOLEAN ';'               # sliceEnabled
             | 'position' '=' NUMBER UNIT ';'           # slicePosition
             | 'keep_only_intersecting_particles' '=' BOOLEAN ';' # sliceKeepOnly
             | 'preserve_original_packing' '=' BOOLEAN ';' # slicePreservePacking
+            | 'slice_particle_policy' '=' STRING ';' # sliceParticlePolicy
+            | 'debug_export_gizmos' '=' BOOLEAN ';' # sliceDebugGizmos
             ;
 
 statistical2dSection: 'statistical_2d' '{' statistical2dProperty+ '}';

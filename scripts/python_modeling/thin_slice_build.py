@@ -1,18 +1,30 @@
 # construcao de malha thin slice (lamina fina) a partir de packing 3d
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
+from bed_reference_frame import BedReferenceFrame, frame_from_slice_cfg
 from geometry_modes import (
+    SLICE_POLICY_INTERSECTING,
+    footprint_vertices_leak_util,
     normalize_slice_axis,
     particle_intersects_slice,
+    particle_passes_policy,
+    particle_slice_metrics,
     slice_footprint_center,
     slice_footprint_spec,
+)
+from slice_debug_export import (
+    empty_slice_summary,
+    export_debug_gizmo_stl,
+    write_slice_debug_json,
 )
 from stl_mesh_utils import (
     annulus_cap_pair,
     box_mesh,
     box_mesh_anisotropic,
+    clip_mesh_to_util_volume,
     cylinder_axis,
     filter_faces_by_slab,
     merge_mesh,
@@ -20,6 +32,8 @@ from stl_mesh_utils import (
     uv_sphere,
     vec3,
 )
+
+SliceSummary = Dict[str, Any]
 
 
 def _append_particle_full(
@@ -106,14 +120,18 @@ def apply_thin_slice_mesh(
     r_int: float,
     slice_cfg: Dict[str, Any],
     segmentos: int = 48,
-) -> Tuple[List[vec3], List[tri]]:
-    axis = normalize_slice_axis(slice_cfg.get("slice_axis"), "y")
-    thickness = float(slice_cfg.get("slice_thickness") or 0.002)
-    if thickness <= 0:
-        thickness = 0.002
-    pos = float(slice_cfg.get("slice_position") or 0.0)
+    debug_stl_path: Optional[Path] = None,
+    debug_json_path: Optional[Path] = None,
+) -> Tuple[List[vec3], List[tri], SliceSummary]:
+    frame = frame_from_slice_cfg(
+        slice_cfg, r_int=r_int, r_ext=r_ext, height=_infer_height_from_shell(shell_vertices)
+    )
+    axis = frame.slice_axis
+    thickness = frame.slice_thickness
+    pos = frame.slice_center
     keep_only = bool(slice_cfg.get("keep_only_intersecting_particles", True))
     preserve = bool(slice_cfg.get("preserve_original_packing", True))
+    policy = frame.slice_particle_policy
 
     min_v = pos - thickness / 2.0
     max_v = pos + thickness / 2.0
@@ -134,26 +152,53 @@ def apply_thin_slice_mesh(
     )
     v_all: List[vec3] = list(v_shell)
     f_all: List[tri] = list(f_shell)
-    if cap_v:
+    if cap_v and f_shell:
         v_all, f_all = merge_mesh(v_all, f_all, cap_v, cap_f)
 
     pk = (particle_kind or "sphere").strip().lower()
     seg_p = max(12, min(32, segmentos))
+    summary = empty_slice_summary()
+    summary["slice_particle_policy"] = policy
+    summary["n_centers"] = len(centers)
+    leak_centers: List[vec3] = []
+    particle_logs: List[Dict[str, Any]] = []
 
     for (x, y, z) in centers:
         center = (float(x), float(y), float(z))
-        if not particle_intersects_slice(
+        metrics = particle_slice_metrics(
             center,
             particle_kind=pk,
             particle_diameter=particle_diameter,
-            axis=axis,
-            slice_position=pos,
+            slice_axis=axis,
+            slice_center=pos,
             slice_thickness=thickness,
+            r_util=frame.r_util,
+        )
+        legacy_ok = bool(metrics["passes_legacy_slice_only"])
+        if not legacy_ok:
+            summary["n_dropped_legacy_slice"] += 1
+            if not keep_only:
+                sv, sf = _append_particle_full(pk, center, particle_diameter, seg_p)
+                v_all, f_all = merge_mesh(v_all, f_all, sv, sf)
+                summary["n_full_3d_outside"] += 1
+            continue
+
+        if not particle_passes_policy(
+            center,
+            particle_kind=pk,
+            particle_diameter=particle_diameter,
+            slice_axis=axis,
+            slice_center=pos,
+            slice_thickness=thickness,
+            r_util=frame.r_util,
+            policy=policy,
         ):
-            if keep_only:
-                continue
-            sv, sf = _append_particle_full(pk, center, particle_diameter, seg_p)
-            v_all, f_all = merge_mesh(v_all, f_all, sv, sf)
+            summary["n_dropped_policy"] += 1
+            if metrics.get("leak_footprint_legacy"):
+                leak_centers.append(center)
+            if bool(slice_cfg.get("debug_export_gizmos")):
+                metrics["action"] = "dropped_policy"
+                particle_logs.append(metrics)
             continue
 
         sv, sf = _append_slice_footprint(
@@ -166,7 +211,74 @@ def apply_thin_slice_mesh(
             preserve=preserve,
             segmentos=seg_p,
         )
-        if sv:
-            v_all, f_all = merge_mesh(v_all, f_all, sv, sf)
+        if not sv:
+            continue
 
-    return v_all, f_all
+        if footprint_vertices_leak_util(
+            sv,
+            r_util=frame.r_util,
+            slice_axis=axis,
+            slice_center=pos,
+            slice_thickness=thickness,
+        ):
+            summary["n_leak_footprint_before_clip"] += 1
+            leak_centers.append(center)
+
+        if policy == SLICE_POLICY_INTERSECTING:
+            sv2, sf2 = clip_mesh_to_util_volume(
+                sv,
+                sf,
+                r_util=frame.r_util,
+                slice_axis=axis,
+                slice_center=pos,
+                slice_thickness=thickness,
+            )
+            if not sv2:
+                summary["n_clipped"] += 1
+                if bool(slice_cfg.get("debug_export_gizmos")):
+                    metrics["action"] = "clipped_empty"
+                    particle_logs.append(metrics)
+                continue
+            if len(sv2) < len(sv) or len(sf2) < len(sf):
+                summary["n_clipped"] += 1
+            sv, sf = sv2, sf2
+
+        if footprint_vertices_leak_util(
+            sv,
+            r_util=frame.r_util,
+            slice_axis=axis,
+            slice_center=pos,
+            slice_thickness=thickness,
+        ):
+            summary["leak_count"] += 1
+            if bool(slice_cfg.get("debug_export_gizmos")):
+                metrics["action"] = "leak_after_processing"
+                particle_logs.append(metrics)
+            continue
+
+        v_all, f_all = merge_mesh(v_all, f_all, sv, sf)
+        summary["n_kept"] += 1
+        if bool(slice_cfg.get("debug_export_gizmos")):
+            metrics["action"] = "kept"
+            particle_logs.append(metrics)
+
+    if bool(slice_cfg.get("debug_export_gizmos")):
+        summary["particles"] = particle_logs
+        if debug_json_path is not None:
+            write_slice_debug_json(debug_json_path, summary, frame)
+        if debug_stl_path is not None and leak_centers:
+            export_debug_gizmo_stl(
+                debug_stl_path,
+                frame,
+                leak_centers=leak_centers,
+                particle_diameter=particle_diameter,
+            )
+
+    return v_all, f_all, summary
+
+
+def _infer_height_from_shell(vertices: List[vec3]) -> float:
+    if not vertices:
+        return 0.1
+    zs = [p[2] for p in vertices]
+    return max(max(zs) - min(zs), 0.01)

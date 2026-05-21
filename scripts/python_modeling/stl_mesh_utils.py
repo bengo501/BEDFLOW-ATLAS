@@ -230,6 +230,50 @@ def filter_faces_by_slab(
     return new_verts, new_faces
 
 
+def clip_mesh_to_util_volume(
+    vertices: List[vec3],
+    faces: List[tri],
+    *,
+    r_util: float,
+    slice_axis: str,
+    slice_center: float,
+    slice_thickness: float,
+) -> Tuple[List[vec3], List[tri]]:
+    """
+    remove triangulos com algum vertice fora do cilindro util (rho) ou fora da faixa do slice.
+    conservador: pode apagar mais do que o clip exacto.
+    """
+    if not vertices or not faces:
+        return [], []
+    a = slice_axis.strip().lower()
+    if a not in ("x", "y", "z"):
+        a = "y"
+    ai = 0 if a == "x" else (1 if a == "y" else 2)
+    lo = slice_center - slice_thickness / 2.0
+    hi = slice_center + slice_thickness / 2.0
+
+    def inside(p: vec3) -> bool:
+        if math.hypot(p[0], p[1]) > r_util + 1e-9:
+            return False
+        s = p[ai]
+        return lo - 1e-9 <= s <= hi + 1e-9
+
+    keep_faces: List[tri] = []
+    used: List[int] = []
+    used_set = set()
+    for (i, j, k) in faces:
+        if inside(vertices[i]) and inside(vertices[j]) and inside(vertices[k]):
+            keep_faces.append((i, j, k))
+            for idx in (i, j, k):
+                if idx not in used_set:
+                    used_set.add(idx)
+                    used.append(idx)
+    remap = {old: new for new, old in enumerate(used)}
+    new_verts = [vertices[i] for i in used]
+    new_faces = [(remap[i], remap[j], remap[k]) for (i, j, k) in keep_faces]
+    return new_verts, new_faces
+
+
 def annulus_cap_pair(
     *,
     r_ext: float,

@@ -382,6 +382,8 @@ const BedWizard = ({ onNavigateTab } = {}) => {
             slice_position: '0.0',
             keep_only_intersecting_particles: true,
             preserve_original_packing: true,
+            slice_particle_policy: 'contained',
+            debug_export_gizmos: false,
           };
           next.statistical_2d = null;
         } else if (value === 'pseudo_2d_statistical') {
@@ -421,6 +423,8 @@ const BedWizard = ({ onNavigateTab } = {}) => {
           slice_position: '0.0',
           keep_only_intersecting_particles: true,
           preserve_original_packing: true,
+          slice_particle_policy: 'contained',
+          debug_export_gizmos: false,
         }),
         [field]: value,
       },
@@ -1596,6 +1600,30 @@ const BedWizard = ({ onNavigateTab } = {}) => {
                   }
                 />
                 {pt ? 'preservar coordenadas originais' : 'preserve original coordinates'}
+              </label>
+            </div>
+            <div className="form-group">
+              <label>{pt ? 'política de partículas na fatia' : 'slice particle policy'}</label>
+              <select
+                value={params.slice.slice_particle_policy || 'contained'}
+                onChange={(e) => handleSliceChange('slice_particle_policy', e.target.value)}
+              >
+                <option value="contained">
+                  {pt ? 'contida (sem vazamento)' : 'contained (no leak)'}
+                </option>
+                <option value="intersecting">
+                  {pt ? 'intersecta + clip' : 'intersecting + clip'}
+                </option>
+              </select>
+            </div>
+            <div className="form-group checkbox-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={Boolean(params.slice.debug_export_gizmos)}
+                  onChange={(e) => handleSliceChange('debug_export_gizmos', e.target.checked)}
+                />
+                {pt ? 'exportar gizmos de debug' : 'export debug gizmos'}
               </label>
             </div>
           </>

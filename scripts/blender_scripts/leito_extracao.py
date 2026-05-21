@@ -469,31 +469,64 @@ def _coerce_bool(v, default=True):
     return default
 
 
+def _boolean_intersect_apply(target_obj, cutter_obj, label: str = "thin_slice") -> bool:
+    try:
+        mod = target_obj.modifiers.new(name=label, type="BOOLEAN")
+        mod.operation = "INTERSECT"
+        mod.object = cutter_obj
+        if hasattr(mod, "solver"):
+            try:
+                mod.solver = "EXACT"
+            except Exception:
+                pass
+        bpy.context.view_layer.objects.active = target_obj
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        return True
+    except Exception as e:
+        print(f"aviso: boolean {label} falhou em {target_obj.name}: {e}")
+        return False
+
+
 def aplicar_thin_slice(
     slice_cfg: dict,
     *,
     altura: float,
     raio_ext: float,
+    raio_int: float,
     particle_centers: Optional[List[Tuple[float, float, float]]] = None,
     particle_diameter: float = 0.005,
     particle_kind: str = "sphere",
+    output_path: Optional[Path] = None,
 ) -> None:
-    # leito e tampas: boolean intersect com cubo fino (mesma ideia que filter_faces_by_slab no python)
-    # particulas: nao usar boolean em instancias com mesh partilhada (corrompe todas);
-    # remove-se as malhas 3d e criam-se cilindros finissimos (discos) no plano de corte, alinhado a pure_generation
+    # leito e tampas: boolean intersect com cubo fino (referencial unificado)
+    # particulas: filtro contained/intersecting; intersecting clipa com slice_volume
     from mathutils import Euler
 
     if not isinstance(slice_cfg, dict):
         return
     if not _coerce_bool(slice_cfg.get("slice_enabled"), False):
         return
-    axis = str(slice_cfg.get("slice_axis") or "y").strip().lower()
-    if axis not in ("x", "y", "z"):
-        axis = "y"
-    thickness = _coerce_float(slice_cfg.get("slice_thickness"), 0.002)
-    if thickness <= 0:
-        thickness = 0.002
-    pos = _coerce_float(slice_cfg.get("slice_position"), 0.0)
+
+    _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+    if str(_pm) not in sys.path:
+        sys.path.insert(0, str(_pm))
+    from bed_reference_frame import blender_cutter_spec, frame_from_slice_cfg  # noqa: E402
+    from geometry_modes import (  # noqa: E402
+        SLICE_POLICY_INTERSECTING,
+        particle_passes_policy,
+        particle_slice_metrics,
+        slice_footprint_center,
+        slice_footprint_spec,
+    )
+    from slice_debug_export import empty_slice_summary, write_slice_debug_json  # noqa: E402
+
+    frame = frame_from_slice_cfg(
+        slice_cfg, r_int=raio_int, r_ext=raio_ext, height=altura
+    )
+    axis = frame.slice_axis
+    thickness = frame.slice_thickness
+    pos = frame.slice_center
+    policy = frame.slice_particle_policy
     keep_only = _coerce_bool(slice_cfg.get("keep_only_intersecting_particles"), True)
     preserve = _coerce_bool(slice_cfg.get("preserve_original_packing"), True)
 
@@ -502,17 +535,11 @@ def aplicar_thin_slice(
     r_ax = d_char * 0.5
     ai = 0 if axis == "x" else (1 if axis == "y" else 2)
 
-    # dimensoes grandes para cobrir o modelo todo, exceto na direcao do corte
-    big = max(altura * 2.0, raio_ext * 4.0, 1.0)
-    dims = [big, big, big]
-    dims[ai] = thickness
-    loc = [0.0, 0.0, altura / 2.0]
-    loc[ai] = pos
-
+    loc, scale = blender_cutter_spec(frame)
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=tuple(loc))
     cutter = bpy.context.active_object
     cutter.name = "thin_slice_cutter"
-    cutter.scale = (dims[0] / 2.0, dims[1] / 2.0, dims[2] / 2.0)
+    cutter.scale = tuple(scale)
 
     part_prefix = "particula"
     bed_targets = [
@@ -521,19 +548,21 @@ def aplicar_thin_slice(
         if o.type == "MESH" and o.name != cutter.name and not o.name.lower().startswith(part_prefix)
     ]
     for obj in bed_targets:
-        try:
-            mod = obj.modifiers.new(name="thin_slice", type="BOOLEAN")
-            mod.operation = "INTERSECT"
-            mod.object = cutter
-            if hasattr(mod, "solver"):
-                try:
-                    mod.solver = "EXACT"
-                except Exception:
-                    pass
-            bpy.context.view_layer.objects.active = obj
-            bpy.ops.object.modifier_apply(modifier=mod.name)
-        except Exception as e:
-            print(f"aviso: boolean fatia falhou em {obj.name}: {e}")
+        _boolean_intersect_apply(obj, cutter, label="thin_slice_bed")
+
+    slice_volume = None
+    if policy == SLICE_POLICY_INTERSECTING:
+        bpy.ops.mesh.primitive_cylinder_add(
+            radius=float(raio_int),
+            depth=float(altura),
+            location=(0.0, 0.0, float(altura) / 2.0),
+        )
+        cyl_vol = bpy.context.active_object
+        cyl_vol.name = "slice_volume_cylinder"
+        slab = cutter
+        _boolean_intersect_apply(cyl_vol, slab, label="thin_slice_volume")
+        slice_volume = cyl_vol
+        slice_volume.display_type = "WIRE"
 
     parts = [
         o
@@ -571,6 +600,7 @@ def aplicar_thin_slice(
         bpy.data.objects.remove(cutter, do_unlink=True)
     except Exception:
         pass
+    cutter = None
 
     if axis == "z":
         rot = Euler((0.0, 0.0, 0.0), "XYZ")
@@ -579,29 +609,28 @@ def aplicar_thin_slice(
     else:
         rot = Euler((0.0, math.pi / 2.0, 0.0), "XYZ")
 
-    _pm = Path(__file__).resolve().parents[1] / "python_modeling"
-    if str(_pm) not in sys.path:
-        sys.path.insert(0, str(_pm))
-    from geometry_modes import (  # noqa: E402
-        particle_intersects_slice,
-        slice_footprint_center,
-        slice_footprint_spec,
-    )
-
     disc_verts = 24
     n_slice_parts = 0
     n_full_parts = 0
+    summary = empty_slice_summary()
+    summary["slice_particle_policy"] = policy
+    summary["n_centers"] = len(centers_final)
+    particle_logs: List[dict] = []
+
     for idx, (x, y, z) in enumerate(centers_final, start=1):
         center = (float(x), float(y), float(z))
         d_plane = abs(center[ai] - pos)
-        if not particle_intersects_slice(
+        metrics = particle_slice_metrics(
             center,
             particle_kind=pk,
             particle_diameter=d_char,
-            axis=axis,
-            slice_position=pos,
+            slice_axis=axis,
+            slice_center=pos,
             slice_thickness=thickness,
-        ):
+            r_util=frame.r_util,
+        )
+        if not bool(metrics.get("passes_legacy_slice_only")):
+            summary["n_dropped_legacy_slice"] += 1
             if keep_only:
                 continue
             loc3 = center
@@ -627,6 +656,23 @@ def aplicar_thin_slice(
                 obj = bpy.context.active_object
             obj.name = f"particula_full_{idx:04d}"
             n_full_parts += 1
+            summary["n_full_3d_outside"] += 1
+            continue
+
+        if not particle_passes_policy(
+            center,
+            particle_kind=pk,
+            particle_diameter=d_char,
+            slice_axis=axis,
+            slice_center=pos,
+            slice_thickness=thickness,
+            r_util=frame.r_util,
+            policy=policy,
+        ):
+            summary["n_dropped_policy"] += 1
+            if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
+                metrics["action"] = "dropped_policy"
+                particle_logs.append(metrics)
             continue
 
         spec = slice_footprint_spec(
@@ -667,11 +713,39 @@ def aplicar_thin_slice(
             )
             obj = bpy.context.active_object
             obj.name = f"slice_disc_{idx:04d}"
+
+        if policy == SLICE_POLICY_INTERSECTING and slice_volume is not None:
+            if not _boolean_intersect_apply(obj, slice_volume, label="thin_slice_particle"):
+                try:
+                    bpy.data.objects.remove(obj, do_unlink=True)
+                except Exception:
+                    pass
+                summary["n_clipped"] += 1
+                continue
+
         n_slice_parts += 1
+        summary["n_kept"] += 1
+        if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
+            metrics["action"] = "kept"
+            particle_logs.append(metrics)
+
+    if slice_volume is not None:
+        try:
+            bpy.data.objects.remove(slice_volume, do_unlink=True)
+        except Exception:
+            pass
+
+    if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
+        summary["particles"] = particle_logs
+        if output_path is not None:
+            dbg = output_path.parent / f"{output_path.stem}_slice_debug.json"
+            write_slice_debug_json(dbg, summary, frame)
 
     print(
-        f"fatia pseudo-2d: leito/tampas cortados por boolean; "
-        f"{n_slice_parts} secções na lamina, {n_full_parts} particulas 3d completas (fora da fatia)"
+        f"fatia pseudo-2d ({policy}): leito/tampas cortados; "
+        f"{n_slice_parts} seccoes, {n_full_parts} particulas 3d fora, "
+        f"removidas_por_politica={summary.get('n_dropped_policy', 0)}, "
+        f"clipadas={summary.get('n_clipped', 0)}"
     )
 
 
@@ -1216,9 +1290,11 @@ def main_com_parametros():
                 slice_cfg,
                 altura=altura,
                 raio_ext=raio_ext,
+                raio_int=raio_int,
                 particle_centers=centers_for_slice,
                 particle_diameter=diametro_particula,
                 particle_kind=particle_kind,
+                output_path=Path(args.output) if args.output else None,
             )
 
         # ambos os ramos chegam aqui com objetos na cena prontos para salvar

@@ -188,7 +188,11 @@ async function parseToObject3D(ext, buffer) {
   throw new Error(`formato nao suportado no viewer: ${e}`);
 }
 
-function orientBedVertical(root) {
+function orientBedVertical(root, viewHint = null) {
+  const gm = viewHint?.geometry_mode;
+  if (gm === 'pseudo_2d_thin_slice' || gm === 'pseudo_2d_statistical') {
+    return;
+  }
   const box = new THREE.Box3().setFromObject(root);
   if (box.isEmpty()) return;
   const size = box.getSize(new THREE.Vector3());
@@ -290,6 +294,14 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     if (!meshes.some((m) => m.mesh_id === id)) setSelectedId('');
   }, [meshes, selectedId]);
 
+  useEffect(() => {
+    const id = selectedId.trim();
+    if (!id || !meshes.some((m) => m.mesh_id === id)) return;
+    const fmt = (meshes.find((m) => m.mesh_id === id)?.format || '').toLowerCase();
+    if (fmt === 'blend') return;
+    void loadSelectedMesh();
+  }, [selectedId, meshes.length]);
+
   const applyWireframe = useCallback((root, on) => {
     if (!root) return;
     root.traverse((ch) => {
@@ -367,9 +379,10 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       const res = await fetch(url);
       if (!res.ok) throw new Error(`http ${res.status}`);
       const buffer = await res.arrayBuffer();
+      const viewHint = viewHintFromMeshInfo(info);
       const obj = await parseToObject3D(ext || 'stl', buffer);
       applyWireframe(obj, wireframe);
-      orientBedVertical(obj);
+      orientBedVertical(obj, viewHint);
       centerOnFloor(obj);
 
       const scene = sceneRef.current;
@@ -379,7 +392,6 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
         syncBoundingBox(obj);
         const cam = cameraRef.current;
         const ctr = controlsRef.current;
-        const viewHint = viewHintFromMeshInfo(info);
         if (cam && ctr) fitCameraToObject(cam, ctr, obj, 1.05, viewHint);
         setMeta({
           filename: info?.filename || 'mesh',

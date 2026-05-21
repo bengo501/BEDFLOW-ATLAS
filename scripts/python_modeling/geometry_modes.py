@@ -152,6 +152,22 @@ def geometry_mode_from_data(data: Dict[str, Any]) -> str:
     return gm
 
 
+SLICE_POLICY_CONTAINED = "contained"
+SLICE_POLICY_INTERSECTING = "intersecting"
+VALID_SLICE_PARTICLE_POLICIES = (SLICE_POLICY_CONTAINED, SLICE_POLICY_INTERSECTING)
+
+
+def normalize_slice_particle_policy(raw: Any, default: str = SLICE_POLICY_CONTAINED) -> str:
+    s = str(raw or default).strip().lower().replace("-", "_")
+    if s in VALID_SLICE_PARTICLE_POLICIES:
+        return s
+    if s in ("inside", "strict"):
+        return SLICE_POLICY_CONTAINED
+    if s in ("intersection", "clip"):
+        return SLICE_POLICY_INTERSECTING
+    return default
+
+
 def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
     """devolve dict slice normalizado; vazio se modo full_3d."""
     gm = geometry_mode_from_data(data)
@@ -167,6 +183,8 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
         "slice_position",
         "keep_only_intersecting_particles",
         "preserve_original_packing",
+        "slice_particle_policy",
+        "debug_export_gizmos",
     ):
         if isinstance(data, dict) and k in data and k not in cfg:
             cfg[k] = data[k]
@@ -176,6 +194,9 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
     if thickness <= 0:
         thickness = 0.002
     pos = _to_float(cfg.get("slice_position"), 0.0)
+    policy = normalize_slice_particle_policy(
+        cfg.get("slice_particle_policy"), SLICE_POLICY_CONTAINED
+    )
 
     return {
         "slice_enabled": True,
@@ -186,6 +207,8 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
             cfg.get("keep_only_intersecting_particles"), True
         ),
         "preserve_original_packing": _to_bool(cfg.get("preserve_original_packing"), True),
+        "slice_particle_policy": policy,
+        "debug_export_gizmos": _to_bool(cfg.get("debug_export_gizmos"), False),
     }
 
 
@@ -255,10 +278,120 @@ def particle_intersects_slice(
     slice_position: float,
     slice_thickness: float,
 ) -> bool:
+    """criterio legado: interseção no eixo da fatia (sem limite radial)."""
     r_eq = collision_radius_for_particle_kind(particle_kind, particle_diameter)
     coord = particle_coord_on_axis(center, axis)
     half = slice_thickness / 2.0
     return abs(coord - slice_position) <= r_eq + half
+
+
+def rho_from_center_xy(center: vec3) -> float:
+    """distância ao eixo z do leito (plano xy), alinhado a AnnulusBedDomain."""
+    return math.hypot(float(center[0]), float(center[1]))
+
+
+def particle_slice_metrics(
+    center: vec3,
+    *,
+    particle_kind: str,
+    particle_diameter: float,
+    slice_axis: str,
+    slice_center: float,
+    slice_thickness: float,
+    r_util: float,
+) -> Dict[str, Any]:
+    r_eq = collision_radius_for_particle_kind(particle_kind, particle_diameter)
+    rho = rho_from_center_xy(center)
+    coord = particle_coord_on_axis(center, slice_axis)
+    half = slice_thickness / 2.0
+    d_plane = abs(coord - slice_center)
+    r_sphere = particle_diameter * 0.5
+    r_section = sphere_section_radius(r_sphere, d_plane)
+
+    passes_intersecting_radial = rho - r_eq <= r_util + 1e-12
+    passes_contained_radial = rho + r_eq <= r_util + 1e-12
+    passes_intersecting_slice = abs(coord - slice_center) <= half + r_eq + 1e-12
+    passes_contained_slice = abs(coord - slice_center) <= half - r_eq + 1e-12
+
+    leak_radial = rho + max(r_section, r_eq) > r_util + 1e-9
+    leak_slice = False
+    if r_section > 1e-12:
+        fp_c = slice_footprint_center(
+            center,
+            slice_axis=slice_axis,
+            slice_position=slice_center,
+            preserve_original_packing=True,
+        )
+        leak_slice = not (
+            passes_contained_radial
+            and passes_contained_slice
+            and rho + r_section <= r_util + 1e-9
+        )
+
+    return {
+        "center": [float(center[0]), float(center[1]), float(center[2])],
+        "dist_radial": rho,
+        "coord_slice": coord,
+        "r_eq": r_eq,
+        "r_section": r_section,
+        "passes_intersecting_radial": passes_intersecting_radial,
+        "passes_contained_radial": passes_contained_radial,
+        "passes_intersecting_slice": passes_intersecting_slice,
+        "passes_contained_slice": passes_contained_slice,
+        "leak_radial_footprint": leak_radial,
+        "leak_footprint_legacy": leak_radial or leak_slice,
+        "passes_legacy_slice_only": passes_intersecting_slice,
+    }
+
+
+def particle_passes_policy(
+    center: vec3,
+    *,
+    particle_kind: str,
+    particle_diameter: float,
+    slice_axis: str,
+    slice_center: float,
+    slice_thickness: float,
+    r_util: float,
+    policy: str = SLICE_POLICY_CONTAINED,
+) -> bool:
+    m = particle_slice_metrics(
+        center,
+        particle_kind=particle_kind,
+        particle_diameter=particle_diameter,
+        slice_axis=slice_axis,
+        slice_center=slice_center,
+        slice_thickness=slice_thickness,
+        r_util=r_util,
+    )
+    pol = normalize_slice_particle_policy(policy, SLICE_POLICY_CONTAINED)
+    if pol == SLICE_POLICY_CONTAINED:
+        # radial: esfera inteira dentro do cilindro util
+        # eixo da fatia: interseção com a lâmina (a pegada 2d não exige esfera contida na espessura)
+        return bool(m["passes_contained_radial"] and m["passes_intersecting_slice"])
+    return bool(m["passes_intersecting_radial"] and m["passes_intersecting_slice"])
+
+
+def footprint_vertices_leak_util(
+    vertices: Sequence[vec3],
+    *,
+    r_util: float,
+    slice_axis: str,
+    slice_center: float,
+    slice_thickness: float,
+) -> bool:
+    """true se algum vertice da pegada esta fora do volume util."""
+    lo = slice_center - slice_thickness / 2.0
+    hi = slice_center + slice_thickness / 2.0
+    ai = axis_index(slice_axis)
+    for p in vertices:
+        rho = math.hypot(p[0], p[1])
+        if rho > r_util + 1e-9:
+            return True
+        s = p[ai]
+        if s < lo - 1e-9 or s > hi + 1e-9:
+            return True
+    return False
 
 
 def sphere_section_radius(sphere_radius: float, distance_to_plane: float) -> float:

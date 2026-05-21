@@ -308,9 +308,13 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
             + str(report_legacy.get("messages", []))[:500]
         )
     centers_legacy = [tuple(part.pos) for part in particulas_finais]
-    slice_cfg = dict(p.get("slice") or {})
+    slice_cfg = resolve_slice_config(p) or dict(p.get("slice") or {})
+    slice_sum: Dict[str, Any] = {}
     if slice_cfg_active(slice_cfg):
-        verts, faces = apply_thin_slice_mesh(
+        dbg_json = None
+        if slice_cfg.get("debug_export_gizmos"):
+            dbg_json = out_stl.parent / f"{out_stl.stem}_slice_debug.json"
+        verts, faces, slice_sum = apply_thin_slice_mesh(
             verts,
             faces,
             centers_legacy,
@@ -320,6 +324,7 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
             r_int=r_int,
             slice_cfg=slice_cfg,
             segmentos=int(p.get("mesh_segmentos", 48)),
+            debug_json_path=dbg_json,
         )
     else:
         cyl_seg = max(12, min(32, int(p.get("mesh_segmentos", 48) // 2)))
@@ -342,6 +347,7 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
     preview_n = 12
     # json lateral para o modo testes rapidos e para inspecao humana sem abrir stl
     # report legacy vem de validate configuration que compara pares e limites do dominio
+    slice_summary_legacy = slice_sum if slice_cfg_active(slice_cfg) else {}
     sidecar: Dict[str, Any] = {
         "packing_method": "rigid_body",
         "particle_kind": pk,
@@ -367,6 +373,9 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
         "pair_violations": report_legacy.get("pair_violations"),
         "domain_violations": report_legacy.get("domain_violations"),
     }
+    if slice_summary_legacy:
+        sidecar["slice_particle_summary"] = slice_summary_legacy
+        sidecar["slice_particle_policy"] = slice_cfg.get("slice_particle_policy")
     out_json = out_stl.parent / f"{out_stl.stem}_pure_bed.json"
     out_json.parent.mkdir(parents=True, exist_ok=True)
     with out_json.open("w", encoding="utf-8") as fp:
@@ -501,8 +510,9 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
 
     # segmentos do cilindro limitados para nao explodir memoria
     seg = min(64, max(12, p.get("mesh_segmentos", 48)))
-    slice_cfg = dict(p.get("slice") or {})
+    slice_cfg = resolve_slice_config(p) or dict(p.get("slice") or {})
     gm = str(p.get("geometry_mode") or "full_3d")
+    slice_summary_scientific: Dict[str, Any] = {}
     if not slice_cfg_active(slice_cfg):
         packed = build_packed_bed_model(
             r_ext=r_ext,
@@ -531,7 +541,10 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             lat_sphere=p["sphere_lat"],
             lon_sphere=p["sphere_lon"],
         )
-        v_all, f_all = apply_thin_slice_mesh(
+        dbg_json = None
+        if slice_cfg.get("debug_export_gizmos"):
+            dbg_json = out_stl.parent / f"{out_stl.stem}_slice_debug.json"
+        v_all, f_all, slice_sum = apply_thin_slice_mesh(
             shell.mesh.vertices,
             shell.mesh.faces,
             centers,
@@ -541,8 +554,10 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             r_int=r_int,
             slice_cfg=slice_cfg,
             segmentos=seg,
+            debug_json_path=dbg_json,
         )
         packed = type(shell)(mesh=type(shell.mesh)(vertices=v_all, faces=f_all), meta=shell.meta)  # type: ignore
+        slice_summary_scientific = slice_sum
 
     preview_n = 12
     gen_public = {k: v for k, v in gen.items() if k != "centers"}
@@ -588,6 +603,9 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
     out_json = out_stl.parent / f"{out_stl.stem}_pure_bed.json"
     if slice_cfg_active(slice_cfg):
         extra["slice"] = slice_cfg
+        if slice_summary_scientific:
+            extra["slice_particle_summary"] = slice_summary_scientific
+            extra["slice_particle_policy"] = slice_cfg.get("slice_particle_policy")
     export_model_data(packed, out_stl, out_json=out_json, extra=extra)
 
 

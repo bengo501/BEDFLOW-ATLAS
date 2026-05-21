@@ -198,6 +198,7 @@ def _build_and_export_mesh(
     gm = geometry_mode_from_data(p)
     slice_cfg = resolve_slice_config(p)
     bed_mode_notes = validate_bed_geometry_mode(p, gm)
+    slice_summary_pipe: Dict[str, Any] = {}
 
     if not slice_cfg_active(slice_cfg):
         packed = build_packed_bed_model(
@@ -229,7 +230,10 @@ def _build_and_export_mesh(
             lon_sphere=_to_int(p.get("sphere_lon"), 6),
             bed_config=p,
         )
-        v_all, f_all = apply_thin_slice_mesh(
+        dbg_json = None
+        if slice_cfg.get("debug_export_gizmos"):
+            dbg_json = out_stl.parent / f"{out_stl.stem}_slice_debug.json"
+        v_all, f_all, slice_sum = apply_thin_slice_mesh(
             shell.mesh.vertices,
             shell.mesh.faces,
             centers,
@@ -239,10 +243,12 @@ def _build_and_export_mesh(
             r_int=r_int,
             slice_cfg=slice_cfg,
             segmentos=seg,
+            debug_json_path=dbg_json,
         )
         packed = type(shell)(
             mesh=type(shell.mesh)(vertices=v_all, faces=f_all), meta=shell.meta
         )
+        slice_summary_pipe = slice_sum
 
     preview_n = 12
     extra: Dict[str, Any] = {
@@ -260,6 +266,9 @@ def _build_and_export_mesh(
     }
     if slice_cfg_active(slice_cfg):
         extra["slice"] = slice_cfg
+        if slice_summary_pipe:
+            extra["slice_particle_summary"] = slice_summary_pipe
+            extra["slice_particle_policy"] = slice_cfg.get("slice_particle_policy")
         p_slice, slice_poro_meta = compute_thin_slice_porosity(
             centers,
             pk,
