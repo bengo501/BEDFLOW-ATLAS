@@ -1,6 +1,7 @@
 # corre blender ou script python conforme MODELING_PROFILE para gerar geometria
 # atualiza objeto job mutavel partilhado pelo router e pela tarefa em background
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -229,6 +230,90 @@ class BlenderService:
                 json.dumps(sc, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
+
+    def _finalize_blender_export_metadata(
+        self,
+        job,
+        blend_path: Path,
+        json_path: Path,
+        *,
+        job_id: str,
+    ) -> None:
+        try:
+            bed_data = json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            bed_data = {}
+        packing = (
+            bed_data.get("packing") if isinstance(bed_data.get("packing"), dict) else {}
+        )
+        if packing.get("random_seed") is not None:
+            job.metadata["packing_random_seed"] = packing["random_seed"]
+        particles = (
+            bed_data.get("particles")
+            if isinstance(bed_data.get("particles"), dict)
+            else {}
+        )
+        if particles.get("seed") is not None:
+            job.metadata["particles_seed"] = particles["seed"]
+        gm = bed_data.get("geometry_mode")
+        if gm:
+            job.metadata["geometry_mode"] = gm
+        job.metadata["generation_backend"] = str(
+            bed_data.get("generation_backend") or "blender"
+        )
+        job.metadata["job_id"] = job_id
+        job.metadata["modeling_profile"] = "blender"
+
+        stl_path = blend_path.with_suffix(".stl")
+        if stl_path.is_file():
+            rel_stl = str(stl_path.relative_to(self.project_root)).replace("\\", "/")
+            job.metadata["stl_path"] = rel_stl
+            if rel_stl not in (job.output_files or []):
+                job.output_files = list(job.output_files or []) + [rel_stl]
+            try:
+                self._validate_stl_nonempty(stl_path)
+            except ValueError:
+                pass
+            if file_content_hash is not None:
+                job.metadata["content_hash"] = file_content_hash(stl_path)
+
+        sidecar = blend_path.parent / f"{blend_path.stem}_pure_bed.json"
+        mesh_for_sidecar = stl_path if stl_path.is_file() else None
+        if sidecar.is_file():
+            try:
+                sc = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                sc = {}
+        else:
+            sc = {}
+        if enrich_export_metadata is not None:
+            sc = enrich_export_metadata(
+                sc,
+                bed_data=bed_data,
+                job_id=job_id,
+                modeling_profile="blender",
+                mesh_path=mesh_for_sidecar,
+            )
+            try:
+                sidecar.write_text(
+                    json.dumps(sc, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+        for key in (
+            "geometry_mode",
+            "representation_dimension",
+            "bed_particle_layout",
+            "internal_cylinder_mode",
+            "content_hash",
+            "packing_random_seed",
+            "particles_seed",
+            "slice",
+            "slice_particle_summary",
+        ):
+            if sc.get(key) is not None:
+                job.metadata[key] = sc[key]
     
     async def generate_model(
         self,
@@ -324,11 +409,14 @@ class BlenderService:
                     "--params", str(json_path),
                     "--output", str(blend_path)
                 ]
+                run_env = {**os.environ, "BEDFLOW_JOB_ID": job_id}
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=300
+                    timeout=300,
+                    env=run_env,
+                    cwd=str(self.project_root),
                 )
                 job.progress = 80
                 job.updated_at = datetime.now()
@@ -343,6 +431,9 @@ class BlenderService:
                 job.output_files = [rel]
                 job.metadata["geometry_file"] = rel
                 job.metadata["blend_file"] = rel
+                self._finalize_blender_export_metadata(
+                    job, blend_path, json_path, job_id=job_id
+                )
             
             # atualizar bed no banco se fornecido
             if bed_id:

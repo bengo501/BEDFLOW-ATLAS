@@ -126,7 +126,7 @@ def test_align_center_to_slice_plane_preserves_when_true():
         slice_position=0.0,
         preserve_original_packing=True,
     )
-    assert c[1] == pytest.approx(0.2)
+    assert c[1] == pytest.approx(0.0)
     assert c[0] == pytest.approx(0.1)
     assert c[2] == pytest.approx(0.3)
 
@@ -138,7 +138,7 @@ def test_align_center_to_slice_plane_snaps_when_false():
         slice_position=0.0,
         preserve_original_packing=False,
     )
-    assert c[1] == pytest.approx(0.0)
+    assert c[1] == pytest.approx(0.2)
     assert c[0] == pytest.approx(0.1)
     assert c[2] == pytest.approx(0.3)
 

@@ -1,5 +1,6 @@
 import bpy
 import math
+import os
 import random
 import json
 import sys
@@ -517,23 +518,22 @@ def _create_slice_disc_bpy(
     name: str,
     vertices: int = 24,
 ) -> Any:
-    """cilindro fino alinhado ao slice_axis via dimensions (evita rotação bpy inconsistente)."""
+    """cilindro fino com eixo local z rodado para coincidir com slice_axis (discos circulares na fatia)."""
+    from mathutils import Euler  # noqa: E402
+    from thin_slice_particles import blender_cylinder_rotation  # noqa: E402
+
+    rs = max(float(radius), 1e-9)
+    t = max(float(thickness), 1e-9)
+    rot = blender_cylinder_rotation(slice_axis)
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=max(8, vertices),
-        radius=1.0,
-        depth=1.0,
+        radius=rs,
+        depth=t,
         location=loc3,
+        rotation=Euler(rot, "XYZ"),
     )
     obj = bpy.context.active_object
     obj.name = name
-    rs = max(float(radius), 1e-9)
-    _set_object_dimensions_on_slice_axis(
-        obj,
-        slice_axis=slice_axis,
-        thickness=thickness,
-        size_a=2.0 * rs,
-        size_b=2.0 * rs,
-    )
     return obj
 
 
@@ -639,12 +639,6 @@ def aplicar_thin_slice(
         except Exception:
             pass
 
-    try:
-        bpy.data.objects.remove(cutter, do_unlink=True)
-    except Exception:
-        pass
-    cutter = None
-
     disc_verts = 24
     n_slice_parts = 0
     n_full_parts = 0
@@ -746,7 +740,16 @@ def aplicar_thin_slice(
                 )
                 summary["n_snapped_to_wall"] += 1
 
+        rho_final = math.hypot(cx, cy)
+        if rho_final + rs > frame.r_util + 1e-6:
+            summary["n_dropped_policy"] += 1
+            summary["n_dropped_leak_radial"] = (
+                int(summary.get("n_dropped_leak_radial") or 0) + 1
+            )
+            continue
+
         loc3 = (cx, cy, cz)
+        slab_t = max(float(thickness), 1e-9)
 
         if pk == "cube":
             bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc3)
@@ -754,20 +757,22 @@ def aplicar_thin_slice(
             _set_object_dimensions_on_slice_axis(
                 obj,
                 slice_axis=axis,
-                thickness=thickness,
+                thickness=slab_t,
                 size_a=d_char,
                 size_b=d_char,
             )
             obj.name = f"slice_box_{idx:04d}"
         else:
-            _create_slice_disc_bpy(
+            obj = _create_slice_disc_bpy(
                 loc3,
                 radius=max(rs, r_ax * 0.25),
-                thickness=thickness,
+                thickness=slab_t,
                 slice_axis=axis,
                 name=f"slice_disc_{idx:04d}",
                 vertices=disc_verts,
             )
+
+        _boolean_intersect_apply(obj, cutter, label="thin_slice_particle")
 
         n_slice_parts += 1
         summary["n_kept"] += 1
@@ -775,6 +780,11 @@ def aplicar_thin_slice(
         if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
             metrics["action"] = "kept"
             particle_logs.append(metrics)
+
+    try:
+        bpy.data.objects.remove(cutter, do_unlink=True)
+    except Exception:
+        pass
 
     if radii_kept:
         summary["min_slice_radius"] = min(radii_kept)
@@ -997,6 +1007,23 @@ def write_export_sidecar_json(
                 payload[k] = slice_summary[k]
     out_json = output_path.parent / f"{output_path.stem}_pure_bed.json"
     out_json.parent.mkdir(parents=True, exist_ok=True)
+    stl_sibling = output_path.parent / f"{output_path.stem}.stl"
+    mesh_for_hash = stl_sibling if stl_sibling.is_file() else None
+    try:
+        _repo = Path(__file__).resolve().parents[2]
+        if str(_repo) not in sys.path:
+            sys.path.insert(0, str(_repo))
+        from bedflow_export_metadata import enrich_export_metadata  # noqa: E402
+
+        payload = enrich_export_metadata(
+            payload,
+            bed_data=params if isinstance(params, dict) else {},
+            modeling_profile="blender",
+            job_id=os.environ.get("BEDFLOW_JOB_ID"),
+            mesh_path=mesh_for_hash,
+        )
+    except ImportError:
+        pass
     with out_json.open("w", encoding="utf-8") as fp:
         json.dump(payload, fp, indent=2, ensure_ascii=False)
     print(f"sidecar metadata: {out_json}")

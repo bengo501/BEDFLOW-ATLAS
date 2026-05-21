@@ -127,12 +127,19 @@ def align_center_to_slice_plane(
     slice_position: float,
     preserve_original_packing: bool = True,
 ) -> vec3:
-    """fixa a coordenada no eixo de corte em slice_position quando preserve_original_packing=false."""
+    """
+    coloca o centro na lâmina (coordenada no eixo da fatia = slice_position).
+
+    preserve_original_packing=true no json: mantém o layout no plano da fatia
+    (x,z para slice_axis=y) e projeta na lâmina — mesma semântica do commit 7868234
+    (preserve_other_coords).
+    false: mantém também a coordenada fora do plano (empacotamento 3d bruto).
+    """
     return slice_footprint_center(
         center,
         slice_axis=slice_axis,
         slice_position=slice_position,
-        preserve_original_packing=preserve_original_packing,
+        preserve_original_packing=not preserve_original_packing,
     )
 
 

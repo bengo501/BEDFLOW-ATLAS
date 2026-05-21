@@ -417,7 +417,8 @@ def particle_passes_policy(
         slice_thickness=slice_thickness,
         r_util=r_util,
     )
-    # inclusão: cruza o plano da fatia; vazamento radial é corrigido por snap à parede
+    # inclusão: cruza o plano da fatia; vazamento radial é corrigido por snap / pós-validação
+    _ = policy
     return bool(m["passes_intersecting_slice"])
 
 

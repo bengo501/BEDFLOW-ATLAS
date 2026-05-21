@@ -77,7 +77,7 @@ def test_align_on_slice_plane():
         (0.03, 0.15, 0.05),
         slice_axis="y",
         slice_position=0.0,
-        preserve_original_packing=False,
+        preserve_original_packing=True,
     )
     assert c[1] == pytest.approx(0.0)
     assert c[0] == pytest.approx(0.03)
