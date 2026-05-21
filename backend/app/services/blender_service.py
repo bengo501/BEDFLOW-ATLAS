@@ -9,8 +9,21 @@ from typing import Dict, Any, Optional
 
 from bedflow_local_paths import models_3d_dir, resolve_existing_artifact
 
+from backend.app.services.blender_launch import (
+    BLENDER_IMPORT_LOG_HINT,
+    default_subprocess_log,
+    pick_mesh_to_open_in_gui,
+    popen_blender_mesh,
+)
 from backend.app.api.models import JobStatus
 from backend.app import config as app_config
+from backend.app.services.job_persistence import persist_job
+
+try:
+    from bedflow_export_metadata import enrich_export_metadata, file_content_hash
+except ImportError:
+    enrich_export_metadata = None  # type: ignore
+    file_content_hash = None  # type: ignore
 
 
 def _profile_from_bed_json(json_path: Path, modeling_profile: Optional[str]) -> str:
@@ -136,6 +149,86 @@ class BlenderService:
             return result.returncode == 0
         except:
             return False
+
+    def _validate_stl_nonempty(self, stl_path: Path) -> None:
+        if not stl_path.is_file():
+            raise FileNotFoundError(f"stl não encontrado: {stl_path}")
+        if stl_path.stat().st_size < 84:
+            raise ValueError("stl vazio ou corrupto (ficheiro demasiado pequeno)")
+        data = stl_path.read_bytes()
+        if data[:5].lower() == b"solid":
+            if b"vertex" not in data[:8000].lower():
+                raise ValueError("stl ascii sem vértices")
+            return
+        if len(data) >= 84:
+            n_tri = int.from_bytes(data[80:84], "little")
+            if n_tri < 1:
+                raise ValueError("stl binário sem triângulos")
+
+    def _finalize_python_stl_metadata(
+        self,
+        job,
+        stl_path: Path,
+        json_path: Path,
+        *,
+        job_id: str,
+    ) -> None:
+        self._validate_stl_nonempty(stl_path)
+        try:
+            bed_data = json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            bed_data = {}
+        if file_content_hash is not None:
+            job.metadata["content_hash"] = file_content_hash(stl_path)
+        packing = bed_data.get("packing") if isinstance(bed_data.get("packing"), dict) else {}
+        if packing.get("random_seed") is not None:
+            job.metadata["packing_random_seed"] = packing["random_seed"]
+        particles = bed_data.get("particles") if isinstance(bed_data.get("particles"), dict) else {}
+        if particles.get("seed") is not None:
+            job.metadata["particles_seed"] = particles["seed"]
+        gm = bed_data.get("geometry_mode")
+        if gm:
+            job.metadata["geometry_mode"] = gm
+        sidecar = stl_path.parent / f"{stl_path.stem}_pure_bed.json"
+        if sidecar.is_file():
+            try:
+                sc = json.loads(sidecar.read_text(encoding="utf-8"))
+                if enrich_export_metadata is not None:
+                    sc = enrich_export_metadata(
+                        sc,
+                        bed_data=bed_data,
+                        job_id=job_id,
+                        modeling_profile="python",
+                        mesh_path=stl_path,
+                    )
+                else:
+                    sc["generation_backend"] = "python_engine"
+                    sc["job_id"] = job_id
+                sidecar.write_text(
+                    json.dumps(sc, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                job.metadata["geometry_mode"] = sc.get(
+                    "geometry_mode", job.metadata.get("geometry_mode")
+                )
+                job.metadata["representation_dimension"] = sc.get(
+                    "representation_dimension"
+                )
+                job.metadata["bed_particle_layout"] = sc.get("bed_particle_layout")
+            except (OSError, json.JSONDecodeError):
+                pass
+        elif enrich_export_metadata is not None:
+            sc = enrich_export_metadata(
+                {"generation_backend": "python_engine", "geometry_mode": gm},
+                bed_data=bed_data,
+                job_id=job_id,
+                modeling_profile="python",
+                mesh_path=stl_path,
+            )
+            sidecar.write_text(
+                json.dumps(sc, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
     
     async def generate_model(
         self,
@@ -208,7 +301,12 @@ class BlenderService:
                 job.output_files = [rel]
                 job.metadata["geometry_file"] = rel
                 job.metadata["stl_path"] = rel
-                job.metadata["blend_file"] = rel
+                job.metadata["generation_backend"] = "python_engine"
+                job.metadata["modeling_profile"] = "python"
+                job.metadata["job_id"] = job_id
+                self._finalize_python_stl_metadata(
+                    job, stl_path, json_path, job_id=job_id
+                )
             else:
                 if not self.check_availability():
                     raise RuntimeError(
@@ -298,10 +396,37 @@ class BlenderService:
                 if own_session is not None:
                     own_session.close()
             
-            if profile == "blender" and open_blender:
-                bp = self.project_root / (job.metadata.get("blend_file") or "")
-                if bp.suffix.lower() == ".blend" and bp.exists():
-                    subprocess.Popen([self.blender_exe, str(bp)])
+            if open_blender:
+                stl_rel = job.metadata.get("stl_path")
+                blend_rel = job.metadata.get("blend_file")
+                stl_p = (
+                    (self.project_root / str(stl_rel)).resolve()
+                    if stl_rel
+                    else None
+                )
+                blend_p = (
+                    (self.project_root / str(blend_rel)).resolve()
+                    if blend_rel
+                    else None
+                )
+                to_open = pick_mesh_to_open_in_gui(
+                    blend_path=blend_p, stl_path=stl_p
+                )
+                if to_open is not None:
+                    popen_blender_mesh(
+                        self.blender_exe,
+                        to_open,
+                        project_root=self.project_root,
+                        log_file=default_subprocess_log(self.project_root),
+                    )
+                    try:
+                        rel_open = str(
+                            to_open.relative_to(self.project_root)
+                        ).replace("\\", "/")
+                    except ValueError:
+                        rel_open = str(to_open)
+                    job.metadata["blender_gui_opened"] = rel_open
+                    job.metadata["blender_import_log_hint"] = BLENDER_IMPORT_LOG_HINT
             
         except subprocess.TimeoutExpired:
             job.status = JobStatus.FAILED
@@ -312,4 +437,6 @@ class BlenderService:
             job.status = JobStatus.FAILED
             job.error_message = str(e)
             job.updated_at = datetime.now()
+        finally:
+            persist_job(job)
 

@@ -6,7 +6,7 @@ import sys
 import argparse
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # o blender executa este arquivo como script entao o diretorio do arquivo precisa estar no sys path
 # assim o python acha a pasta packed_bed_science ao lado deste arquivo
@@ -487,6 +487,56 @@ def _boolean_intersect_apply(target_obj, cutter_obj, label: str = "thin_slice") 
         return False
 
 
+def _set_object_dimensions_on_slice_axis(
+    obj,
+    *,
+    slice_axis: str,
+    thickness: float,
+    size_a: float,
+    size_b: float,
+) -> None:
+    """define dimensões mundiais: espessura no eixo da fatia, tamanhos no plano."""
+    ax = (slice_axis or "y").strip().lower()
+    t = max(float(thickness), 1e-9)
+    a = max(float(size_a), 1e-9)
+    b = max(float(size_b), 1e-9)
+    if ax == "x":
+        obj.dimensions = (t, a, b)
+    elif ax == "y":
+        obj.dimensions = (a, t, b)
+    else:
+        obj.dimensions = (a, b, t)
+
+
+def _create_slice_disc_bpy(
+    loc3: Tuple[float, float, float],
+    *,
+    radius: float,
+    thickness: float,
+    slice_axis: str,
+    name: str,
+    vertices: int = 24,
+) -> Any:
+    """cilindro fino alinhado ao slice_axis via dimensions (evita rotação bpy inconsistente)."""
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=max(8, vertices),
+        radius=1.0,
+        depth=1.0,
+        location=loc3,
+    )
+    obj = bpy.context.active_object
+    obj.name = name
+    rs = max(float(radius), 1e-9)
+    _set_object_dimensions_on_slice_axis(
+        obj,
+        slice_axis=slice_axis,
+        thickness=thickness,
+        size_a=2.0 * rs,
+        size_b=2.0 * rs,
+    )
+    return obj
+
+
 def aplicar_thin_slice(
     slice_cfg: dict,
     *,
@@ -497,15 +547,15 @@ def aplicar_thin_slice(
     particle_diameter: float = 0.005,
     particle_kind: str = "sphere",
     output_path: Optional[Path] = None,
-) -> None:
+) -> Dict[str, Any]:
     # leito e tampas: boolean intersect com cubo fino (referencial unificado)
     # particulas: filtro contained/intersecting; intersecting clipa com slice_volume
     from mathutils import Euler
 
     if not isinstance(slice_cfg, dict):
-        return
+        return {}
     if not _coerce_bool(slice_cfg.get("slice_enabled"), False):
-        return
+        return {}
 
     _pm = Path(__file__).resolve().parents[1] / "python_modeling"
     if str(_pm) not in sys.path:
@@ -521,7 +571,6 @@ def aplicar_thin_slice(
     from thin_slice_particles import (  # noqa: E402
         SliceParticleConfig,
         align_center_to_slice_plane,
-        blender_cylinder_rotation,
         compute_slice_radius,
         sphere_intersects_slice,
     )
@@ -542,7 +591,6 @@ def aplicar_thin_slice(
     pk = (particle_kind or "sphere").strip().lower()
     d_char = float(particle_diameter)
     r_ax = d_char * 0.5
-    euler_rot = blender_cylinder_rotation(axis)
 
     loc, scale = blender_cutter_spec(frame)
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=tuple(loc))
@@ -688,7 +736,7 @@ def aplicar_thin_slice(
             center,
             slice_axis=axis,
             slice_position=pos,
-            preserve_other_coords=pcfg.preserve_original_packing,
+            preserve_original_packing=pcfg.preserve_original_packing,
         )
         if pcfg.snap_radial_to_wall:
             rho = math.hypot(cx, cy)
@@ -699,23 +747,27 @@ def aplicar_thin_slice(
                 summary["n_snapped_to_wall"] += 1
 
         loc3 = (cx, cy, cz)
-        rot = Euler(euler_rot, "XYZ")
 
         if pk == "cube":
             bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc3)
             obj = bpy.context.active_object
-            obj.dimensions = (d_char, d_char, thickness)
+            _set_object_dimensions_on_slice_axis(
+                obj,
+                slice_axis=axis,
+                thickness=thickness,
+                size_a=d_char,
+                size_b=d_char,
+            )
             obj.name = f"slice_box_{idx:04d}"
         else:
-            bpy.ops.mesh.primitive_cylinder_add(
-                vertices=disc_verts,
+            _create_slice_disc_bpy(
+                loc3,
                 radius=max(rs, r_ax * 0.25),
-                depth=thickness,
-                location=loc3,
-                rotation=rot,
+                thickness=thickness,
+                slice_axis=axis,
+                name=f"slice_disc_{idx:04d}",
+                vertices=disc_verts,
             )
-            obj = bpy.context.active_object
-            obj.name = f"slice_disc_{idx:04d}"
 
         n_slice_parts += 1
         summary["n_kept"] += 1
@@ -743,6 +795,7 @@ def aplicar_thin_slice(
         f"snap_parede={summary.get('n_snapped_to_wall', 0)}, "
         f"fora_plano_fatia={summary.get('n_dropped_policy', 0)}"
     )
+    return summary
 
 
 def _salvar_relatorio_packing(output_path: Path, relatorio: dict):
@@ -899,6 +952,54 @@ def export_outputs(args, output_path: Path, *, formats_override: Optional[str] =
         except Exception as e:
             print(f"erro ao exportar .stl: {e}")
     print(f"\nexportacao concluida {len(formats)} formato(s) processado(s)")
+
+
+def write_export_sidecar_json(
+    output_path: Path,
+    params: dict,
+    *,
+    slice_summary: Optional[Dict[str, Any]] = None,
+) -> None:
+    """grava {stem}_pure_bed.json junto ao blend/stl para o viewer web."""
+    try:
+        _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+        if str(_pm) not in sys.path:
+            sys.path.insert(0, str(_pm))
+        from geometry_modes import geometry_mode_from_data, resolve_slice_config  # noqa: E402
+    except ImportError:
+        geometry_mode_from_data = lambda _p: str(params.get("geometry_mode") or "")  # type: ignore
+        resolve_slice_config = lambda _p: {}  # type: ignore
+
+    gm = geometry_mode_from_data(params)
+    payload: Dict[str, Any] = {
+        "geometry_mode": gm,
+        "generation_backend": str(params.get("generation_backend") or "blender"),
+        "packing_method": str(
+            (params.get("packing") or {}).get("method")
+            or params.get("packing_mode")
+            or ""
+        ),
+    }
+    sl = resolve_slice_config(params)
+    if sl:
+        payload["slice"] = sl
+    if slice_summary:
+        payload["slice_particle_summary"] = slice_summary
+        for k in (
+            "slice_axis",
+            "slice_position",
+            "slice_thickness",
+            "n_kept",
+            "min_slice_radius",
+            "max_slice_radius",
+        ):
+            if k in slice_summary and slice_summary[k] is not None:
+                payload[k] = slice_summary[k]
+    out_json = output_path.parent / f"{output_path.stem}_pure_bed.json"
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    with out_json.open("w", encoding="utf-8") as fp:
+        json.dump(payload, fp, indent=2, ensure_ascii=False)
+    print(f"sidecar metadata: {out_json}")
 
 
 def main_com_parametros():
@@ -1307,8 +1408,9 @@ def main_com_parametros():
             raise
         except Exception:
             pass
+        slice_summary_export: Dict[str, Any] = {}
         if isinstance(slice_cfg, dict) and slice_cfg.get("slice_enabled"):
-            aplicar_thin_slice(
+            slice_summary_export = aplicar_thin_slice(
                 slice_cfg,
                 altura=altura,
                 raio_ext=raio_ext,
@@ -1317,13 +1419,17 @@ def main_com_parametros():
                 particle_diameter=diametro_particula,
                 particle_kind=particle_kind,
                 output_path=Path(args.output) if args.output else None,
-            )
+            ) or {}
 
         # ambos os ramos chegam aqui com objetos na cena prontos para salvar
         if args.output:
             _prepare_export_visibility(params)
             fmt_cli = export_formats_from_params(params, getattr(args, "formats", "blend,stl,obj"))
-            export_outputs(args, Path(args.output), formats_override=fmt_cli)
+            out_p = Path(args.output)
+            export_outputs(args, out_p, formats_override=fmt_cli)
+            write_export_sidecar_json(
+                out_p, params, slice_summary=slice_summary_export or None
+            )
         else:
             print("\naviso caminho saida nao especificado arquivo nao salvo")
 

@@ -1,17 +1,21 @@
 # pipeline unificado: packing -> malha -> export
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 _PMDIR = Path(__file__).resolve().parent.parent
+_REPO = _PMDIR.parent.parent
 _SCRIPTS = _PMDIR.parent / "blender_scripts"
 if str(_PMDIR) not in sys.path:
     sys.path.insert(0, str(_PMDIR))
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
+if str(_REPO) not in sys.path:
+    sys.path.insert(0, str(_REPO))
 
 from packed_bed_science.geometry_math import collision_radius_for_particle_kind  # noqa: E402
 from packed_bed_science.packing_hexagonal import generate_hexagonal_packing  # noqa: E402
@@ -29,6 +33,11 @@ from geometry_modes import (  # noqa: E402
 from pseudo_2d_statistical import generate_statistical_thin_3d_stl  # noqa: E402
 from pure_bed_mesh import build_packed_bed_model, export_model_data  # noqa: E402
 from thin_slice_build import apply_thin_slice_mesh, slice_cfg_active  # noqa: E402
+from mesh_export_validate import (  # noqa: E402
+    check_geometry_mode_slice_consistency,
+    validate_stl_file,
+)
+import bedflow_export_metadata as _export_meta  # noqa: E402
 
 from .dem_solver import run_dem_packing
 from .domain import PackedBedDomain
@@ -300,11 +309,66 @@ def _build_and_export_mesh(
             if k in packed.meta and k not in extra:
                 extra[k] = packed.meta[k]
 
+    warnings = list(extra.get("warnings") or [])
+    warnings.extend(check_geometry_mode_slice_consistency(p, slice_cfg))
+    if warnings:
+        extra["warnings"] = warnings
+        for w in warnings:
+            print(f"[bedflow aviso] {w}", file=sys.stderr)
+
+    extra["generation_backend"] = "python_engine"
+    extra = _export_meta.enrich_export_metadata(
+        extra,
+        bed_data=p,
+        modeling_profile=p.get("modeling_profile") or "python",
+    )
+
     out_json = out_stl.parent / f"{out_stl.stem}_pure_bed.json"
     report_path = out_stl.parent / f"{out_stl.stem}_packing_report.json"
     write_packing_report(result, report_path)
     extra["packing_report_path"] = str(report_path)
     export_model_data(packed, out_stl, out_json=out_json, extra=extra)
+
+    if out_json.is_file() and out_stl.is_file():
+        try:
+            sc = json.loads(out_json.read_text(encoding="utf-8"))
+            sc = _export_meta.enrich_export_metadata(
+                sc,
+                bed_data=p,
+                modeling_profile=p.get("modeling_profile") or "python",
+                mesh_path=out_stl,
+            )
+            out_json.write_text(
+                json.dumps(sc, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    if slice_cfg_active(slice_cfg):
+        vreport = validate_stl_file(
+            out_stl,
+            geometry_mode=gm,
+            slice_axis=str(slice_cfg.get("slice_axis", "y")),
+            slice_thickness=float(slice_cfg.get("slice_thickness", 0.002)),
+            bed_height=domain.height,
+        )
+        vreport["particle_region_only"] = False
+        if not vreport.get("ok"):
+            raise RuntimeError(
+                "validação thin slice falhou: "
+                + "; ".join(vreport.get("errors") or [])
+            )
+        if vreport.get("warnings"):
+            try:
+                side = json.loads(out_json.read_text(encoding="utf-8"))
+                side.setdefault("warnings", []).extend(vreport["warnings"])
+                out_json.write_text(
+                    json.dumps(side, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
 
 
 def generate_packed_bed(p: Dict[str, Any], out_stl: Path) -> PackingResult:

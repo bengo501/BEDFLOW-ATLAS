@@ -74,12 +74,13 @@ def test_snap_center_to_util_wall():
 
 def test_align_on_slice_plane():
     c = align_center_to_slice_plane(
-        _fixture_wall_center(),
+        (0.03, 0.15, 0.05),
         slice_axis="y",
         slice_position=0.0,
-        preserve_other_coords=True,
+        preserve_original_packing=False,
     )
     assert c[1] == pytest.approx(0.0)
+    assert c[0] == pytest.approx(0.03)
 
 
 def test_fixture_slice_edge_outside_plane_drops():

@@ -94,6 +94,17 @@ async def on_startup():
     DatabaseConnection.create_tables()
     # dados demo so se env e base permitirem
     seed_demo_data_if_needed()
+    try:
+        from backend.app.api import routes
+        from backend.app.api import routes_integrated
+        from backend.app.services.job_persistence import hydrate_jobs_store
+
+        n = hydrate_jobs_store(routes.jobs_store)
+        n += hydrate_jobs_store(routes_integrated.jobs_store_integrated)
+        if n:
+            print(f"[OK] {n} job(s) rehidratado(s) da base de dados")
+    except Exception as exc:
+        print(f"[aviso] rehidratação de jobs: {exc}")
 
 
 @app.get("/")
@@ -124,11 +135,15 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     # bloco main permite python backend app main py em dev
-    uvicorn.run(
-        "backend.app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    try:
+        uvicorn.run(
+            "backend.app.main:app",
+            host="0.0.0.0",
+            port=8000,
+            reload=True,
+            log_level="info",
+        )
+    except KeyboardInterrupt:
+        print("\n\napi encerrada. ate logo!\n")

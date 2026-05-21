@@ -16,6 +16,7 @@ from backend.app.api.models import (
 from backend.app.services.bed_service import BedService
 from backend.app.services.blender_service import BlenderService
 from backend.app.services.openfoam_service import OpenFOAMService
+from backend.app.services.job_persistence import persist_job
 
 from datetime import datetime
 import uuid
@@ -83,7 +84,8 @@ async def create_bed_full(
     )
     
     jobs_store_integrated[job_id] = job
-    
+    persist_job(job)
+
     background_tasks.add_task(
         _execute_full_pipeline,
         job_id=job_id,
@@ -154,7 +156,8 @@ async def _execute_full_pipeline(
                 metadata={}
             )
             jobs_store[blender_job_id] = blender_job
-            
+            persist_job(blender_job)
+
             await blender_service.generate_model(
                 job_id=blender_job_id,
                 json_file=result["json_file"],
@@ -215,6 +218,8 @@ async def _execute_full_pipeline(
         job.status = JobStatus.FAILED
         job.error_message = str(e)
         job.updated_at = datetime.now()
+    finally:
+        persist_job(job)
 
 
 @router.get("/pipeline/job/{job_id}", response_model=Job, tags=["pipeline"])
@@ -293,6 +298,7 @@ async def execute_full_pipeline_with_simulation(
     )
 
     jobs_store_integrated[job_id] = job
+    persist_job(job)
 
     background_tasks.add_task(
         _execute_full_pipeline_with_simulation,
@@ -488,6 +494,8 @@ async def _execute_full_pipeline_with_simulation(
         job.updated_at = datetime.now()
         import traceback
         job.logs.append(f"[{datetime.now()}] traceback: {traceback.format_exc()}")
+    finally:
+        persist_job(job)
 
 
 async def _create_openfoam_case(json_file: str, blend_file: str, job: Job, jobs_store: dict) -> Optional[str]:

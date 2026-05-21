@@ -18,6 +18,12 @@ from bedflow_local_paths import (
     resolve_validated_mesh_path,
     scan_project_mesh_files,
 )
+from backend.app.services.blender_launch import (
+    BLENDER_IMPORT_LOG_HINT,
+    build_blender_launch_command,
+    default_subprocess_log,
+    popen_blender_mesh,
+)
 
 router = APIRouter()
 
@@ -62,6 +68,18 @@ class MeshInfo(BaseModel):
     boolean_particle_tools: Optional[str] = None
     boolean_backend: Optional[str] = None
     boolean_warnings: Optional[str] = None
+    job_id: Optional[str] = Field(None, description="id do job que gerou a malha")
+    content_hash: Optional[str] = Field(None, description="sha256 do ficheiro de malha")
+    packing_random_seed: Optional[Any] = Field(None, description="seed do empacotamento")
+    particles_seed: Optional[Any] = Field(None, description="seed das partículas")
+    modeling_profile: Optional[str] = Field(None, description="perfil python/blender")
+    representation_dimension: Optional[str] = Field(
+        None, description="2d ou 3d (heurística por geometry_mode)"
+    )
+    bed_particle_layout: Optional[str] = Field(
+        None,
+        description="solid_fill ou boolean_holes",
+    )
 
 
 class MeshListResponse(BaseModel):
@@ -125,6 +143,13 @@ def _to_mesh_info(row: Dict[str, Any]) -> MeshInfo:
         boolean_particle_tools=row.get("boolean_particle_tools"),
         boolean_backend=row.get("boolean_backend"),
         boolean_warnings=row.get("boolean_warnings"),
+        job_id=row.get("job_id"),
+        content_hash=row.get("content_hash"),
+        packing_random_seed=row.get("packing_random_seed"),
+        particles_seed=row.get("particles_seed"),
+        modeling_profile=row.get("modeling_profile"),
+        representation_dimension=row.get("representation_dimension"),
+        bed_particle_layout=row.get("bed_particle_layout"),
     )
 
 
@@ -218,14 +243,18 @@ async def launch_desktop_viewer(body: LaunchViewerRequest):
     if not script.is_file():
         raise HTTPException(status_code=404, detail=f"script nao encontrado: {script}")
     py = shutil.which("python") or shutil.which("python3") or sys.executable
+    log_path = default_subprocess_log(root).with_name("bedflow_desktop_viewer.log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.Popen(
-            [py, str(script), str(mesh_path)],
-            cwd=str(root),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        with open(log_path, "ab", encoding="utf-8", errors="replace") as lf:
+            lf.write(f"\n--- launch {mesh_path.name} ---\n")
+            proc = subprocess.Popen(
+                [py, str(script), str(mesh_path)],
+                cwd=str(root),
+                stdin=subprocess.DEVNULL,
+                stdout=lf,
+                stderr=subprocess.STDOUT,
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {
@@ -233,6 +262,8 @@ async def launch_desktop_viewer(body: LaunchViewerRequest):
         "message": "visualizador desktop solicitado",
         "filename": row.get("filename") or mesh_path.name,
         "path": str(mesh_path),
+        "pid": proc.pid,
+        "log_hint": str(log_path),
     }
 
 
@@ -248,14 +279,19 @@ async def launch_blender_viewer(body: LaunchViewerRequest):
             status_code=503,
             detail="blender nao encontrado no servidor (instale ou ajuste o PATH)",
         )
+    root = project_root()
     try:
-        subprocess.Popen(
-            [svc.blender_exe, str(mesh_path)],
-            cwd=str(project_root()),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        _cmd, mode = build_blender_launch_command(
+            svc.blender_exe, mesh_path, project_root=root
         )
+        popen_blender_mesh(
+            svc.blender_exe,
+            mesh_path,
+            project_root=root,
+            log_file=default_subprocess_log(root),
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {
@@ -263,4 +299,8 @@ async def launch_blender_viewer(body: LaunchViewerRequest):
         "message": "blender solicitado",
         "filename": row.get("filename") or mesh_path.name,
         "path": str(mesh_path),
+        "launch_mode": mode,
+        "import_log_hint": BLENDER_IMPORT_LOG_HINT
+        if mode == "import_script"
+        else None,
     }

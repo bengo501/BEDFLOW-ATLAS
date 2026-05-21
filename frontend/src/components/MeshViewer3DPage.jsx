@@ -41,11 +41,41 @@ function meshGeometrySummary(m, pt) {
 function appendGeometryMetaRows(info, pt) {
   if (!info) return null;
   const rows = [];
+  if (info.representation_dimension) {
+    rows.push({
+      dt: pt ? 'dimensão' : 'dimension',
+      dd: info.representation_dimension,
+    });
+  }
   if (info.geometry_mode) {
     rows.push({ dt: pt ? 'geometria' : 'geometry', dd: info.geometry_mode });
   }
-  if (info.generation_backend) {
-    rows.push({ dt: pt ? 'motor' : 'backend', dd: info.generation_backend });
+  const motor =
+    info.generation_backend ||
+    (info.modeling_profile === 'python' ? 'python_engine' : info.modeling_profile);
+  if (motor) {
+    rows.push({ dt: pt ? 'motor' : 'backend', dd: motor });
+  }
+  if (info.bed_particle_layout) {
+    rows.push({
+      dt: pt ? 'layout partículas' : 'particle layout',
+      dd: info.bed_particle_layout,
+    });
+  }
+  if (info.job_id) {
+    rows.push({ dt: 'job id', dd: info.job_id });
+  }
+  if (info.content_hash) {
+    rows.push({
+      dt: pt ? 'hash' : 'hash',
+      dd: `${String(info.content_hash).slice(0, 16)}…`,
+    });
+  }
+  if (info.packing_random_seed != null) {
+    rows.push({ dt: pt ? 'seed empacotamento' : 'packing seed', dd: String(info.packing_random_seed) });
+  }
+  if (info.particles_seed != null) {
+    rows.push({ dt: pt ? 'seed partículas' : 'particles seed', dd: String(info.particles_seed) });
   }
   if (info.packing_method) {
     rows.push({ dt: pt ? 'empacotamento' : 'packing', dd: info.packing_method });
@@ -188,6 +218,8 @@ async function parseToObject3D(ext, buffer) {
   throw new Error(`formato nao suportado no viewer: ${e}`);
 }
 
+const THIN_RATIO_ORIENT = 0.08;
+
 function orientBedVertical(root, viewHint = null) {
   const gm = viewHint?.geometry_mode;
   if (gm === 'pseudo_2d_thin_slice' || gm === 'pseudo_2d_statistical') {
@@ -196,6 +228,12 @@ function orientBedVertical(root, viewHint = null) {
   const box = new THREE.Box3().setFromObject(root);
   if (box.isEmpty()) return;
   const size = box.getSize(new THREE.Vector3());
+  const dims = [size.x, size.y, size.z];
+  const minDim = Math.min(...dims);
+  const maxDim = Math.max(...dims) || 1;
+  if (minDim / maxDim < THIN_RATIO_ORIENT) {
+    return;
+  }
   const longest =
     size.x >= size.y && size.x >= size.z ? 'x' : size.y >= size.x && size.y >= size.z ? 'y' : 'z';
   if (longest === 'y') return;
@@ -381,6 +419,10 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       const buffer = await res.arrayBuffer();
       const viewHint = viewHintFromMeshInfo(info);
       const obj = await parseToObject3D(ext || 'stl', buffer);
+      const verts = countVertices(obj);
+      if (verts < 1) {
+        throw new Error(pt ? 'malha sem vértices' : 'mesh has no vertices');
+      }
       applyWireframe(obj, wireframe);
       orientBedVertical(obj, viewHint);
       centerOnFloor(obj);
@@ -417,6 +459,13 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           slice_thickness: info?.slice_thickness,
           slice_position: info?.slice_position,
           sidecar_json: info?.sidecar_json || '',
+          representation_dimension: info?.representation_dimension || '',
+          bed_particle_layout: info?.bed_particle_layout || '',
+          content_hash: info?.content_hash || '',
+          job_id: info?.job_id || '',
+          packing_random_seed: info?.packing_random_seed,
+          particles_seed: info?.particles_seed,
+          modeling_profile: info?.modeling_profile || '',
         });
       }
       try {
@@ -711,6 +760,13 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
           </section>
 
           {err ? <div className="mesh-viewer-error">{err}</div> : null}
+          {!err && meta?.representation_dimension === '2d' ? (
+            <p className="mesh-viewer-hint">
+              {pt
+                ? `modelo 2d: para ver discos circulares, rode a câmara para a normal da fatia (eixo ${meta.slice_axis || 'y'}). vista ao longo do leito pode parecer hastes finas.`
+                : `2d model: orbit camera toward slice normal (axis ${meta.slice_axis || 'y'}) for circular discs.`}
+            </p>
+          ) : null}
 
           <section className="mesh-viewer-subpanel mesh-viewer-subpanel--controls">
             <div className="mesh-viewer-actions-primary">

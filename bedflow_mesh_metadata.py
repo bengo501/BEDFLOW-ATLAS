@@ -9,6 +9,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from bedflow_export_metadata import (
+    bed_particle_layout_from_internal_mode,
+    representation_dimension,
+)
+
 
 def _sidecar_paths_for_mesh(mesh_path: Path) -> List[Path]:
     """candidatos por ordem de prioridade (primeiro encontrado com geometry_mode ganha merge)."""
@@ -34,11 +39,13 @@ def _extract_geometry_fields(data: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(data, dict):
         return {}
     gm = data.get("geometry_mode")
-    sl = data.get("slice") if isinstance(data.get("slice"), dict) else {}
     st = data.get("statistical_2d") if isinstance(data.get("statistical_2d"), dict) else {}
     out: Dict[str, Any] = {}
     if gm:
         out["geometry_mode"] = str(gm)
+    sl = data.get("slice") if isinstance(data.get("slice"), dict) else {}
+    if not out.get("geometry_mode") and sl.get("slice_axis"):
+        out["geometry_mode"] = "pseudo_2d_thin_slice"
     pt = data.get("porosity_target")
     if pt is None and st:
         pt = st.get("target_porosity")
@@ -101,6 +108,25 @@ def _extract_geometry_fields(data: Dict[str, Any]) -> Dict[str, Any]:
         warns = bos.get("warnings")
         if isinstance(warns, list) and warns:
             out["boolean_warnings"] = "; ".join(str(w) for w in warns[:5])
+    for key in (
+        "job_id",
+        "content_hash",
+        "packing_random_seed",
+        "particles_seed",
+        "modeling_profile",
+        "representation_dimension",
+        "bed_particle_layout",
+    ):
+        if data.get(key) is not None:
+            out[key] = data[key]
+    if not out.get("representation_dimension") and out.get("geometry_mode"):
+        out["representation_dimension"] = representation_dimension(
+            out.get("geometry_mode")
+        )
+    if not out.get("bed_particle_layout") and out.get("internal_cylinder_mode"):
+        out["bed_particle_layout"] = bed_particle_layout_from_internal_mode(
+            out.get("internal_cylinder_mode")
+        )
     return out
 
 

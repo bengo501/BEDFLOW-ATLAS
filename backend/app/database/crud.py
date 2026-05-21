@@ -390,6 +390,87 @@ class ResultCRUD:
         return deleted
 
 
+class JobCRUD:
+    @staticmethod
+    def upsert(db: Session, job) -> models.JobRecord:
+        from backend.app.api.models import Job as ApiJob
+
+        data = job
+        if not isinstance(data, ApiJob):
+            raise TypeError("job deve ser backend.app.api.models.Job")
+        row = db.query(models.JobRecord).filter(
+            models.JobRecord.job_id == data.job_id
+        ).first()
+        meta = dict(data.metadata or {})
+        outputs = list(data.output_files or [])
+        logs = list(data.logs or [])
+        payload = {
+            "job_type": str(data.job_type.value if hasattr(data.job_type, "value") else data.job_type),
+            "status": str(data.status.value if hasattr(data.status, "value") else data.status),
+            "progress": int(data.progress or 0),
+            "metadata_json": meta,
+            "output_files_json": outputs,
+            "logs_json": logs,
+            "error_message": data.error_message,
+            "updated_at": data.updated_at,
+        }
+        if str(payload["status"]) in ("completed", "failed"):
+            payload["completed_at"] = data.updated_at
+        if row is None:
+            row = models.JobRecord(job_id=data.job_id, created_at=data.created_at, **payload)
+            db.add(row)
+        else:
+            for k, v in payload.items():
+                setattr(row, k, v)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def get(db: Session, job_id: str) -> Optional[models.JobRecord]:
+        return db.query(models.JobRecord).filter(
+            models.JobRecord.job_id == job_id
+        ).first()
+
+    @staticmethod
+    def list_all(
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int = 500,
+    ) -> List[models.JobRecord]:
+        return (
+            db.query(models.JobRecord)
+            .order_by(models.JobRecord.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    @staticmethod
+    def mark_stale_running_as_failed(db: Session) -> int:
+        from backend.app.api.models import JobStatus
+
+        rows = (
+            db.query(models.JobRecord)
+            .filter(
+                models.JobRecord.status.in_(
+                    [JobStatus.QUEUED.value, JobStatus.RUNNING.value]
+                )
+            )
+            .all()
+        )
+        n = 0
+        for row in rows:
+            row.status = JobStatus.FAILED.value
+            row.error_message = row.error_message or "interrompido (reinício do servidor)"
+            row.updated_at = datetime.utcnow()
+            n += 1
+        if n:
+            db.commit()
+        return n
+
+
 def paginate(
     total: int,
     page: int = 1,

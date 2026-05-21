@@ -49,7 +49,7 @@ class BedReferenceFrame:
         return self.slice_center - half, self.slice_center + half
 
     def point_in_util_volume(self, p: vec3) -> bool:
-        rho = math.hypot(p[0], p[2])
+        rho = math.hypot(p[0], p[1])
         if rho > self.r_util + 1e-12:
             return False
         s = self.slice_coord(p)

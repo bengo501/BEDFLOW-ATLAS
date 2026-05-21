@@ -125,14 +125,14 @@ def align_center_to_slice_plane(
     *,
     slice_axis: str,
     slice_position: float,
-    preserve_other_coords: bool = True,
+    preserve_original_packing: bool = True,
 ) -> vec3:
-    """fixa a coordenada no eixo de corte em slice_position."""
+    """fixa a coordenada no eixo de corte em slice_position quando preserve_original_packing=false."""
     return slice_footprint_center(
         center,
         slice_axis=slice_axis,
         slice_position=slice_position,
-        preserve_original_packing=not preserve_other_coords,
+        preserve_original_packing=preserve_original_packing,
     )
 
 
@@ -175,7 +175,7 @@ def create_slice_cylinder_mesh(
         center,
         slice_axis=cfg.slice_axis,
         slice_position=cfg.slice_position,
-        preserve_other_coords=cfg.preserve_original_packing,
+        preserve_original_packing=cfg.preserve_original_packing,
     )
     snapped = False
     if cfg.snap_radial_to_wall:

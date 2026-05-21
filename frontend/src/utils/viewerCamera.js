@@ -32,7 +32,7 @@ export function fitCameraToObject(camera, controls, root, margin = 1.05, viewHin
   if (thinAxis >= 0) {
     const inPlane = maxDim * margin * 1.15;
     const dist = Math.max(inPlane, minDim * 8);
-    camera.near = Math.max(minDim * 0.1, 1e-5);
+    camera.near = Math.max(minDim * 0.01, 1e-6);
     camera.far = Math.max(maxDim * 300, 10);
     camera.updateProjectionMatrix();
     const pos = center.clone();
@@ -56,7 +56,10 @@ export function fitCameraToObject(camera, controls, root, margin = 1.05, viewHin
 
 export function viewHintFromMeshInfo(info) {
   if (!info || typeof info !== 'object') return null;
-  const gm = info.geometry_mode || info.geometryMode;
+  let gm = info.geometry_mode || info.geometryMode;
+  if (!gm && info.slice_axis) {
+    gm = 'pseudo_2d_thin_slice';
+  }
   if (!gm) return null;
   return {
     geometry_mode: gm,
@@ -65,5 +68,6 @@ export function viewHintFromMeshInfo(info) {
     slice_position: info.slice_position,
     porosity_method: info.porosity_method,
     statistical_2d: info.statistical_2d,
+    representation_dimension: info.representation_dimension,
   };
 }

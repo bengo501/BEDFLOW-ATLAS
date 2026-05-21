@@ -556,6 +556,9 @@ class BedWizard:
         self._load_wizard_ui_lang()
         if hasattr(self.ui, "set_ui_lang"):
             self.ui.set_ui_lang(self.lang)
+        from graceful_shutdown import set_shutdown_lang
+
+        set_shutdown_lang(self.lang)
         
         # dicionario com informacoes de ajuda para cada parametro
         self.param_help = {
@@ -4541,6 +4544,9 @@ cfd {
         self._save_wizard_ui_lang()
         if hasattr(self.ui, "set_ui_lang"):
             self.ui.set_ui_lang(self.lang)
+        from graceful_shutdown import set_shutdown_lang
+
+        set_shutdown_lang(self.lang)
         self.ui.ok(self._t("lang.ok", "idioma atualizado"))
 
     def visualization_3d_mode(self) -> None:
@@ -4929,6 +4935,14 @@ cfd {
     
     def run(self):
         """executar wizard"""
+        try:
+            self._run_main_loop()
+        except KeyboardInterrupt:
+            from graceful_shutdown import exit_on_user_interrupt
+
+            exit_on_user_interrupt(self.lang)
+
+    def _run_main_loop(self):
         while True:
             self._draw_main_menu()
             choice = self.ui.ask_line(self._t("prompt.main.choice", "opcao (1-5 ou 0): ")).strip()
@@ -4970,9 +4984,16 @@ def main():
     """entrada unifica typer rich comandos e legado argparse via dispatch main"""
     if str(_DSL_DIR) not in sys.path:
         sys.path.insert(0, str(_DSL_DIR))
+    from graceful_shutdown import install_graceful_shutdown
     from cli.app import dispatch_main
 
-    sys.exit(dispatch_main())
+    install_graceful_shutdown("pt")
+    try:
+        sys.exit(dispatch_main())
+    except KeyboardInterrupt:
+        from graceful_shutdown import exit_on_user_interrupt
+
+        exit_on_user_interrupt()
 
 # quando executas python bed wizard py diretamente este bloco corre
 # quando importas bed wizard como modulo este bloco nao corre

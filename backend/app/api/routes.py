@@ -16,6 +16,7 @@ from backend.app.services.bed_service import BedService
 from backend.app.services.blender_service import BlenderService
 from backend.app.services.openfoam_service import OpenFOAMService
 from backend.app.utils.file_manager import FileManager
+from backend.app.services.job_persistence import persist_job, sync_job_in_store
 
 router = APIRouter()
 
@@ -78,7 +79,8 @@ async def generate_model(request: GenerateModelRequest, background_tasks: Backgr
     )
     
     jobs_store[job_id] = job
-    
+    persist_job(job)
+
     # background tasks corre depois da resposta http devolver 202 implicitamente aqui e 200 com body
     background_tasks.add_task(
         blender_service.generate_model,
@@ -123,7 +125,8 @@ async def create_simulation(request: SimulationRequest, background_tasks: Backgr
     )
     
     jobs_store[job_id] = job
-    
+    persist_job(job)
+
     background_tasks.add_task(
         openfoam_service.create_case,
         job_id=job_id,
@@ -152,10 +155,22 @@ async def get_job(job_id: str):
     """
     busca status de job
     """
-    if job_id not in jobs_store:
-        raise HTTPException(status_code=404, detail="job não encontrado")
-    
-    return jobs_store[job_id]
+    if job_id in jobs_store:
+        return jobs_store[job_id]
+    from backend.app.services.job_persistence import job_from_record
+    from backend.app.database.connection import DatabaseConnection
+    from backend.app.database import crud
+
+    session = DatabaseConnection.get_session()
+    try:
+        row = crud.JobCRUD.get(session, job_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="job não encontrado")
+        job = job_from_record(row)
+        jobs_store[job_id] = job
+        return job
+    finally:
+        session.close()
 
 @router.get("/jobs", response_model=List[Job], tags=["jobs"])
 async def list_jobs(status: str = None, job_type: str = None):

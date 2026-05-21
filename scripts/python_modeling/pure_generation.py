@@ -348,7 +348,10 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
     # json lateral para o modo testes rapidos e para inspecao humana sem abrir stl
     # report legacy vem de validate configuration que compara pares e limites do dominio
     slice_summary_legacy = slice_sum if slice_cfg_active(slice_cfg) else {}
+    gm_legacy = geometry_mode_from_data(p)
     sidecar: Dict[str, Any] = {
+        "geometry_mode": gm_legacy,
+        "generation_backend": str(p.get("generation_backend") or "python_engine"),
         "packing_method": "rigid_body",
         "particle_kind": pk,
         "particle_type": pk,
@@ -373,6 +376,8 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
         "pair_violations": report_legacy.get("pair_violations"),
         "domain_violations": report_legacy.get("domain_violations"),
     }
+    if slice_cfg_active(slice_cfg):
+        sidecar["slice"] = slice_cfg
     if slice_summary_legacy:
         sidecar["slice_particle_summary"] = slice_summary_legacy
         sidecar["slice_particle_policy"] = slice_cfg.get("slice_particle_policy")

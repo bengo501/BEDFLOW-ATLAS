@@ -72,6 +72,20 @@ PICK_LIST_SHORT_HINT_EN = (
 PICK_LIST_SHORT_HINT = "0 ou c voltar  ·  ? ajuda do campo  ·  h ajuda global"
 
 
+def _handle_ctrl_c() -> None:
+    """ctrl+c ou ctrl+d no input: despedida sem traceback."""
+    try:
+        from graceful_shutdown import ensure_installed, exit_on_user_interrupt
+
+        ensure_installed()
+        exit_on_user_interrupt()
+    except SystemExit:
+        raise
+    except Exception:
+        print("\n\nencerrado com seguranca. ate logo!\n")
+        raise SystemExit(0) from None
+
+
 def _normalize_terminal_lang(code: Optional[str]) -> str:
     c = (code or "pt").strip().lower()
     return "en" if c.startswith("en") else "pt"
@@ -483,17 +497,30 @@ class PlainWizardUi:
             print(ln)
 
     def pause(self, msg: str = "pressione enter para continuar...") -> None:
-        input(f"\n{msg}")
+        try:
+            input(f"\n{msg}")
+        except (KeyboardInterrupt, EOFError):
+            _handle_ctrl_c()
 
     def ask_line(self, prompt: str, default: str = "") -> str:
         if _HAS_PROMPT_TOOLKIT:
             if self._pt_session is None:
                 self._pt_session = _setup_prompt_session()
             try:
+                from graceful_shutdown import ensure_installed
+
+                ensure_installed()
                 return str(self._pt_session.prompt(prompt, default=default)).rstrip()
+            except KeyboardInterrupt:
+                _handle_ctrl_c()
+            except EOFError:
+                _handle_ctrl_c()
             except Exception:
                 pass
-        return input(prompt)
+        try:
+            return input(prompt)
+        except (KeyboardInterrupt, EOFError):
+            _handle_ctrl_c()
 
     def ask_number(
         self,
@@ -526,6 +553,10 @@ class PlainWizardUi:
                         key_bindings=kb,
                     )
                 ).rstrip()
+            except KeyboardInterrupt:
+                _handle_ctrl_c()
+            except EOFError:
+                _handle_ctrl_c()
             except Exception:
                 pass
         return self.ask_line(prompt, default=default)
@@ -796,7 +827,10 @@ class RichWizardUi:
             self.console.print(Text(ln, style="setup.muted"))
 
     def pause(self, msg: str = "pressione enter para continuar...") -> None:
-        self.console.input(f"\n[setup.muted]{msg}[/] ")
+        try:
+            self.console.input(f"\n[setup.muted]{msg}[/] ")
+        except (KeyboardInterrupt, EOFError):
+            _handle_ctrl_c()
 
     def ask_line(self, prompt: str, default: str = "") -> str:
         plain = escape(prompt) if escape else prompt
@@ -804,10 +838,20 @@ class RichWizardUi:
             if self._pt_session is None:
                 self._pt_session = _setup_prompt_session()
             try:
+                from graceful_shutdown import ensure_installed
+
+                ensure_installed()
                 return str(self._pt_session.prompt(plain, default=default)).rstrip()
+            except KeyboardInterrupt:
+                _handle_ctrl_c()
+            except EOFError:
+                _handle_ctrl_c()
             except Exception:
                 pass
-        return self.console.input(plain)
+        try:
+            return self.console.input(plain)
+        except (KeyboardInterrupt, EOFError):
+            _handle_ctrl_c()
 
     def ask_number(
         self,
@@ -841,6 +885,10 @@ class RichWizardUi:
                         key_bindings=kb,
                     )
                 ).rstrip()
+            except KeyboardInterrupt:
+                _handle_ctrl_c()
+            except EOFError:
+                _handle_ctrl_c()
             except Exception:
                 pass
         return self.ask_line(prompt, default=default)

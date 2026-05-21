@@ -280,6 +280,17 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 3
+        mesh.remove_duplicated_vertices()
+        mesh.remove_degenerate_triangles()
+        mesh.remove_unreferenced_vertices()
+        if mesh.is_empty() or len(mesh.triangles) == 0:
+            hint = (
+                "obj sem triangulos validos — reexporte como stl ou abra no viewer web"
+                if suf == ".obj"
+                else "malha sem triangulos apos limpeza"
+            )
+            print(f"erro: {hint}", file=sys.stderr)
+            return 3
         _style_mesh(mesh)
 
         bbox = mesh.get_axis_aligned_bounding_box()

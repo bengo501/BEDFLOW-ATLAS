@@ -651,6 +651,13 @@ def compute_thin_slice_porosity(
         cu, cv = _plane_uv_from_center(c, axis)
         footprints.append((cu, cv, spec))
 
+    def _rho_at_uv(u: float, v: float) -> float:
+        if axis == "x":
+            return math.hypot(float(v), float(slice_position))
+        if axis == "y":
+            return math.hypot(float(u), float(slice_position))
+        return math.hypot(float(u), float(v))
+
     annulus_cells = 0
     solid_cells = 0
     du = span / nx
@@ -659,8 +666,8 @@ def compute_thin_slice_porosity(
         v = -r_ext + (j + 0.5) * span / ny
         for i in range(nx):
             u = u0 + i * du
-            rr = u * u + v * v
-            if rr < r_int2 or rr > r_ext2:
+            rho = _rho_at_uv(u, v)
+            if rho < r_int or rho > r_ext:
                 continue
             annulus_cells += 1
             for cu, cv, spec in footprints:

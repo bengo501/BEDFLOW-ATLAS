@@ -113,6 +113,26 @@ class Simulation(Base):
         return f"<Simulation(id={self.id}, name='{self.name}', status='{self.status}')>"
 
 
+# jobs assíncronos (geração de modelo, simulação, pipeline) — persistência permanente
+class JobRecord(Base):
+    __tablename__ = "jobs"
+
+    job_id = Column(String(36), primary_key=True, index=True)
+    job_type = Column(String(50), nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="queued", index=True)
+    progress = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    output_files_json = Column(JSON, nullable=True)
+    logs_json = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    def __repr__(self):
+        return f"<JobRecord(job_id='{self.job_id}', type='{self.job_type}', status='{self.status}')>"
+
+
 # linha de detalhe metrica campo ou ficheiro associado a uma simulacao
 class Result(Base):
     __tablename__ = "results"

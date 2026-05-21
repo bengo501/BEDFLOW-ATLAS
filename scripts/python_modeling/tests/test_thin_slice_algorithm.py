@@ -119,12 +119,24 @@ def test_shell_and_particle_same_thickness_in_config():
     assert cfg["min_slice_particle_radius"] == pytest.approx(1e-6)
 
 
-def test_align_center_to_slice_plane():
+def test_align_center_to_slice_plane_preserves_when_true():
     c = align_center_to_slice_plane(
         (0.1, 0.2, 0.3),
         slice_axis="y",
         slice_position=0.0,
-        preserve_other_coords=True,
+        preserve_original_packing=True,
+    )
+    assert c[1] == pytest.approx(0.2)
+    assert c[0] == pytest.approx(0.1)
+    assert c[2] == pytest.approx(0.3)
+
+
+def test_align_center_to_slice_plane_snaps_when_false():
+    c = align_center_to_slice_plane(
+        (0.1, 0.2, 0.3),
+        slice_axis="y",
+        slice_position=0.0,
+        preserve_original_packing=False,
     )
     assert c[1] == pytest.approx(0.0)
     assert c[0] == pytest.approx(0.1)

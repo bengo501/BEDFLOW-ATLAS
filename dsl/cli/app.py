@@ -56,7 +56,12 @@ class PackingChoice(str, Enum):
 def _run_interactive_menu() -> None:
     from bed_wizard import BedWizard
 
-    BedWizard().run()
+    try:
+        BedWizard().run()
+    except KeyboardInterrupt:
+        from graceful_shutdown import exit_on_user_interrupt
+
+        exit_on_user_interrupt()
 
 
 def _print_cli_flags_help() -> None:
@@ -91,7 +96,12 @@ def _choose_startup_mode() -> bool:
     typer.echo("  [1] menu interativo (passo a passo no terminal)")
     typer.echo("  [2] linha de comandos (subcomandos e flags — ver ajuda e exemplos)")
     typer.echo()
-    choice = typer.prompt("opcao (1 ou 2)", default="1").strip().lower()
+    try:
+        choice = typer.prompt("opcao (1 ou 2)", default="1").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        from graceful_shutdown import exit_on_user_interrupt
+
+        exit_on_user_interrupt()
     if choice in ("2", "cli", "flags", "f", "linha", "comandos"):
         _print_cli_flags_help()
         return False
@@ -437,21 +447,26 @@ def cmd_templates(
 
 def dispatch_main() -> int:
     argv = sys.argv[1:]
-    if not argv:
-        _choose_startup_mode()
-        return 0
-    if any(a in _LEGACY_FLAGS for a in argv):
-        from bed_wizard import BedWizard
-        from wizard_cli import run_cli
-
-        return run_cli(BedWizard(), argv)
     try:
-        app()
-    except SystemExit as e:
-        c = e.code
-        if c is None:
+        if not argv:
+            _choose_startup_mode()
             return 0
-        if isinstance(c, int):
-            return c
-        return 1
-    return 0
+        if any(a in _LEGACY_FLAGS for a in argv):
+            from bed_wizard import BedWizard
+            from wizard_cli import run_cli
+
+            return run_cli(BedWizard(), argv)
+        try:
+            app()
+        except SystemExit as e:
+            c = e.code
+            if c is None:
+                return 0
+            if isinstance(c, int):
+                return c
+            return 1
+        return 0
+    except KeyboardInterrupt:
+        from graceful_shutdown import exit_on_user_interrupt
+
+        exit_on_user_interrupt()

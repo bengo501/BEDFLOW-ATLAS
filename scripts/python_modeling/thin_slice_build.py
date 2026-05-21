@@ -116,6 +116,21 @@ def apply_thin_slice_mesh(
         segmentos=segmentos,
     )
     if pv:
+        from mesh_export_validate import validate_thin_slice_mesh
+
+        bed_h = _infer_height_from_shell(shell_vertices)
+        vpre = validate_thin_slice_mesh(
+            pv,
+            slice_axis=axis,
+            slice_thickness=thickness,
+            bed_height=bed_h,
+            particle_region_only=True,
+        )
+        if not vpre.get("ok"):
+            raise RuntimeError(
+                "validação thin slice (partículas): "
+                + "; ".join(vpre.get("errors") or [])
+            )
         v_all, f_all = merge_mesh(v_all, f_all, pv, pf)
 
     summary = empty_slice_summary()
