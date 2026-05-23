@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   listViewerMeshes,
   buildMeshStreamUrl,
@@ -15,7 +11,8 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import ThemeIcon from './ThemeIcon';
 import '../styles/MeshViewer3DPage.css';
-import { fitCameraToObject, viewHintFromMeshInfo } from '../utils/viewerCamera';
+import { fitCameraToObject } from '../utils/viewerCamera';
+import { countVertices, loadMeshFromBuffer } from '../utils/meshLoadThree';
 
 const LS_LAST_MESH = 'bedflow_last_mesh_id';
 
@@ -150,111 +147,6 @@ function IconRefresh({ className }) {
   );
 }
 
-function countVertices(obj) {
-  let n = 0;
-  obj.traverse((ch) => {
-    if (ch.isMesh && ch.geometry) {
-      const g = ch.geometry;
-      const pos = g.attributes && g.attributes.position;
-      if (pos) n += pos.count;
-    }
-  });
-  return n;
-}
-
-async function parseToObject3D(ext, buffer) {
-  const e = ext.toLowerCase().replace(/^\./, '');
-  if (e === 'stl') {
-    const geom = new STLLoader().parse(buffer);
-    geom.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x8b7355,
-      metalness: 0.15,
-      roughness: 0.65,
-      side: THREE.DoubleSide,
-    });
-    return new THREE.Mesh(geom, mat);
-  }
-  if (e === 'obj') {
-    const text = new TextDecoder('utf-8').decode(buffer);
-    const obj = new OBJLoader().parse(text);
-    obj.traverse((ch) => {
-      if (ch.isMesh && ch.material) {
-        const m = ch.material;
-        if (!m.vertexColors) {
-          ch.material = new THREE.MeshStandardMaterial({
-            color: 0x7a9e9f,
-            metalness: 0.12,
-            roughness: 0.7,
-            side: THREE.DoubleSide,
-          });
-        }
-      }
-    });
-    return obj;
-  }
-  if (e === 'ply') {
-    const geom = new PLYLoader().parse(buffer);
-    geom.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x6b8e8f,
-      metalness: 0.1,
-      roughness: 0.75,
-      side: THREE.DoubleSide,
-    });
-    return new THREE.Mesh(geom, mat);
-  }
-  if (e === 'gltf' || e === 'glb') {
-    return new Promise((resolve, reject) => {
-      const loader = new GLTFLoader();
-      loader.parse(
-        buffer,
-        '',
-        (gltf) => resolve(gltf.scene),
-        (err) => reject(err || new Error('gltf parse'))
-      );
-    });
-  }
-  throw new Error(`formato nao suportado no viewer: ${e}`);
-}
-
-const THIN_RATIO_ORIENT = 0.08;
-
-function orientBedVertical(root, viewHint = null) {
-  const gm = viewHint?.geometry_mode;
-  if (gm === 'pseudo_2d_thin_slice' || gm === 'pseudo_2d_statistical') {
-    return;
-  }
-  const box = new THREE.Box3().setFromObject(root);
-  if (box.isEmpty()) return;
-  const size = box.getSize(new THREE.Vector3());
-  const dims = [size.x, size.y, size.z];
-  const minDim = Math.min(...dims);
-  const maxDim = Math.max(...dims) || 1;
-  if (minDim / maxDim < THIN_RATIO_ORIENT) {
-    return;
-  }
-  const longest =
-    size.x >= size.y && size.x >= size.z ? 'x' : size.y >= size.x && size.y >= size.z ? 'y' : 'z';
-  if (longest === 'y') return;
-  if (longest === 'x') {
-    root.rotation.z = Math.PI / 2;
-  } else {
-    root.rotation.x = -Math.PI / 2;
-  }
-  root.updateMatrixWorld(true);
-}
-
-function centerOnFloor(root) {
-  const box = new THREE.Box3().setFromObject(root);
-  if (box.isEmpty()) return;
-  const center = box.getCenter(new THREE.Vector3());
-  const minY = box.min.y;
-  root.position.x -= center.x;
-  root.position.z -= center.z;
-  root.position.y -= minY;
-}
-
 export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBootId }) {
   const { t } = useLanguage();
   const mountRef = useRef(null);
@@ -325,21 +217,6 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
     }
   }, [initialMeshId, onConsumedBootId]);
 
-  useEffect(() => {
-    if (!meshes.length) return;
-    const id = selectedId.trim();
-    if (!id) return;
-    if (!meshes.some((m) => m.mesh_id === id)) setSelectedId('');
-  }, [meshes, selectedId]);
-
-  useEffect(() => {
-    const id = selectedId.trim();
-    if (!id || !meshes.some((m) => m.mesh_id === id)) return;
-    const fmt = (meshes.find((m) => m.mesh_id === id)?.format || '').toLowerCase();
-    if (fmt === 'blend') return;
-    void loadSelectedMesh();
-  }, [selectedId, meshes.length]);
-
   const applyWireframe = useCallback((root, on) => {
     if (!root) return;
     root.traverse((ch) => {
@@ -401,7 +278,7 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       return;
     }
     const info = meshes.find((m) => m.mesh_id === id);
-    const ext = info ? info.format : '';
+    const ext = (info?.format || 'stl').toLowerCase();
     if (ext === 'blend') {
       setErr(pt ? '.blend nao carrega no three.js; use blender' : '.blend cannot load in three.js; use blender');
       return;
@@ -417,15 +294,12 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       const res = await fetch(url);
       if (!res.ok) throw new Error(`http ${res.status}`);
       const buffer = await res.arrayBuffer();
-      const viewHint = viewHintFromMeshInfo(info);
-      const obj = await parseToObject3D(ext || 'stl', buffer);
-      const verts = countVertices(obj);
-      if (verts < 1) {
-        throw new Error(pt ? 'malha sem vértices' : 'mesh has no vertices');
-      }
+      const { object: obj, viewHint, vertices: verts } = await loadMeshFromBuffer(
+        buffer,
+        ext || 'stl',
+        info
+      );
       applyWireframe(obj, wireframe);
-      orientBedVertical(obj, viewHint);
-      centerOnFloor(obj);
 
       const scene = sceneRef.current;
       if (scene) {
@@ -482,6 +356,15 @@ export default function MeshViewer3DPage({ language, initialMeshId, onConsumedBo
       setLoadingMesh(false);
     }
   }, [selectedId, meshes, wireframe, clearRoot, applyWireframe, syncBoundingBox, pt]);
+
+  useEffect(() => {
+    const id = selectedId.trim();
+    if (!id) return;
+    const info = meshes.find((m) => m.mesh_id === id);
+    const fmt = (info?.format || 'stl').toLowerCase();
+    if (fmt === 'blend') return;
+    void loadSelectedMesh();
+  }, [selectedId, meshes.length, loadSelectedMesh]);
 
   useEffect(() => {
     if (!mountRef.current) return;

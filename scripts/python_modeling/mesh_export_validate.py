@@ -24,7 +24,7 @@ def _read_stl_vertices(path: Path) -> List[vec3]:
     n_tri = int.from_bytes(data[80:84], "little")
     verts: List[vec3] = []
     off = 84
-    tri_record = 52  # 12 floats + uint16 + 2 bytes pad (formato write_stl_binary)
+    tri_record = 50  # 12 floats + uint16 atributo (padrao stl binario / three.js)
     for _ in range(n_tri):
         if off + tri_record > len(data):
             break
@@ -36,7 +36,7 @@ def _read_stl_vertices(path: Path) -> List[vec3]:
             off += 12
             if abs(x) < 1e6 and abs(y) < 1e6 and abs(z) < 1e6:
                 verts.append((x, y, z))
-        off += 4  # atributo uint16 + padding
+        off += 2  # atributo uint16
     return verts
 
 

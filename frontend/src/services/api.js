@@ -85,6 +85,11 @@ export function parseApiError(err) {
     return 'erro de conexão com o backend — inicie uvicorn (porta 8000) e recarregue a página';
   }
   const status = err.response?.status;
+  if (status === 409) {
+    const d409 = data?.detail;
+    if (typeof d409 === 'string' && d409.trim()) return d409;
+    return 'já existe uma geração de modelo em curso; aguarde o job anterior terminar.';
+  }
   if (status === 405) {
     return 'metodo nao permitido (405): o backend precisa ser reiniciado para expor GET /api/simulations/{id}';
   }

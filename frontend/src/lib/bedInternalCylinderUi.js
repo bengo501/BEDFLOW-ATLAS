@@ -10,11 +10,20 @@ export const ICM_ALL = [ICM_HOLLOW, ICM_VISIBLE, ICM_SOLID];
 
 export function defaultVisibilityForMode(mode) {
   const m = mode || ICM_HOLLOW;
-  if (m === ICM_VISIBLE || m === ICM_SOLID) {
+  if (m === ICM_VISIBLE) {
     return {
       show_outer_cylinder: true,
       show_internal_cylinder: true,
       show_particles: true,
+      show_boolean_tools: false,
+      export_boolean_tools: false,
+    };
+  }
+  if (m === ICM_SOLID) {
+    return {
+      show_outer_cylinder: true,
+      show_internal_cylinder: true,
+      show_particles: false,
       show_boolean_tools: false,
       export_boolean_tools: false,
     };

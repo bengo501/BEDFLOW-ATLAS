@@ -57,6 +57,16 @@ def main() -> None:
         default=12000,
         help="passos simulacao apenas no modo rigid body legacy",
     )
+    ap.add_argument(
+        "--progress",
+        action="store_true",
+        help="abre janela com barra de progresso (por defeito auto no terminal)",
+    )
+    ap.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="desativa janela de progresso",
+    )
 
     # parse args transforma os valores digitados no terminal em um objeto
     args = ap.parse_args()
@@ -71,7 +81,13 @@ def main() -> None:
     # ele vai ler o json
     # escolher o modo de empacotamento
     # validar e depois exportar stl
-    generate_packed_bed_stl(args.bed_json, args.out_stl, max_passos=args.max_passos)
+    pw = False if args.no_progress else (True if args.progress else None)
+    generate_packed_bed_stl(
+        args.bed_json,
+        args.out_stl,
+        max_passos=args.max_passos,
+        progress_window=pw,
+    )
 
     # mensagem final para o usuario
     print(f"[ok] stl escrito: {args.out_stl}")

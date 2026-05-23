@@ -9,6 +9,7 @@ from geometry_modes import (
     axis_index,
     collision_radius_for_particle_kind,
     particle_intersects_slice,
+    particle_passes_policy,
     slice_footprint_center,
     slice_footprint_spec,
     snap_center_radial_to_util_wall,
@@ -23,6 +24,12 @@ from stl_mesh_utils import (
 )
 
 SliceParticleSummary = Dict[str, Any]
+
+# motivos de descarte (contrato partilhado python + blender)
+DROP_POLICY = "policy"
+DROP_OUTSIDE_SLICE = "outside_slice"
+DROP_BELOW_MIN_RADIUS = "below_min_radius"
+DROP_LEAK_RADIAL = "leak_radial"
 
 
 @dataclass
@@ -120,6 +127,91 @@ def compute_slice_radius(
     return 0.0
 
 
+def prepare_slice_particle_for_mesh(
+    center: vec3,
+    particle_kind: str,
+    particle_diameter: float,
+    *,
+    cfg: SliceParticleConfig,
+    policy: str = "contained",
+) -> Tuple[Optional[vec3], float, Dict[str, Any]]:
+    """
+    pipeline unificado de decisão + centro na lâmina (mesma ordem que aplicar_thin_slice no blender).
+    devolve (centro_final, raio_aparente, meta) ou (None, 0, meta) se descartada.
+    """
+    meta: Dict[str, Any] = {"included": False}
+    pk = (particle_kind or "sphere").strip().lower()
+    d = float(particle_diameter)
+    c = (float(center[0]), float(center[1]), float(center[2]))
+
+    if not particle_passes_policy(
+        c,
+        particle_kind=pk,
+        particle_diameter=d,
+        slice_axis=cfg.slice_axis,
+        slice_center=cfg.slice_position,
+        slice_thickness=cfg.slice_thickness,
+        r_util=cfg.r_util,
+        policy=policy,
+    ):
+        meta["reason"] = DROP_POLICY
+        return None, 0.0, meta
+
+    if not sphere_intersects_slice(
+        c,
+        particle_kind=pk,
+        particle_diameter=d,
+        slice_axis=cfg.slice_axis,
+        slice_position=cfg.slice_position,
+        slice_thickness=cfg.slice_thickness,
+    ):
+        meta["reason"] = DROP_OUTSIDE_SLICE
+        return None, 0.0, meta
+
+    d_plane = distance_to_slice_plane(c, cfg.slice_axis, cfg.slice_position)
+    rs = compute_slice_radius(pk, d, d_plane, slice_axis=cfg.slice_axis)
+    if rs < cfg.min_slice_particle_radius:
+        meta["reason"] = DROP_BELOW_MIN_RADIUS
+        meta["apparent_radius"] = rs
+        return None, 0.0, meta
+
+    cx, cy, cz = align_center_to_slice_plane(
+        c,
+        slice_axis=cfg.slice_axis,
+        slice_position=cfg.slice_position,
+        preserve_original_packing=cfg.preserve_original_packing,
+    )
+    snapped = False
+    if cfg.snap_radial_to_wall:
+        rho = math.hypot(cx, cy)
+        if rho + rs > cfg.r_util + 1e-9:
+            cx, cy, cz = snap_center_radial_to_util_wall(
+                (cx, cy, cz), cfg.r_util, rs
+            )
+            snapped = True
+
+    rho_final = math.hypot(cx, cy)
+    if rho_final + rs > cfg.r_util + 1e-6:
+        meta["reason"] = DROP_LEAK_RADIAL
+        meta["center_final"] = [cx, cy, cz]
+        meta["apparent_radius"] = rs
+        return None, 0.0, meta
+
+    r_mesh = max(rs, collision_radius_for_particle_kind(pk, d) * 0.25)
+    meta.update(
+        {
+            "included": True,
+            "reason": "keep",
+            "apparent_radius": rs,
+            "distance_to_plane": d_plane,
+            "snapped_to_wall": snapped,
+            "center_final": [cx, cy, cz],
+            "mesh_radius": r_mesh,
+        }
+    )
+    return (cx, cy, cz), r_mesh, meta
+
+
 def align_center_to_slice_plane(
     center: vec3,
     *,
@@ -150,49 +242,23 @@ def create_slice_cylinder_mesh(
     *,
     cfg: SliceParticleConfig,
     segmentos: int = 24,
+    policy: str = "contained",
 ) -> Tuple[List[vec3], List[tri], Dict[str, Any]]:
     """
     gera malha do disco/cilindro fino no eixo da fatia.
     devolve (vertices, faces, meta) ou ([], [], meta) se descartada.
     """
-    meta: Dict[str, Any] = {"included": False}
     pk = (particle_kind or "sphere").strip().lower()
     d = float(particle_diameter)
-    d_plane = distance_to_slice_plane(center, cfg.slice_axis, cfg.slice_position)
-
-    if not sphere_intersects_slice(
-        center,
-        particle_kind=pk,
-        particle_diameter=d,
-        slice_axis=cfg.slice_axis,
-        slice_position=cfg.slice_position,
-        slice_thickness=cfg.slice_thickness,
-    ):
-        meta["reason"] = "outside_slice_slab"
-        return [], [], meta
-
-    r_app = compute_slice_radius(pk, d, d_plane, slice_axis=cfg.slice_axis)
-    if r_app < cfg.min_slice_particle_radius:
-        meta["reason"] = "below_min_radius"
-        meta["apparent_radius"] = r_app
-        return [], [], meta
-
-    margin = r_app if r_app > 1e-12 else collision_radius_for_particle_kind(pk, d)
-    cx, cy, cz = align_center_to_slice_plane(
-        center,
-        slice_axis=cfg.slice_axis,
-        slice_position=cfg.slice_position,
-        preserve_original_packing=cfg.preserve_original_packing,
+    loc, r_mesh, meta = prepare_slice_particle_for_mesh(
+        center, pk, d, cfg=cfg, policy=policy
     )
-    snapped = False
-    if cfg.snap_radial_to_wall:
-        rho_before = math.hypot(cx, cy)
-        if rho_before + margin > cfg.r_util + 1e-9:
-            cx, cy, cz = snap_center_radial_to_util_wall(
-                (cx, cy, cz), cfg.r_util, margin
-            )
-            snapped = True
+    if loc is None:
+        return [], [], meta
 
+    cx, cy, cz = loc
+    d_plane = float(meta.get("distance_to_plane") or 0.0)
+    r_app = float(meta.get("apparent_radius") or r_mesh)
     seg = max(12, min(32, segmentos))
     t = cfg.slice_thickness
     spec = slice_footprint_spec(
@@ -201,10 +267,11 @@ def create_slice_cylinder_mesh(
 
     if spec.get("shape") == "none":
         meta["reason"] = "no_footprint"
+        meta["included"] = False
         return [], [], meta
 
     if spec.get("shape") == "disc":
-        rs = float(spec.get("radius") or r_app)
+        rs = float(spec.get("radius") or r_mesh)
         sv, sf = cylinder_axis(
             cx, cy, cz, rs, t, axis=cfg.slice_axis, segments=seg
         )
@@ -226,7 +293,7 @@ def create_slice_cylinder_mesh(
             "included": True,
             "apparent_radius": r_app,
             "distance_to_plane": d_plane,
-            "snapped_to_wall": snapped,
+            "snapped_to_wall": bool(meta.get("snapped_to_wall")),
             "center_final": [cx, cy, cz],
         }
     )
@@ -263,6 +330,7 @@ def process_slice_particles(
     particle_diameter: float,
     cfg: SliceParticleConfig,
     segmentos: int = 24,
+    policy: str = "contained",
 ) -> Tuple[List[vec3], List[tri], SliceParticleSummary]:
     """processa todos os centros e devolve malha agregada + resumo."""
     pk = (particle_kind or "sphere").strip().lower()
@@ -288,35 +356,29 @@ def process_slice_particles(
 
     for center in centers:
         c = (float(center[0]), float(center[1]), float(center[2]))
-        if sphere_intersects_slice(
-            c,
-            particle_kind=pk,
-            particle_diameter=d,
-            slice_axis=cfg.slice_axis,
-            slice_position=cfg.slice_position,
-            slice_thickness=cfg.slice_thickness,
-        ):
-            summary["intersecting_particle_count"] = (
-                int(summary["intersecting_particle_count"]) + 1
-            )
-        else:
-            summary["n_dropped_outside_slice"] = (
-                int(summary["n_dropped_outside_slice"]) + 1
-            )
-            if not cfg.keep_only_intersecting:
-                summary["n_full_3d_outside"] = int(summary["n_full_3d_outside"]) + 1
-            continue
-
         sv, sf, meta = create_slice_cylinder_mesh(
-            pk, c, d, cfg=cfg, segmentos=segmentos
+            pk, c, d, cfg=cfg, segmentos=segmentos, policy=policy
         )
         if not sv:
             reason = meta.get("reason")
-            if reason == "below_min_radius":
+            if reason == DROP_OUTSIDE_SLICE:
+                summary["n_dropped_outside_slice"] = (
+                    int(summary["n_dropped_outside_slice"]) + 1
+                )
+            elif reason == DROP_POLICY:
+                summary["n_dropped_policy"] = int(summary.get("n_dropped_policy") or 0) + 1
+            elif reason == DROP_BELOW_MIN_RADIUS:
                 summary["n_discarded_by_radius_threshold"] = (
                     int(summary["n_discarded_by_radius_threshold"]) + 1
                 )
+            elif reason == DROP_LEAK_RADIAL:
+                summary["leak_count"] = int(summary["leak_count"]) + 1
+                summary["n_dropped_policy"] = int(summary.get("n_dropped_policy") or 0) + 1
             continue
+
+        summary["intersecting_particle_count"] = (
+            int(summary["intersecting_particle_count"]) + 1
+        )
 
         if meta.get("snapped_to_wall"):
             summary["n_snapped_to_wall"] = int(summary["n_snapped_to_wall"]) + 1
@@ -359,11 +421,16 @@ def blender_cylinder_rotation(slice_axis: str) -> Tuple[float, float, float]:
 
 __all__ = [
     "SliceParticleConfig",
+    "DROP_BELOW_MIN_RADIUS",
+    "DROP_LEAK_RADIAL",
+    "DROP_OUTSIDE_SLICE",
+    "DROP_POLICY",
     "align_center_to_slice_plane",
     "blender_cylinder_rotation",
     "compute_slice_radius",
     "create_slice_cylinder_mesh",
     "distance_to_slice_plane",
+    "prepare_slice_particle_for_mesh",
     "process_slice_particles",
     "sphere_intersects_slice",
     "validate_slice_particle_vertices",

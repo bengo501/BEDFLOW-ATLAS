@@ -51,9 +51,65 @@ def test_m2_visibility_defaults():
     assert vis["show_internal_cylinder"] is True
 
 
-def test_m2_shell_has_components():
+def test_m3_hides_particles_and_punches_all():
+    mode, vis, _ = resolve_bed_internal_config(
+        {"bed": {"internal_cylinder_mode": MODE_SOLID_HOLES}}
+    )
+    assert mode == MODE_SOLID_HOLES
+    assert vis["show_particles"] is False
+
+
+def test_m1_enforces_no_internal_cylinder_flag():
+    mode, vis, _ = resolve_bed_internal_config(
+        {
+            "bed": {
+                "internal_cylinder_mode": MODE_HOLLOW_BOOLEAN,
+                "visibility": {
+                    "show_internal_cylinder": True,
+                    "show_particles": True,
+                },
+            }
+        }
+    )
+    assert mode == MODE_HOLLOW_BOOLEAN
+    assert vis["show_internal_cylinder"] is False
+
+
+def test_m3_punches_even_when_inner_hidden():
+    from bed_shell_build import build_bed_with_internal_mode
+
+    data = {
+        "bed": {
+            "internal_cylinder_mode": MODE_SOLID_HOLES,
+            "visibility": {
+                "show_outer_cylinder": True,
+                "show_internal_cylinder": False,
+                "show_particles": True,
+            },
+        }
+    }
+    centers = [(0.005, 0.0, 0.05)]
+    v, f, meta = build_bed_with_internal_mode(
+        data,
+        0.025,
+        0.023,
+        0.1,
+        0.003,
+        0.003,
+        centers,
+        0.004,
+        "sphere",
+        segmentos=12,
+    )
+    assert meta["visibility"]["show_particles"] is False
+    st = meta["boolean_operation_status"]
+    assert st.get("n_holes_requested") == 1
+    assert "inner_core_perforated" not in meta.get("shell_components", [])
+
+
+def test_m1_shell_no_inner_core():
     v, f, meta = build_bed_shell(
-        MODE_VISIBLE_INNER,
+        MODE_HOLLOW_BOOLEAN,
         0.025,
         0.023,
         0.1,
@@ -61,18 +117,44 @@ def test_m2_shell_has_components():
             "show_outer_cylinder": True,
             "show_internal_cylinder": True,
             "show_particles": True,
-            "show_boolean_tools": False,
-            "export_boolean_tools": False,
         },
         segmentos=16,
-        bottom_cap_thickness=0.003,
-        top_cap_thickness=0.003,
     )
     assert len(v) > 0
-    assert "inner_cylinder_visible" in meta.get("shell_components", [])
-    st = meta["boolean_operation_status"]
-    assert st["outer_shell"] == "fallback_separate_meshes"
-    assert st["inner_core"] == "visible_separate"
+    assert "inner_cylinder_visible" not in meta.get("shell_components", [])
+    assert "annulus_shell" in meta.get("shell_components", [])
+
+
+def test_m2_pudding_fused_not_separate_particles():
+    from bed_shell_build import build_bed_with_internal_mode
+
+    data = {
+        "bed": {
+            "internal_cylinder_mode": MODE_VISIBLE_INNER,
+            "visibility": {
+                "show_outer_cylinder": True,
+                "show_internal_cylinder": True,
+                "show_particles": True,
+            },
+        }
+    }
+    centers = [(0.01, 0.0, 0.05), (0.0, 0.01, 0.04)]
+    v, f, meta = build_bed_with_internal_mode(
+        data,
+        0.025,
+        0.023,
+        0.1,
+        0.003,
+        0.003,
+        centers,
+        0.004,
+        "sphere",
+        segmentos=12,
+    )
+    assert len(v) > 0
+    assert "inner_pudding_fused" in meta.get("shell_components", [])
+    assert "particles_in_annulus" not in meta.get("shell_components", [])
+    assert meta["boolean_operation_status"]["inner_core"] == "fused_with_particles"
 
 
 def test_statistical_ignores_mode_warning():

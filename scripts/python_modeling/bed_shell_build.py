@@ -60,11 +60,6 @@ def build_bed_shell(
         v, f = meshdata_to_lists(body)
         components.append("annulus_shell")
 
-    if m == MODE_VISIBLE_INNER and show_inner and r_int > 0:
-        iv, iff = _solid_cylinder_mesh(r_int, height, segmentos)
-        v, f = merge_mesh(v, f, iv, iff)
-        components.append("inner_cylinder_visible")
-
     if bottom_cap_thickness > 0 and show_outer:
         z_inf = bottom_cap_thickness / 2.0
         cap_i = create_cap_geometry(r_ext, bottom_cap_thickness, z_inf, segmentos)
@@ -107,7 +102,7 @@ def punch_holes_in_solid(
     particle_kind: str,
     particle_diameter: float,
     *,
-    max_holes: int = 32,
+    max_holes: Optional[int] = None,
 ) -> Tuple[List[vec3], List[tuple], str, List[str]]:
     """
     tenta boolean difference com trimesh; devolve mesh, status, warnings.
@@ -127,11 +122,14 @@ def punch_holes_in_solid(
         if not core.is_watertight:
             core.fix_normals()
         result = core
-        n = min(len(particle_centers), max_holes)
-        if len(particle_centers) > n:
-            warnings.append(
-                f"furos limitados a {n} de {len(particle_centers)} particulas (desempenho)"
-            )
+        if max_holes is None:
+            n = len(particle_centers)
+        else:
+            n = min(len(particle_centers), max(0, int(max_holes)))
+            if len(particle_centers) > n:
+                warnings.append(
+                    f"furos limitados a {n} de {len(particle_centers)} particulas (desempenho)"
+                )
         pk = (particle_kind or "sphere").strip().lower()
         r = particle_diameter / 2.0
         engines = ("manifold", "blender")
@@ -177,6 +175,93 @@ def punch_holes_in_solid(
         return core_v, core_f, "failed", warnings
 
 
+def _particle_tool_mesh(
+    cx: float,
+    cy: float,
+    cz: float,
+    particle_kind: str,
+    particle_diameter: float,
+) -> Tuple[List[vec3], List[tuple]]:
+    """malha de uma ferramenta/partícula para union ou difference."""
+    pk = (particle_kind or "sphere").strip().lower()
+    r = particle_diameter / 2.0
+    if pk == "cube":
+        from stl_mesh_utils import box_mesh
+
+        return box_mesh(cx, cy, cz, particle_diameter)
+    if pk == "cylinder":
+        return cylinder_axis(cx, cy, cz, r, particle_diameter, axis="z", segments=16)
+    from stl_mesh_utils import uv_sphere
+
+    return uv_sphere(cx, cy, cz, r, lat=4, lon=6)
+
+
+def fuse_core_with_particles(
+    core_v: List[vec3],
+    core_f: List[tuple],
+    particle_centers: List[vec3],
+    particle_kind: str,
+    particle_diameter: float,
+) -> Tuple[List[vec3], List[tuple], str, List[str]]:
+    """
+    m2: núcleo sólido fundido com partículas (pudim) via trimesh union.
+    """
+    warnings: List[str] = []
+    if not core_v or not core_f:
+        return core_v, core_f, "n/a", warnings
+    if not particle_centers:
+        return core_v, core_f, "n/a", warnings
+
+    try:
+        import trimesh  # type: ignore
+    except ImportError:
+        warnings.append("trimesh nao instalado: exportando nucleo e particulas separados")
+        v, f = list(core_v), list(core_f)
+        for c in particle_centers:
+            pv, pf = _particle_tool_mesh(
+                c[0], c[1], c[2], particle_kind, particle_diameter
+            )
+            v, f = merge_mesh(v, f, pv, pf)
+        return v, f, "fallback_separate", warnings
+
+    try:
+        result = trimesh.Trimesh(vertices=core_v, faces=core_f, process=False)
+        if not result.is_watertight:
+            result.fix_normals()
+        engines = ("manifold", "blender")
+        fused = 0
+        for c in particle_centers:
+            pv, pf = _particle_tool_mesh(
+                c[0], c[1], c[2], particle_kind, particle_diameter
+            )
+            tool = trimesh.Trimesh(vertices=pv, faces=pf, process=False)
+            ok = False
+            for eng in engines:
+                try:
+                    result = result.union(tool, engine=eng)
+                    ok = True
+                    fused += 1
+                    break
+                except Exception:
+                    continue
+            if not ok:
+                warnings.append(
+                    f"union falhou em ({c[0]:.4f},{c[1]:.4f},{c[2]:.4f})"
+                )
+        if fused == 0:
+            warnings.append("nenhuma union aplicada no nucleo")
+            return core_v, core_f, "failed", warnings
+        return (
+            result.vertices.tolist(),
+            result.faces.tolist(),
+            "applied",
+            warnings,
+        )
+    except Exception as exc:
+        warnings.append(f"trimesh union: {exc}")
+        return core_v, core_f, "failed", warnings
+
+
 def build_bed_with_internal_mode(
     data: Dict[str, Any],
     r_ext: float,
@@ -208,11 +293,34 @@ def build_bed_with_internal_mode(
     )
     status = dict(meta.get("boolean_operation_status") or {})
     warnings = list(status.get("warnings") or [])
+    shell_components = list(meta.get("shell_components") or [])
 
-    if mode == MODE_SOLID_HOLES:
-        cv, cf = _solid_cylinder_mesh(r_int, height, segmentos)
-        if vis.get("show_internal_cylinder", True):
-            pv, pf, pstat, pw = punch_holes_in_solid(
+    if mode == MODE_HOLLOW_BOOLEAN:
+        status["inner_core"] = "n/a"
+        status["particle_tools"] = "n/a"
+        if vis.get("show_particles", True):
+            pk = (particle_kind or "sphere").strip().lower()
+            for c in particle_centers:
+                v, f = _append_particle_mesh(
+                    v,
+                    f,
+                    c[0],
+                    c[1],
+                    c[2],
+                    particle_diameter,
+                    pk,
+                    lat_sphere,
+                    lon_sphere,
+                )
+            shell_components.append("particles_in_annulus")
+
+    elif mode == MODE_VISIBLE_INNER:
+        status["outer_shell"] = status.get("outer_shell") or "fallback_separate_meshes"
+        show_inner = vis.get("show_internal_cylinder", True)
+        show_parts = vis.get("show_particles", True)
+        if show_inner and r_int > 0:
+            cv, cf = _solid_cylinder_mesh(r_int, height, segmentos)
+            pv, pf, pstat, pw = fuse_core_with_particles(
                 cv,
                 cf,
                 particle_centers,
@@ -221,23 +329,64 @@ def build_bed_with_internal_mode(
             )
             warnings.extend(pw)
             status["particle_tools"] = pstat
-            status["inner_core"] = "solid_with_holes"
-            status["warnings"] = warnings
+            status["inner_core"] = "fused_with_particles"
             v, f = merge_mesh(v, f, pv, pf)
-        else:
-            status["particle_tools"] = "skipped"
+            shell_components.append("inner_pudding_fused")
+        elif show_parts:
+            pk = (particle_kind or "sphere").strip().lower()
+            for c in particle_centers:
+                v, f = _append_particle_mesh(
+                    v,
+                    f,
+                    c[0],
+                    c[1],
+                    c[2],
+                    particle_diameter,
+                    pk,
+                    lat_sphere,
+                    lon_sphere,
+                )
             status["inner_core"] = "n/a"
+            status["particle_tools"] = "n/a"
+            shell_components.append("particles_in_annulus")
+        else:
+            status["inner_core"] = "n/a"
+            status["particle_tools"] = "n/a"
 
-    if vis.get("show_particles", True):
-        pk = (particle_kind or "sphere").strip().lower()
-        for c in particle_centers:
-            sx, sy, sz = c
-            v, f = _append_particle_mesh(
-                v, f, sx, sy, sz, particle_diameter, pk, lat_sphere, lon_sphere
+    elif mode == MODE_SOLID_HOLES:
+        cv, cf = _solid_cylinder_mesh(r_int, height, segmentos)
+        n_req = len(particle_centers)
+        status["inner_core"] = "solid_with_holes"
+        if n_req > 0:
+            pv, pf, pstat, pw = punch_holes_in_solid(
+                cv,
+                cf,
+                particle_centers,
+                particle_kind,
+                particle_diameter,
+                max_holes=None,
             )
+            warnings.extend(pw)
+            status["particle_tools"] = pstat
+            status["n_holes_requested"] = n_req
+            status["n_holes_applied"] = (
+                n_req if pstat == "applied" else 0
+            )
+            if vis.get("show_internal_cylinder", True):
+                v, f = merge_mesh(v, f, pv, pf)
+                shell_components.append("inner_core_perforated")
+            else:
+                status["inner_core"] = "solid_with_holes_omitted_from_export"
+        else:
+            status["particle_tools"] = "n/a"
+            if vis.get("show_internal_cylinder", True):
+                v, f = merge_mesh(v, f, cv, cf)
+                shell_components.append("inner_core_solid")
+        status["warnings"] = warnings
 
     meta["internal_cylinder_mode"] = mode
     meta["visibility"] = vis
+    meta["shell_components"] = shell_components
     meta["boolean_operation_status"] = status
     meta["n_particles"] = len(particle_centers)
     meta["particle_kind"] = (particle_kind or "sphere").strip().lower()

@@ -5,7 +5,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 _PMDIR = Path(__file__).resolve().parent.parent
 _REPO = _PMDIR.parent.parent
@@ -107,10 +107,12 @@ def run_packing(p: Dict[str, Any]) -> PackingResult:
         centers, gen_meta = run_rigid_body_packing(domain, n_req, packing, warnings=warnings)
         collisions = int(gen_meta.get("collisions_checked", 0))
     elif method == "spherical_packing":
-        seed = p.get("random_seed")
-        if seed is None:
-            seed = p.get("particles_seed")
-        seed_i = _to_int(seed, 42) if seed is not None else None
+        from packed_bed_science.packing_seed import resolve_packing_random_seed  # noqa: E402
+
+        seed_i, seed_auto = resolve_packing_random_seed(
+            packing,
+            {"seed": p.get("particles_seed")},
+        )
         r_pack = collision_radius_for_particle_kind(pk, domain.particle_diameter)
         gen = generate_spherical_packing(
             ann,
@@ -122,18 +124,33 @@ def run_packing(p: Dict[str, Any]) -> PackingResult:
         )
         centers = gen["centers"]
         gen_meta = {k: v for k, v in gen.items() if k != "centers"}
+        gen_meta["packing_random_seed"] = seed_i
+        gen_meta["packing_seed_auto"] = seed_auto
         collisions = int(gen.get("attempts", 0))
     elif method == "hexagonal_3d":
+        from packed_bed_science.packing_seed import resolve_packing_random_seed  # noqa: E402
+
+        seed_i, seed_auto = resolve_packing_random_seed(
+            packing,
+            {"seed": p.get("particles_seed")},
+        )
         r_pack = collision_radius_for_particle_kind(pk, domain.particle_diameter)
         step_x_opt = p.get("step_x")
         step_x_f = _to_float(step_x_opt, 0.0) if step_x_opt is not None else None
         if step_x_f is not None and step_x_f <= 0:
             step_x_f = None
         gen = generate_hexagonal_packing(
-            ann, n_req, r_pack, domain.gap, step_x=step_x_f
+            ann,
+            n_req,
+            r_pack,
+            domain.gap,
+            step_x=step_x_f,
+            random_seed=seed_i,
         )
         centers = gen["centers"]
         gen_meta = {k: v for k, v in gen.items() if k != "centers"}
+        gen_meta["packing_random_seed"] = seed_i
+        gen_meta["packing_seed_auto"] = seed_auto
         collisions = 0
     else:
         raise ValueError(f"packing_method nao suportado no motor python: {method}")
@@ -193,7 +210,14 @@ def _build_and_export_mesh(
     p: Dict[str, Any],
     result: PackingResult,
     out_stl: Path,
+    progress: Optional[Any] = None,
 ) -> None:
+    if progress is not None:
+        progress.update(
+            "mesh",
+            pct=55.0,
+            detail=f"modo {geometry_mode_from_data(p)} — {len(result.centers)} centros",
+        )
     domain = PackedBedDomain.from_bed_params(p)
     r_ext = domain.r_ext
     r_int = domain.r_int
@@ -209,6 +233,13 @@ def _build_and_export_mesh(
     bed_mode_notes = validate_bed_geometry_mode(p, gm)
     slice_summary_pipe: Dict[str, Any] = {}
 
+    if slice_cfg_active(slice_cfg):
+        if progress is not None:
+            progress.update(
+                "slice",
+                pct=70.0,
+                detail=f"eixo {slice_cfg.get('slice_axis', 'y')} esp. {slice_cfg.get('slice_thickness')}",
+            )
     if not slice_cfg_active(slice_cfg):
         packed = build_packed_bed_model(
             r_ext=r_ext,
@@ -327,7 +358,15 @@ def _build_and_export_mesh(
     report_path = out_stl.parent / f"{out_stl.stem}_packing_report.json"
     write_packing_report(result, report_path)
     extra["packing_report_path"] = str(report_path)
-    export_model_data(packed, out_stl, out_json=out_json, extra=extra)
+    if progress is not None:
+        progress.update("export", pct=88.0, detail=str(out_stl.name))
+        if hasattr(progress, "begin_long_task"):
+            progress.begin_long_task()
+    try:
+        export_model_data(packed, out_stl, out_json=out_json, extra=extra)
+    finally:
+        if progress is not None and hasattr(progress, "end_long_task"):
+            progress.end_long_task()
 
     if out_json.is_file() and out_stl.is_file():
         try:
@@ -344,6 +383,9 @@ def _build_and_export_mesh(
             )
         except (OSError, json.JSONDecodeError):
             pass
+
+    if progress is not None:
+        progress.update("export", pct=95.0, detail="metadados gravados")
 
     if slice_cfg_active(slice_cfg):
         vreport = validate_stl_file(
@@ -371,11 +413,21 @@ def _build_and_export_mesh(
                 pass
 
 
-def generate_packed_bed(p: Dict[str, Any], out_stl: Path) -> PackingResult:
+def generate_packed_bed(
+    p: Dict[str, Any],
+    out_stl: Path,
+    progress: Optional[Any] = None,
+) -> PackingResult:
     validate_geometry_contract(p, mutate=True)
     gm = geometry_mode_from_data(p)
+    if progress is not None:
+        progress.update("load", pct=8.0, detail=f"geometry_mode={gm}")
     if gm == GEOMETRY_STATISTICAL:
+        if progress is not None:
+            progress.update("mesh", pct=40.0, detail="reconstrução estatística 2d")
         generate_statistical_thin_3d_stl(p, out_stl)
+        if progress is not None:
+            progress.update("export", pct=90.0, detail="stl estatístico")
         return PackingResult(
             centers=[],
             method="statistical_reconstruction",
@@ -387,6 +439,18 @@ def generate_packed_bed(p: Dict[str, Any], out_stl: Path) -> PackingResult:
             metadata={"geometry_mode": gm},
         )
 
+    if progress is not None:
+        progress.update(
+            "packing",
+            pct=22.0,
+            detail=f"metodo {p.get('packing_method')} — alvo {p.get('particle_count')} particulas",
+        )
     result = run_packing(p)
-    _build_and_export_mesh(p, result, out_stl)
+    if progress is not None:
+        progress.update(
+            "packing",
+            pct=48.0,
+            detail=f"colocadas {result.n_placed}/{result.n_requested}",
+        )
+    _build_and_export_mesh(p, result, out_stl, progress=progress)
     return result

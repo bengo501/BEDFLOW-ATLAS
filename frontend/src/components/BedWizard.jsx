@@ -31,6 +31,32 @@ import '../styles/TemplateEditor.css';
 
 const REPO_PLACEHOLDER = '<raiz-do-repositorio>';
 
+function randomSeedValue() {
+  return String(Math.floor(Math.random() * 2147483646) + 1);
+}
+
+function SeedFieldRow({ label, value, onChange, onGenerate, hint, id }) {
+  return (
+    <div className="form-group seed-field-row">
+      <label htmlFor={id}>{label}</label>
+      <div className="seed-field-input-row">
+        <input
+          id={id}
+          type="number"
+          min="1"
+          max="2147483647"
+          value={value}
+          onChange={onChange}
+        />
+        <button type="button" className="btn-seed-generate" onClick={onGenerate}>
+          gerar
+        </button>
+      </div>
+      {hint ? <small>{hint}</small> : null}
+    </div>
+  );
+}
+
 function modelingProfileFromBackend(generationBackend) {
   const gb = String(generationBackend || '').toLowerCase();
   if (gb.includes('python') || gb === 'pure_python') return 'python';
@@ -368,6 +394,10 @@ const BedWizard = ({ onNavigateTab, onOpenMeshViewer } = {}) => {
       }
       return next;
     });
+  };
+
+  const generateSeedFor = (section, field) => {
+    handleInputChange(section, field, randomSeedValue());
   };
 
   const handleMetaChange = (field, value) => {
@@ -1193,15 +1223,14 @@ const BedWizard = ({ onNavigateTab, onOpenMeshViewer } = {}) => {
           <small>0 = calcular automaticamente</small>
         </div>
         
-        <div className="form-group">
-          <label>seed para reproducibilidade</label>
-          <input
-            type="number"
-            value={params.particles.seed}
-            onChange={(e) => handleInputChange('particles', 'seed', e.target.value)}
-          />
-          <small>42 = resultado reproduzível</small>
-        </div>
+        <SeedFieldRow
+          id="particles-seed"
+          label="seed para reproducibilidade"
+          value={params.particles.seed}
+          onChange={(e) => handleInputChange('particles', 'seed', e.target.value)}
+          onGenerate={() => generateSeedFor('particles', 'seed')}
+          hint="vazio no motor = aleatório; número fixo = mesmo empacotamento"
+        />
       </div>
       
       <details className="advanced-params" open>
@@ -1435,14 +1464,13 @@ const BedWizard = ({ onNavigateTab, onOpenMeshViewer } = {}) => {
                 onChange={(e) => handleDemChange('settle_threshold', e.target.value)}
               />
             </div>
-            <div className="form-group">
-              <label>seed dem</label>
-              <input
-                type="number"
-                value={params.packing.dem?.seed || '42'}
-                onChange={(e) => handleDemChange('seed', e.target.value)}
-              />
-            </div>
+            <SeedFieldRow
+              id="packing-dem-seed"
+              label="seed dem"
+              value={params.packing.dem?.seed || '42'}
+              onChange={(e) => handleDemChange('seed', e.target.value)}
+              onGenerate={() => handleDemChange('seed', randomSeedValue())}
+            />
             <p className="form-hint">
               dem requer motor python_engine. no blender use spherical_packing ou rigid_body.
             </p>
@@ -1462,14 +1490,16 @@ const BedWizard = ({ onNavigateTab, onOpenMeshViewer } = {}) => {
             </div>
             {params.packing.method === 'spherical_packing' && (
               <>
-                <div className="form-group">
-                  <label>random seed</label>
-                  <input
-                    type="number"
-                    value={params.packing.random_seed}
-                    onChange={(e) => handleInputChange('packing', 'random_seed', e.target.value)}
-                  />
-                </div>
+                <SeedFieldRow
+                  id="packing-random-seed"
+                  label="random seed"
+                  value={params.packing.random_seed}
+                  onChange={(e) =>
+                    handleInputChange('packing', 'random_seed', e.target.value)
+                  }
+                  onGenerate={() => generateSeedFor('packing', 'random_seed')}
+                  hint="usado pelo empacotamento esférico e hexagonal"
+                />
                 <div className="form-group">
                   <label>máx. tentativas de colocação</label>
                   <input
@@ -1479,6 +1509,18 @@ const BedWizard = ({ onNavigateTab, onOpenMeshViewer } = {}) => {
                   />
                 </div>
               </>
+            )}
+            {params.packing.method === 'hexagonal_3d' && (
+              <SeedFieldRow
+                id="packing-hex-seed"
+                label="random seed"
+                value={params.packing.random_seed}
+                onChange={(e) =>
+                  handleInputChange('packing', 'random_seed', e.target.value)
+                }
+                onGenerate={() => generateSeedFor('packing', 'random_seed')}
+                hint="baralha candidatos da grade antes de escolher as posições"
+              />
             )}
             {params.packing.method === 'hexagonal_3d' && (
               <div className="form-group">

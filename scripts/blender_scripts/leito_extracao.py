@@ -569,9 +569,11 @@ def aplicar_thin_slice(
     )
     from slice_debug_export import empty_slice_summary, write_slice_debug_json  # noqa: E402
     from thin_slice_particles import (  # noqa: E402
+        DROP_BELOW_MIN_RADIUS,
+        DROP_LEAK_RADIAL,
+        DROP_POLICY,
         SliceParticleConfig,
-        align_center_to_slice_plane,
-        compute_slice_radius,
+        prepare_slice_particle_for_mesh,
         sphere_intersects_slice,
     )
 
@@ -694,61 +696,32 @@ def aplicar_thin_slice(
             summary["n_full_3d_outside"] += 1
             continue
 
-        if not particle_passes_policy(
+        loc3, rs, prep_meta = prepare_slice_particle_for_mesh(
             center,
-            particle_kind=pk,
-            particle_diameter=d_char,
-            slice_axis=axis,
-            slice_center=pos,
-            slice_thickness=thickness,
-            r_util=frame.r_util,
+            pk,
+            d_char,
+            cfg=pcfg,
             policy=policy,
-        ):
-            summary["n_dropped_policy"] += 1
+        )
+        if loc3 is None:
+            reason = prep_meta.get("reason")
+            if reason == DROP_POLICY:
+                summary["n_dropped_policy"] += 1
+            elif reason == DROP_BELOW_MIN_RADIUS:
+                summary["n_discarded_by_radius_threshold"] += 1
+            elif reason == DROP_LEAK_RADIAL:
+                summary["n_dropped_policy"] += 1
+                summary["n_dropped_leak_radial"] = (
+                    int(summary.get("n_dropped_leak_radial") or 0) + 1
+                )
             if _coerce_bool(slice_cfg.get("debug_export_gizmos"), False):
-                metrics["action"] = "outside_slice_plane"
+                metrics["action"] = reason or "dropped"
                 particle_logs.append(metrics)
             continue
 
-        if not sphere_intersects_slice(
-            center,
-            particle_kind=pk,
-            particle_diameter=d_char,
-            slice_axis=axis,
-            slice_position=pos,
-            slice_thickness=thickness,
-        ):
-            continue
-
-        d_plane = abs(center[axis_index(axis)] - pos)
-        rs = compute_slice_radius(pk, d_char, d_plane, slice_axis=axis)
-        if rs < pcfg.min_slice_particle_radius:
-            summary["n_discarded_by_radius_threshold"] += 1
-            continue
-
-        cx, cy, cz = align_center_to_slice_plane(
-            center,
-            slice_axis=axis,
-            slice_position=pos,
-            preserve_original_packing=pcfg.preserve_original_packing,
-        )
-        if pcfg.snap_radial_to_wall:
-            rho = math.hypot(cx, cy)
-            if rho + rs > frame.r_util + 1e-9:
-                cx, cy, cz = snap_center_radial_to_util_wall(
-                    (cx, cy, cz), frame.r_util, rs
-                )
-                summary["n_snapped_to_wall"] += 1
-
-        rho_final = math.hypot(cx, cy)
-        if rho_final + rs > frame.r_util + 1e-6:
-            summary["n_dropped_policy"] += 1
-            summary["n_dropped_leak_radial"] = (
-                int(summary.get("n_dropped_leak_radial") or 0) + 1
-            )
-            continue
-
-        loc3 = (cx, cy, cz)
+        cx, cy, cz = loc3
+        if prep_meta.get("snapped_to_wall"):
+            summary["n_snapped_to_wall"] += 1
         slab_t = max(float(thickness), 1e-9)
 
         if pk == "cube":
@@ -821,17 +794,78 @@ def _salvar_relatorio_packing(output_path: Path, relatorio: dict):
         print(f"aviso: nao foi possivel salvar relatorio json: {e}")
 
 
+def _remove_particle_objects(*, include_slice_discs: bool = False) -> int:
+    """
+    remove malhas de partículas 3d após boolean no núcleo (modo solid_internal_cylinder_with_particle_holes).
+    mantém slice_disc_* (representação 2d) salvo include_slice_discs=True.
+    """
+    removed = 0
+    for obj in list(bpy.data.objects):
+        if obj.type != "MESH":
+            continue
+        low = obj.name.lower()
+        if low.startswith("boolean_tool_"):
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                removed += 1
+            except Exception:
+                pass
+            continue
+        if low.startswith("particula"):
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                removed += 1
+            except Exception:
+                pass
+            continue
+        if include_slice_discs and low.startswith("slice_disc_"):
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                removed += 1
+            except Exception:
+                pass
+    return removed
+
+
+def _finalize_solid_core_with_holes(
+    nucleo: Any,
+    centers: List[Tuple[float, float, float]],
+    *,
+    particle_diameter: float,
+    particle_kind: str,
+) -> Tuple[str, List[str], int]:
+    """aplica furos no cilindro interno e garante que malhas de partícula foram removidas."""
+    pstat, pw, n_applied = punch_core_with_particle_tools(
+        nucleo,
+        centers,
+        particle_diameter,
+        particle_kind,
+        max_tools=None,
+    )
+    removed = _remove_particle_objects()
+    if removed:
+        print(f"particulas/ferramentas removidas apos boolean: {removed}")
+    return pstat, pw, n_applied
+
+
 def _prepare_export_visibility(params: dict) -> None:
-    """remove ou oculta ferramentas booleanas conforme bed.visibility."""
+    """remove ferramentas booleanas e particulas ocultas conforme bed.visibility."""
     try:
         _pm = Path(__file__).resolve().parents[1] / "python_modeling"
         if str(_pm) not in sys.path:
             sys.path.insert(0, str(_pm))
-        from bed_internal_modes import resolve_bed_internal_config  # noqa: E402
+        from bed_internal_modes import (  # noqa: E402
+            MODE_SOLID_HOLES,
+            resolve_bed_internal_config,
+        )
 
-        _, vis, _ = resolve_bed_internal_config(params)
+        mode, vis, _ = resolve_bed_internal_config(params)
     except Exception:
         return
+    if mode == MODE_SOLID_HOLES or not vis.get("show_particles", True):
+        n = _remove_particle_objects()
+        if n:
+            print(f"particulas removidas da cena/export: {n}")
     if vis.get("export_boolean_tools", False):
         return
     for obj in list(bpy.data.objects):
@@ -1149,13 +1183,12 @@ def main_com_parametros():
 
             # mede tempo de cpu do gerador para comparar metodos no relatorio
             t0_gen = time.perf_counter()
+            from packed_bed_science.packing_seed import resolve_packing_random_seed  # noqa: E402
+
+            seed_i, seed_auto = resolve_packing_random_seed(
+                packing_raw, particles_raw
+            )
             if metodo == "spherical_packing":
-                # monte carlo com rejeicao ver packed bed science packing spherical
-                # seed pode vir do packing ou cair no seed das particles do dsl
-                seed = packing_raw.get("random_seed")
-                if seed is None:
-                    seed = particles_raw.get("seed")
-                seed_i = _coerce_int(seed, 42) if seed is not None else None
                 max_att = _coerce_int(packing_raw.get("max_placement_attempts"), 500_000)
                 gen = generate_spherical_packing(
                     domain,
@@ -1166,8 +1199,6 @@ def main_com_parametros():
                     max_placement_attempts=max_att,
                 )
             else:
-                # grade hexagonal filtrada ver packed bed science packing hexagonal
-                # passo opcional da grade se ausente o modulo usa dois r mais gap
                 step_x_opt = packing_raw.get("step_x")
                 step_x_f = (
                     _coerce_float(step_x_opt, 0.0)
@@ -1182,7 +1213,10 @@ def main_com_parametros():
                     raio_equiv,
                     gap,
                     step_x=step_x_f,
+                    random_seed=seed_i,
                 )
+            gen["packing_random_seed"] = seed_i
+            gen["packing_seed_auto"] = seed_auto
             t_gen = time.perf_counter() - t0_gen
             centers = gen["centers"]
             centers_for_slice = list(centers)
@@ -1246,6 +1280,8 @@ def main_com_parametros():
             )
 
             internal_mode, vis, _ = resolve_bed_internal_config(params)
+            if internal_mode == MODE_SOLID_HOLES:
+                vis["show_particles"] = False
             print(f"modo cilindro interno: {internal_mode}")
 
             print("criando geometria leito e tampas")
@@ -1262,19 +1298,28 @@ def main_com_parametros():
             bool_status = dict(bed_partial)
             bool_warnings: List[str] = []
             if internal_mode == MODE_SOLID_HOLES and nucleo is not None:
-                pstat, pw = punch_core_with_particle_tools(
+                print(
+                    f"nucleo solido: aplicando boolean difference em {len(centers)} posicoes"
+                )
+                pstat, pw, n_holes = _finalize_solid_core_with_holes(
                     nucleo,
                     centers,
-                    diametro_particula,
-                    particle_kind,
+                    particle_diameter=diametro_particula,
+                    particle_kind=particle_kind,
                 )
                 bool_status["particle_tools"] = pstat
+                bool_status["n_holes_applied"] = n_holes
                 bool_warnings.extend(pw)
             elif internal_mode == MODE_SOLID_HOLES:
                 bool_status["particle_tools"] = "skipped"
 
             _plural = _log_particle_plural(particle_kind)
-            if vis.get("show_particles", True):
+            if internal_mode == MODE_SOLID_HOLES:
+                print(
+                    f"{_plural}: furos no nucleo ({len(centers)} posicoes); malhas nao exportadas"
+                )
+                particulas = []
+            elif vis.get("show_particles", True):
                 print(f"{_plural}: {len(centers)} malhas mesh compartilhada")
                 particulas = create_particles_by_kind(
                     particle_kind, centers, diametro_particula
@@ -1447,6 +1492,21 @@ def main_com_parametros():
                 particle_kind=particle_kind,
                 output_path=Path(args.output) if args.output else None,
             ) or {}
+
+        try:
+            _pm_ic = Path(__file__).resolve().parents[1] / "python_modeling"
+            if str(_pm_ic) not in sys.path:
+                sys.path.insert(0, str(_pm_ic))
+            from bed_internal_modes import (  # noqa: E402
+                MODE_SOLID_HOLES as _MODE_SOLID,
+                resolve_bed_internal_config as _resolve_icm,
+            )
+
+            _icm_post, _, _ = _resolve_icm(params)
+            if _icm_post == _MODE_SOLID:
+                _remove_particle_objects()
+        except Exception:
+            pass
 
         # ambos os ramos chegam aqui com objetos na cena prontos para salvar
         if args.output:

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+import os
 import sys
 
 # calcula raiz do repo subindo tres niveis a partir deste ficheiro app main py
@@ -137,12 +138,18 @@ if __name__ == "__main__":
     import uvicorn
 
     # bloco main permite python backend app main py em dev
+    reload_dev = os.environ.get("BEDFLOW_UVICORN_RELOAD", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "sim",
+    )
     try:
         uvicorn.run(
             "backend.app.main:app",
             host="0.0.0.0",
             port=8000,
-            reload=True,
+            reload=reload_dev,
             log_level="info",
         )
     except KeyboardInterrupt:

@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from bed_reference_frame import frame_from_slice_cfg
-from geometry_modes import particle_passes_policy
 from slice_debug_export import (
     empty_slice_summary,
     export_debug_gizmo_stl,
@@ -19,7 +18,9 @@ from stl_mesh_utils import (
     vec3,
 )
 from thin_slice_particles import (
+    DROP_POLICY,
     SliceParticleConfig,
+    prepare_slice_particle_for_mesh,
     process_slice_particles,
 )
 
@@ -92,17 +93,16 @@ def apply_thin_slice_mesh(
 
     for center in centers:
         c = (float(center[0]), float(center[1]), float(center[2]))
-        if not particle_passes_policy(
+        loc, _rs, prep_meta = prepare_slice_particle_for_mesh(
             c,
-            particle_kind=pk,
-            particle_diameter=particle_diameter,
-            slice_axis=axis,
-            slice_center=pos,
-            slice_thickness=thickness,
-            r_util=frame.r_util,
+            pk,
+            particle_diameter,
+            cfg=pcfg,
             policy=policy,
-        ):
-            n_dropped_policy += 1
+        )
+        if loc is None:
+            if prep_meta.get("reason") == DROP_POLICY:
+                n_dropped_policy += 1
             if bool(slice_cfg.get("debug_export_gizmos")):
                 leak_centers.append(c)
             continue
@@ -114,6 +114,7 @@ def apply_thin_slice_mesh(
         particle_diameter=particle_diameter,
         cfg=pcfg,
         segmentos=segmentos,
+        policy=policy,
     )
     if pv:
         from mesh_export_validate import validate_thin_slice_mesh

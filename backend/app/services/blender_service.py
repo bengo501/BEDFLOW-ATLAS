@@ -1,5 +1,6 @@
 # corre blender ou script python conforme MODELING_PROFILE para gerar geometria
 # atualiza objeto job mutavel partilhado pelo router e pela tarefa em background
+import asyncio
 import json
 import os
 import subprocess
@@ -7,6 +8,13 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
+
+from backend.app.services.mesh_job_runner import (
+    acquire_mesh_slot,
+    release_mesh_slot,
+    run_command_async,
+    should_open_blender_gui,
+)
 
 from bedflow_local_paths import models_3d_dir, resolve_existing_artifact
 
@@ -335,11 +343,21 @@ class BlenderService:
             jobs_store: armazenamento de jobs
         """
         job = jobs_store[job_id]
-        
+
+        if not await acquire_mesh_slot(job_id):
+            job.status = JobStatus.FAILED
+            job.error_message = (
+                "outra geração de modelo já está em curso; aguarde o job anterior terminar"
+            )
+            job.updated_at = datetime.now()
+            persist_job(job)
+            return
+
         try:
             job.status = JobStatus.RUNNING
             job.progress = 10
             job.updated_at = datetime.now()
+            persist_job(job)
 
             json_path = self.project_root / json_file
             if not json_path.exists():
@@ -351,7 +369,13 @@ class BlenderService:
 
             profile = _profile_from_bed_json(json_path, modeling_profile)
             job.metadata["modeling_profile"] = profile
-            
+            persist_job(job)
+
+            def _touch_progress(pct: float, _line: str = "") -> None:
+                job.progress = max(float(job.progress or 0), min(99.0, float(pct)))
+                job.updated_at = datetime.now()
+                persist_job(job)
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
             if profile == "python":
@@ -361,22 +385,31 @@ class BlenderService:
                 stl_path = self.output_dir / stl_filename
                 job.progress = 30
                 job.updated_at = datetime.now()
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        str(self.python_stl_script),
-                        str(json_path),
-                        str(stl_path),
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=600,
+                persist_job(job)
+                run_env = {
+                    **os.environ,
+                    "BEDFLOW_PROGRESS_UI": "0",
+                    "BEDFLOW_JOB_ID": job_id,
+                }
+                py_cmd = [
+                    sys.executable,
+                    str(self.python_stl_script),
+                    str(json_path),
+                    str(stl_path),
+                    "--no-progress",
+                ]
+                rc, out = await run_command_async(
+                    py_cmd,
                     cwd=str(self.project_root),
+                    env=run_env,
+                    timeout_sec=600.0,
+                    on_progress=_touch_progress,
                 )
                 job.progress = 80
                 job.updated_at = datetime.now()
-                if result.returncode != 0:
-                    raise Exception(f"erro na geracao python/stl: {result.stderr or result.stdout}")
+                persist_job(job)
+                if rc != 0:
+                    raise Exception(f"erro na geracao python/stl: {out[-4000:]}")
                 if not stl_path.exists():
                     raise Exception("arquivo .stl nao foi gerado")
                 rel = str(stl_path.relative_to(self.project_root)).replace("\\", "/")
@@ -401,6 +434,7 @@ class BlenderService:
                 blend_path = self.output_dir / blend_filename
                 job.progress = 30
                 job.updated_at = datetime.now()
+                persist_job(job)
                 cmd = [
                     self.blender_exe,
                     "--background",
@@ -410,18 +444,18 @@ class BlenderService:
                     "--output", str(blend_path)
                 ]
                 run_env = {**os.environ, "BEDFLOW_JOB_ID": job_id}
-                result = subprocess.run(
+                rc, out = await run_command_async(
                     cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                    env=run_env,
                     cwd=str(self.project_root),
+                    env=run_env,
+                    timeout_sec=600.0,
+                    on_progress=_touch_progress,
                 )
                 job.progress = 80
                 job.updated_at = datetime.now()
-                if result.returncode != 0:
-                    raise Exception(f"erro no blender: {result.stderr}")
+                persist_job(job)
+                if rc != 0:
+                    raise Exception(f"erro no blender: {out[-4000:]}")
                 if not blend_path.exists():
                     raise Exception("arquivo .blend não foi gerado")
                 rel = str(blend_path.relative_to(self.project_root))
@@ -487,7 +521,12 @@ class BlenderService:
                 if own_session is not None:
                     own_session.close()
             
-            if open_blender:
+            open_gui = should_open_blender_gui(open_blender)
+            if open_blender and not open_gui:
+                job.metadata["open_blender_skipped"] = (
+                    "gui ignorada no servidor (defina BEDFLOW_ALLOW_BLENDER_GUI=1 para permitir)"
+                )
+            if open_gui:
                 stl_rel = job.metadata.get("stl_path")
                 blend_rel = job.metadata.get("blend_file")
                 stl_p = (
@@ -519,15 +558,16 @@ class BlenderService:
                     job.metadata["blender_gui_opened"] = rel_open
                     job.metadata["blender_import_log_hint"] = BLENDER_IMPORT_LOG_HINT
             
-        except subprocess.TimeoutExpired:
+        except asyncio.TimeoutError:
             job.status = JobStatus.FAILED
-            job.error_message = "timeout na geração do modelo (>5min)"
+            job.error_message = "timeout na geração do modelo (limite 10 min)"
             job.updated_at = datetime.now()
-            
+
         except Exception as e:
             job.status = JobStatus.FAILED
             job.error_message = str(e)
             job.updated_at = datetime.now()
         finally:
+            await release_mesh_slot(job_id)
             persist_job(job)
 

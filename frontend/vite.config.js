@@ -13,7 +13,11 @@ export default defineConfig({
       '/files': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-      }
+      },
+      '/generated': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     }
   }
 })

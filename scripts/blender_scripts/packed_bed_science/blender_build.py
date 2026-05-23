@@ -115,15 +115,18 @@ def punch_core_with_particle_tools(
     diameter: float,
     kind: str = "sphere",
     *,
-    max_tools: int = 40,
-) -> Tuple[str, List[str]]:
-    """m3 blender: difference no nucleo; tools removidas apos apply."""
+    max_tools: Optional[int] = None,
+) -> Tuple[str, List[str], int]:
+    """m3 blender: difference no nucleo com uma ferramenta por particula; tools removidas apos apply."""
     warnings: List[str] = []
     if not centers or core_obj is None:
-        return "n/a", warnings
+        return "n/a", warnings, 0
     k = (kind or "sphere").strip().lower()
     r = diameter / 2.0
-    n = min(len(centers), max_tools)
+    if max_tools is None:
+        n = len(centers)
+    else:
+        n = min(len(centers), max(0, int(max_tools)))
     applied = 0
     for idx, loc in enumerate(centers[:n], start=1):
         if k == "cube":
@@ -142,10 +145,10 @@ def punch_core_with_particle_tools(
         bpy.data.objects.remove(tool, do_unlink=True)
     if applied == 0:
         warnings.append("nenhuma booleana de furo aplicada no nucleo")
-        return "failed", warnings
+        return "failed", warnings, 0
     if applied < n:
         warnings.append(f"apenas {applied}/{n} furos aplicados (limite max_tools)")
-    return "applied", warnings
+    return "applied", warnings, applied
 
 
 def create_bed_by_internal_mode(
@@ -182,10 +185,16 @@ def create_bed_by_internal_mode(
 
     if m == "solid_internal_cylinder_with_particle_holes":
         leito = create_hollow_cylinder(outer_radius, inner_radius, height)
-        core = create_solid_inner_core(inner_radius, height) if show_inner else None
+        core = create_solid_inner_core(inner_radius, height)
+        if not show_inner:
+            try:
+                core.hide_set(True)
+                core.hide_render = True
+            except Exception:
+                pass
         return leito, core, {
             "outer_shell": "explicit_annulus",
-            "inner_core": "solid_with_holes" if core else "n/a",
+            "inner_core": "solid_with_holes",
         }
 
     leito = create_hollow_cylinder(outer_radius, inner_radius, height)

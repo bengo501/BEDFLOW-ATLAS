@@ -67,7 +67,7 @@ def default_visibility_for_mode(mode: str) -> Dict[str, bool]:
         return {
             "show_outer_cylinder": True,
             "show_internal_cylinder": True,
-            "show_particles": True,
+            "show_particles": False,
             "show_boolean_tools": False,
             "export_boolean_tools": False,
         }
@@ -80,19 +80,45 @@ def default_visibility_for_mode(mode: str) -> Dict[str, bool]:
     }
 
 
+def enforce_visibility_for_mode(mode: str, vis: Dict[str, bool]) -> Dict[str, bool]:
+    """impede combinações incoerentes (ex.: m1 com núcleo sólido ou m3 com partículas soltas)."""
+    m = normalize_internal_cylinder_mode(mode)
+    out = dict(vis)
+    if m == MODE_HOLLOW_BOOLEAN:
+        out["show_internal_cylinder"] = False
+        out["show_boolean_tools"] = False
+        out["export_boolean_tools"] = False
+    elif m == MODE_SOLID_HOLES:
+        out["show_particles"] = False
+        out["show_boolean_tools"] = False
+        out["export_boolean_tools"] = False
+    elif m == MODE_VISIBLE_INNER:
+        if not out.get("show_internal_cylinder", True):
+            pass
+        else:
+            out["show_internal_cylinder"] = True
+    return out
+
+
 def resolve_bed_internal_config(data: Dict[str, Any]) -> Tuple[str, Dict[str, bool], List[str]]:
     """extrai modo e visibility a partir de data ou data['bed']; devolve avisos."""
     notes: List[str] = []
     bed = data.get("bed") if isinstance(data.get("bed"), dict) else {}
     if not isinstance(bed, dict):
         bed = {}
-    mode = normalize_internal_cylinder_mode(bed.get("internal_cylinder_mode"))
+    raw_mode = bed.get("internal_cylinder_mode")
+    if raw_mode is None and data.get("internal_cylinder_mode") is not None:
+        raw_mode = data.get("internal_cylinder_mode")
+    mode = normalize_internal_cylinder_mode(raw_mode)
     vis_raw = bed.get("visibility")
+    if vis_raw is None and isinstance(data.get("visibility"), dict):
+        vis_raw = data.get("visibility")
     vis = default_visibility_for_mode(mode)
     if isinstance(vis_raw, dict):
         for k in vis:
             if k in vis_raw:
                 vis[k] = _to_bool(vis_raw[k], vis[k])
+    vis = enforce_visibility_for_mode(mode, vis)
     return mode, vis, notes
 
 

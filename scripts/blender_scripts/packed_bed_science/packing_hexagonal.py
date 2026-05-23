@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import math
+import random
 import time
 from typing import List, Tuple, Dict, Any, Optional
 
@@ -28,6 +29,7 @@ def generate_hexagonal_packing(
     gap: float,
     *,
     step_x: Optional[float] = None,
+    random_seed: Optional[int] = None,
 ) -> Dict[str, Any]:
     # domain igual ao spherical packing
     # n target numero desejado de centros
@@ -102,10 +104,9 @@ def generate_hexagonal_packing(
                 if point_in_domain(p, domain):
                     candidates.append(p)
 
-    # ordenacao determinista antes de truncar ao pedido do utilizador
-    candidates.sort(key=lambda p: (_cylinder_radius_xy(p), p[2], p[0], p[1]))
+    rng = random.Random(random_seed) if random_seed is not None else random
+    rng.shuffle(candidates)
 
-    # se sobram candidatos cortamos aos primeiros n target
     if len(candidates) >= n_target:
         chosen = candidates[:n_target]
         reason = "ok_truncado"
@@ -124,4 +125,5 @@ def generate_hexagonal_packing(
         "step_y": dy,
         "step_z": dz,
         "candidates_before_trim": len(candidates),
+        "random_seed": random_seed,
     }

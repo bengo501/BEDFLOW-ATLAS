@@ -349,10 +349,10 @@ def write_stl_binary(path: Path, vertices: List[vec3], faces: List[tri]) -> None
             # comprimento para normalizar evita divisao por zero com or um
             ln = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
             nx, ny, nz = nx / ln, ny / ln, nz / ln
-            # doze floats em little endian mais atributo uint16 zero com padding
+            # 50 bytes/triangulo (padrao stl binario; three.js STLLoader usa faceLength=50)
             f.write(
                 struct.pack(
-                    "<12fHxx",
+                    "<12fH",
                     nx,
                     ny,
                     nz,

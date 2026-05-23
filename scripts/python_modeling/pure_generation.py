@@ -36,6 +36,7 @@ import sys
 import time
 import math
 from pathlib import Path
+from typing import Optional
 from typing import Any, Dict, List, Tuple
 
 # diretorio deste ficheiro serve para imports relativos sem instalar pacote
@@ -456,12 +457,12 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
         # ramo spherical packing
         # o gerador interno tenta varias vezes ate aceitar cada centro
         # seed controla repetibilidade dos sorteios
-        seed = p.get("random_seed")
-        if seed is None:
-            seed = p.get("particles_seed")
-        # seed none deixa o gerador escolher comportamento proprio
-        seed_i = _to_int(seed, 42) if seed is not None else None
-        # generate spherical packing devolve dict com centros e estatisticas
+        from packed_bed_science.packing_seed import resolve_packing_random_seed  # noqa: E402
+
+        seed_i, seed_auto = resolve_packing_random_seed(
+            p.get("packing") if isinstance(p.get("packing"), dict) else {},
+            {"seed": p.get("particles_seed")},
+        )
         gen = generate_spherical_packing(
             domain,
             p["particle_count"],
@@ -486,7 +487,10 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             r_pack,
             gap,
             step_x=step_x_f,
+            random_seed=seed_i,
         )
+    gen["packing_random_seed"] = seed_i
+    gen["packing_seed_auto"] = seed_auto
     # tempo decorrido em segundos
     elapsed = time.perf_counter() - t0
 
@@ -615,7 +619,11 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
 
 
 def generate_packed_bed_stl(
-    bed_json: Path, out_stl: Path, max_passos: int = 12000
+    bed_json: Path,
+    out_stl: Path,
+    max_passos: int = 12000,
+    *,
+    progress_window: Optional[bool] = None,
 ) -> None:
     # entrada publica unica para testes e para o servico fastapi
     p = load_bed_json(bed_json)
@@ -626,8 +634,11 @@ def generate_packed_bed_stl(
         _legacy_generate_stl(p, out_stl, max_passos)
         return
     from engine.pipeline import generate_packed_bed
+    from mesh_progress_ui import MeshProgressReporter, should_use_progress_window
 
-    generate_packed_bed(p, out_stl)
+    use_gui = should_use_progress_window(progress_window)
+    with MeshProgressReporter(use_gui=use_gui) as prog:
+        generate_packed_bed(p, out_stl, progress=prog)
 
 
 # resumo final para quem le o ficheiro inteiro

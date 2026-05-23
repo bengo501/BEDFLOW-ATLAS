@@ -10,7 +10,7 @@
     "visibility": {
       "show_outer_cylinder": true,
       "show_internal_cylinder": true,
-      "show_particles": true
+      "show_particles": false
     }
   },
   "particles": {

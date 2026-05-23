@@ -1082,6 +1082,34 @@
   animation: fadeIn 0.3s ease;
 }
 
+.seed-field-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.seed-field-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-seed-generate {
+  flex-shrink: 0;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  background: var(--card-bg, #f5f5f5);
+  color: var(--text, #333);
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-seed-generate:hover {
+  border-color: var(--primary, #5f1923);
+  background: var(--bg-hover, #eee);
+}
+
 /* estilos para template actions */
 .template-actions {
   display: flex;

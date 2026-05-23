@@ -2342,6 +2342,8 @@ class BedWizard:
         show_inner = vis_defaults.get(str(bd.get("internal_cylinder_mode")), False)
         bd.setdefault("visibility", {})
         bd["visibility"]["show_internal_cylinder"] = show_inner
+        if str(bd.get("internal_cylinder_mode")) == "solid_internal_cylinder_with_particle_holes":
+            bd["visibility"]["show_particles"] = False
 
         self.print_section("etapa 2: tampas")
         lid_types = ["flat", "hemispherical", "none"]

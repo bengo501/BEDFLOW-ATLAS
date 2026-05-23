@@ -17,8 +17,21 @@ from backend.app.services.blender_service import BlenderService
 from backend.app.services.openfoam_service import OpenFOAMService
 from backend.app.utils.file_manager import FileManager
 from backend.app.services.job_persistence import persist_job, sync_job_in_store
+from backend.app.services.mesh_job_runner import mesh_slot_busy
 
 router = APIRouter()
+
+
+def _mesh_generation_busy(store: dict) -> bool:
+    if mesh_slot_busy():
+        return True
+    for j in store.values():
+        if j.job_type == JobType.GENERATE_MODEL and j.status in (
+            JobStatus.QUEUED,
+            JobStatus.RUNNING,
+        ):
+            return True
+    return False
 
 # memoria volatil partilhada entre pedidos para estado de jobs simples
 jobs_store: dict[str, Job] = {}
@@ -67,6 +80,15 @@ async def generate_model(request: GenerateModelRequest, background_tasks: Backgr
     """
     gera modelo 3d no blender (assíncrono)
     """
+    if _mesh_generation_busy(jobs_store):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "já existe uma geração de modelo em fila ou em execução. "
+                "aguarde o job anterior terminar antes de iniciar outra."
+            ),
+        )
+
     # uuid garante id unico sem coordenacao entre workers
     job_id = str(uuid.uuid4())
     job = Job(

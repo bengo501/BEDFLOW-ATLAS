@@ -463,7 +463,7 @@ function ResultsModels3DPage({ onOpenInViewer }) {
             <h3>
               {pt ? 'Visualização 3d' : '3d preview'}: {selectedModel.name}
             </h3>
-            <ModelViewer modelPath={selectedModel.path} />
+            <ModelViewer modelPath={selectedModel.path} meshInfo={selectedModel} />
           </div>
         </div>
       ) : null}
