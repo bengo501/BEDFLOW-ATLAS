@@ -1,0 +1,225 @@
+{
+  "shell_components": [
+    "annulus_shell",
+    "bottom_cap",
+    "top_cap",
+    "particles_in_annulus"
+  ],
+  "boolean_operation_status": {
+    "outer_shell": "explicit_annulus",
+    "inner_core": "n/a",
+    "particle_tools": "n/a",
+    "backend": "python_engine",
+    "warnings": [],
+    "r_int": 0.023,
+    "r_ext": 0.025
+  },
+  "internal_cylinder_mode": "hollow_boolean_applied",
+  "visibility": {
+    "show_outer_cylinder": true,
+    "show_internal_cylinder": false,
+    "show_particles": true,
+    "show_boolean_tools": false,
+    "export_boolean_tools": false
+  },
+  "n_particles": 0,
+  "particle_kind": "sphere",
+  "r_ext": 0.025,
+  "r_int": 0.023,
+  "height": 0.1,
+  "packing_method": "hexagonal_3d",
+  "particle_type": "sphere",
+  "n_particles_requested": 80,
+  "n_particles_placed": 80,
+  "n_spheres_requested": 80,
+  "n_spheres_placed": 80,
+  "porosity_estimate": 1.0,
+  "validation_ok": true,
+  "collisions_checked": 0,
+  "wall_violations": 0,
+  "elapsed_sec": 0.1175548799999433,
+  "warnings": [],
+  "metadata": {
+    "generation": {
+      "n_placed": 80,
+      "n_target": 80,
+      "elapsed_sec": 0.11035507400004008,
+      "stopped_reason": "ok_truncado",
+      "step_x": 0.0016,
+      "step_y": 0.0013856406460551018,
+      "step_z": 0.0013063945294843617,
+      "candidates_before_trim": 50401,
+      "random_seed": 1,
+      "packing_random_seed": 1,
+      "packing_seed_auto": false
+    },
+    "validation": {
+      "ok": true,
+      "n_spheres": 80,
+      "pair_violations": 0,
+      "domain_violations": 0,
+      "messages": []
+    },
+    "collision_radius_equiv": 0.00075,
+    "collision_model": "circumscribed_sphere"
+  },
+  "validation": {
+    "ok": true,
+    "n_spheres": 80,
+    "pair_violations": 0,
+    "domain_violations": 0,
+    "messages": []
+  },
+  "generation": {
+    "n_placed": 80,
+    "n_target": 80,
+    "elapsed_sec": 0.11035507400004008,
+    "stopped_reason": "ok_truncado",
+    "step_x": 0.0016,
+    "step_y": 0.0013856406460551018,
+    "step_z": 0.0013063945294843617,
+    "candidates_before_trim": 50401,
+    "random_seed": 1,
+    "packing_random_seed": 1,
+    "packing_seed_auto": false
+  },
+  "generation_wall_time_sec": 0.1175548799999433,
+  "gap_convention": "center_distance >= r1+r2+gap",
+  "particle_centers_preview": [
+    [
+      0.016,
+      0.0046188021535170055,
+      0.03788544135504649
+    ],
+    [
+      -0.013600000000000001,
+      0.008775724091682311,
+      0.0953668006523584
+    ],
+    [
+      -0.0048,
+      -0.012008885599144216,
+      0.019595917942265426
+    ],
+    [
+      0.009600000000000001,
+      -0.00831384387633061,
+      0.06270693741524937
+    ],
+    [
+      0.0048000000000000004,
+      0.011085125168440815,
+      0.028740679648655957
+    ],
+    [
+      0.0064,
+      0.0027712812921102037,
+      0.05486857023834319
+    ],
+    [
+      0.005600000000000001,
+      -0.0013856406460551018,
+      0.0888348280049366
+    ],
+    [
+      0.004,
+      0.006004442799572108,
+      0.016983128883296703
+    ],
+    [
+      0.009600000000000001,
+      -0.006466323014923809,
+      0.027434285119171595
+    ],
+    [
+      0.0048000000000000004,
+      0.00739008344562721,
+      0.014370339824327978
+    ],
+    [
+      0.0032,
+      -0.01662768775266122,
+      0.05486857023834319
+    ],
+    [
+      -0.0072,
+      -0.012470765814495917,
+      0.057481359297311914
+    ]
+  ],
+  "geometry_mode": "pseudo_2d_thin_slice",
+  "generation_backend": "python_engine",
+  "slice": {
+    "slice_enabled": true,
+    "slice_axis": "y",
+    "slice_thickness": 0.01,
+    "slice_position": 0.0,
+    "min_slice_particle_radius": 1e-05,
+    "snap_radial_to_wall": true,
+    "keep_only_intersecting_particles": true,
+    "preserve_original_packing": true,
+    "slice_particle_policy": "contained",
+    "debug_export_gizmos": false
+  },
+  "slice_particle_summary": {
+    "n_centers": 0,
+    "n_kept": 4,
+    "n_dropped_policy": 53,
+    "n_dropped_legacy_slice": 0,
+    "n_leak_footprint_before_clip": 0,
+    "n_clipped": 0,
+    "n_full_3d_outside": 0,
+    "n_snapped_to_wall": 0,
+    "leak_count": 0,
+    "slice_thickness": 0.01,
+    "slice_particle_summary": {
+      "slice_axis": "y",
+      "slice_position": 0.0,
+      "slice_thickness": 0.01,
+      "min_slice_particle_radius": 1e-05,
+      "original_particle_count": 4,
+      "intersecting_particle_count": 4,
+      "n_kept": 4,
+      "n_dropped_outside_slice": 0,
+      "n_discarded_by_radius_threshold": 0,
+      "n_snapped_to_wall": 0,
+      "n_full_3d_outside": 0,
+      "leak_count": 0,
+      "min_slice_radius": 0.0005909032633745279,
+      "max_slice_radius": 0.00075,
+      "average_slice_radius": 0.0006704516316872639
+    },
+    "slice_particle_policy": "contained",
+    "particles": [],
+    "slice_axis": "y",
+    "slice_position": 0.0,
+    "min_slice_particle_radius": 1e-05,
+    "original_particle_count": 4,
+    "intersecting_particle_count": 4,
+    "n_dropped_outside_slice": 0,
+    "n_discarded_by_radius_threshold": 0,
+    "min_slice_radius": 0.0005909032633745279,
+    "max_slice_radius": 0.00075,
+    "average_slice_radius": 0.0006704516316872639,
+    "geometry_mode": "pseudo_2d_thin_slice"
+  },
+  "slice_particle_policy": "contained",
+  "porosity_slice_plane": 1.0,
+  "porosity_result": 1.0,
+  "porosity_slice_meta": {
+    "porosity_method": "slice_raster",
+    "porosity_slice_plane": 1.0,
+    "n_particles_in_slice": 4,
+    "raster_nx": 400,
+    "raster_ny": 400,
+    "solid_fraction": 0.0,
+    "slice_axis": "y"
+  },
+  "porosity_packing_3d": 0.9991230292518465,
+  "representation_dimension": "2d",
+  "bed_particle_layout": "boolean_holes",
+  "modeling_profile": "python",
+  "particles_seed": 1,
+  "packing_report_path": "/home/user/BEDFLOW-ATLAS-TCC-2/dsl/_quick_work__test_hex.bed_pure_packing_report.json",
+  "content_hash": "0bf726f301efc4cb93a20e8766fa65e22dea5048debf7535798e5f5c74aa0719"
+}

@@ -1,0 +1,40 @@
+{
+  "packing_method": "hexagonal_3d",
+  "particle_type": "sphere",
+  "particle_kind": "sphere",
+  "n_particles_requested": 80,
+  "n_particles_placed": 80,
+  "n_spheres_requested": 80,
+  "n_spheres_placed": 80,
+  "porosity_estimate": 0.9991230292518465,
+  "validation_ok": true,
+  "collisions_checked": 0,
+  "wall_violations": 0,
+  "elapsed_sec": 0.1175548799999433,
+  "warnings": [],
+  "metadata": {
+    "generation": {
+      "n_placed": 80,
+      "n_target": 80,
+      "elapsed_sec": 0.11035507400004008,
+      "stopped_reason": "ok_truncado",
+      "step_x": 0.0016,
+      "step_y": 0.0013856406460551018,
+      "step_z": 0.0013063945294843617,
+      "candidates_before_trim": 50401,
+      "random_seed": 1,
+      "packing_random_seed": 1,
+      "packing_seed_auto": false
+    },
+    "validation": {
+      "ok": true,
+      "n_spheres": 80,
+      "pair_violations": 0,
+      "domain_violations": 0,
+      "messages": []
+    },
+    "collision_radius_equiv": 0.00075,
+    "collision_model": "circumscribed_sphere"
+  },
+  "generated_at": "2026-05-24T18:34:45Z"
+}
