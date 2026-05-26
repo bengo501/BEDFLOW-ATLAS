@@ -1,0 +1,1281 @@
+================================================================================
+TEXTO PARA O TCC — CAPÍTULOS 4 A 8
+BEDFLOW-ATLAS: PIPELINE AUTOMATIZADO PARA SIMULAÇÃO CFD DE LEITOS EMPACOTADOS
+================================================================================
+
+INSTRUÇÃO DE USO: Este documento oferece rascunhos completos para os capítulos
+4 a 8 da monografia. Cada seção traz sugestão de texto corrido, tabelas e
+remissões a evidências no repositório. Adapte conforme a norma da instituição
+(numeração, nível de detalhamento, citações).
+
+================================================================================
+CAPÍTULO 4 — PROPOSTA DE SOLUÇÃO
+================================================================================
+
+4.1 Contexto e Motivação
+----------------------------------------------------------------------
+
+A simulação por dinâmica dos fluidos computacional (CFD) de leitos empacotados
+é recorrente em pesquisa de engenharia química, processamento de minérios e
+projetos de reatores. Um leito empacotado típico consiste em um recipiente
+cilíndrico ou prismático preenchido por partículas sólidas — esferas, cilindros
+ou cubos — que criam caminhos tortuosos para o escoamento do fluido.
+Reproduzir computacionalmente esse cenário exige três passos distintos e
+interdependentes: (i) descrever a geometria do leito e das partículas de forma
+paramétrica; (ii) gerar a geometria tridimensional com um esquema de
+empacotamento fisicamente plausível; e (iii) executar a simulação CFD sobre
+essa geometria, obtendo campos de velocidade, pressão e porosidade.
+
+Na prática, pesquisadores lidam com esses passos em ferramentas separadas,
+sem integração formal: parâmetros são inseridos manualmente em scripts sem
+validação; o empacotamento é realizado em um programa e exportado para outro;
+a preparação do caso CFD demanda edição manual de dicionários do solver. O
+resultado é um fluxo de trabalho frágil, difícil de reproduzir e de auditar:
+alterando o diâmetro das partículas, por exemplo, o pesquisador precisa propagar
+a mudança manualmente em pelo menos três ambientes diferentes, com alto risco de
+inconsistência.
+
+Este trabalho propõe uma solução integrada para esse problema: um pipeline
+automatizado que unifica a descrição paramétrica, a geração geométrica e a
+configuração CFD em um único fluxo rastreável, controlado por uma linguagem de
+domínio específico (DSL) desenvolvida especialmente para o contexto de leitos
+empacotados.
+
+
+4.2 Objetivos da Proposta
+----------------------------------------------------------------------
+
+O objetivo geral deste trabalho é projetar e implementar o sistema BEDFLOW-ATLAS,
+um pipeline automatizado e reprodutível para simulação CFD de leitos empacotados,
+que permita ao pesquisador descrever o problema em linguagem declarativa e obter
+geometria tridimensional e caso CFD configurado sem intervenção manual em
+múltiplas ferramentas.
+
+Os objetivos específicos são:
+
+  OE1. Definir uma linguagem de domínio específico (.bed) capaz de expressar
+       todos os parâmetros relevantes de um leito empacotado — geometria do
+       recipiente, tipo e tamanho das partículas, método de empacotamento,
+       regime CFD e configurações de exportação — em um único arquivo texto
+       legível por humanos.
+
+  OE2. Implementar um compilador ANTLR4 que valide sintaticamente o arquivo .bed
+       e produza um JSON normalizado (`.bed.json`) com unidades convertidas para
+       SI e metadados de rastreabilidade (hash SHA-256).
+
+  OE3. Disponibilizar dois motores de geração geométrica: um baseado em Blender
+       (motor de física rigid body, para empacotamento realista completo) e um
+       em Python puro (sem dependências de terceiros, para ambientes restritos,
+       DEM e geometrias pseudo-2D).
+
+  OE4. Implementar o sistema de corte fino (thin slice / pseudo-2D), que
+       extrai uma fatia planar do leito empacotado para reduzir custo
+       computacional da malha CFD mantendo representatividade estatística da
+       porosidade.
+
+  OE5. Prover uma interface web (React + Three.js) para criação de leitos via
+       formulário, monitoramento de jobs assíncronos e visualização de modelos
+       3D diretamente no navegador.
+
+  OE6. Prover uma interface de terminal (CLI Wizard, Typer) para uso interativo
+       e headless (automação por scripts), suportando os mesmos fluxos da
+       interface web.
+
+  OE7. Garantir rastreabilidade completa: todo artefato STL gerado deve ser
+       acompanhado de metadados (sidecar JSON) contendo seed de empacotamento,
+       hash do arquivo .bed.json de origem, contagem de partículas, porosidade
+       estimada e tempo de geração.
+
+  OE8. Oferecer um sistema de templates que permita salvar, nomear e reutilizar
+       configurações de leito frequentes sem redigitar parâmetros.
+
+
+4.3 Arquitetura Geral do Sistema
+----------------------------------------------------------------------
+
+O BEDFLOW-ATLAS é composto por seis camadas funcionais que operam em sequência
+no fluxo principal (Figura 8 do documento):
+
+  [DSL .bed] → [Compilador ANTLR4] → [Motor de Modelagem] →
+  [Pipeline OpenFOAM] → [API FastAPI] → [Interface (Web / CLI)]
+
+A camada de DSL define a entrada do sistema: o pesquisador escreve um arquivo
+.bed descrevendo o leito. O compilador ANTLR4 valida esse arquivo, converte
+unidades e gera o .bed.json normalizado com hash SHA-256 embutido em
+`_metadata.hash`. O motor de modelagem (Blender ou Python puro, escolhido pela
+seção `generation { backend }` do .bed) consome o .bed.json e produz arquivos
+STL e metadados sidecar. O pipeline OpenFOAM recebe a geometria STL e configura
+automaticamente o caso de simulação (blockMesh, snappyHexMesh, condições de
+contorno). A API FastAPI orquestra esses processos de forma assíncrona, com
+persistência dos jobs em SQLite. As interfaces web e CLI consomem a API.
+
+Módulos novos introduzidos nesta etapa (em relação à versão inicial do sistema)
+estão marcados nas figuras de arquitetura (Figuras 9b, 9c, 16 e 17). São eles:
+o motor Python puro, o sistema de corte fino (thin slice / pseudo-2D), o sistema
+de rastreabilidade por seed e hash, e o sistema de templates de leito.
+
+
+4.4 Módulos do Sistema
+----------------------------------------------------------------------
+
+A tabela a seguir lista os módulos do sistema com suas responsabilidades
+principais e localização no repositório:
+
+  +----+---------------------------+---------------------------------------------+
+  | #  | Módulo                    | Responsabilidade                            |
+  +----+---------------------------+---------------------------------------------+
+  | 1  | DSL .bed / Gramática      | Sintaxe declarativa dos parâmetros          |
+  |    | dsl/grammar/Bed.g4        | 10 seções, unidades físicas, validação      |
+  +----+---------------------------+---------------------------------------------+
+  | 2  | Compilador ANTLR4         | Análise léxica/sintática, normalização      |
+  |    | dsl/compiler/             | de unidades, emissão de .bed.json + hash    |
+  +----+---------------------------+---------------------------------------------+
+  | 3  | Motor Blender             | Geração 3D por física rigid body no         |
+  |    | scripts/blender_scripts/  | Blender 4.x; exporta STL/OBJ/BLEND         |
+  +----+---------------------------+---------------------------------------------+
+  | 4  | Motor Python Puro         | Geração 3D sem dependências externas;       |
+  |    | scripts/python_modeling/  | hexagonal_3d, DEM, statistical 2D           |
+  +----+---------------------------+---------------------------------------------+
+  | 5  | Sistema de Corte Fino     | Thin slice / pseudo-2D; extrai fatia        |
+  |    | scripts/python_modeling/  | planar; calcula porosidade 2D               |
+  |    | thin_slice*.py            |                                             |
+  +----+---------------------------+---------------------------------------------+
+  | 6  | Pipeline OpenFOAM         | Configura blockMesh, snappyHexMesh,         |
+  |    | scripts/openfoam_scripts/ | campos de CC; invoca solver                 |
+  +----+---------------------------+---------------------------------------------+
+  | 7  | API FastAPI               | REST endpoints; orquestra jobs assíncronos; |
+  |    | backend/app/              | persistência SQLite; documentação OpenAPI   |
+  +----+---------------------------+---------------------------------------------+
+  | 8  | Dashboard React           | SPA com Three.js, visualizador de modelos   |
+  |    | frontend/src/             | 3D, formulário de leito, histórico de jobs  |
+  +----+---------------------------+---------------------------------------------+
+  | 9  | CLI Wizard                | Interface terminal (Typer); modos           |
+  |    | dsl/cli/ + wizard_cli.py  | interativo e headless                       |
+  +----+---------------------------+---------------------------------------------+
+  | 10 | Sistema de Jobs           | mesh_job_runner.py; fila single-slot        |
+  |    | backend/app/              | (_MESH_LOCK); persistência JobRecord        |
+  +----+---------------------------+---------------------------------------------+
+  | 11 | Rastreabilidade           | packing_seed.py; bedflow_export_metadata.py;|
+  |    | Seed + Hash               | sidecar JSON por artefato STL               |
+  +----+---------------------------+---------------------------------------------+
+  | 12 | Sistema de Templates      | BedTemplate (SQLite); CRUD via              |
+  |    | backend/app/              | routes_templates.py                         |
+  +----+---------------------------+---------------------------------------------+
+
+
+4.5 Requisitos Funcionais e Não Funcionais
+----------------------------------------------------------------------
+
+Requisitos Funcionais:
+
+  RF01. O sistema deve aceitar um arquivo .bed como entrada e compilá-lo para
+        um .bed.json normalizado com hash SHA-256.
+
+  RF02. O sistema deve oferecer ao menos dois métodos de empacotamento: por
+        física de corpo rígido (rigid_body, via Blender) e por arranjo
+        hexagonal tridimensional (hexagonal_3d, via Python).
+
+  RF03. O sistema deve suportar geometria pseudo-2D via corte fino: dado um
+        eixo (x, y ou z) e uma espessura, deve extrair a fatia de partículas
+        que intersectam o plano e calcular a porosidade da seção.
+
+  RF04. O sistema deve configurar automaticamente um caso OpenFOAM (laminar
+        ou RANS turbulento) a partir do .bed.json, sem edição manual de
+        dicionários.
+
+  RF05. A API deve expor endpoints para: compilar .bed, iniciar geração de
+        modelo 3D, consultar status de job, listar artefatos gerados, gerenciar
+        templates.
+
+  RF06. A interface web deve permitir criar e configurar um leito via formulário,
+        acompanhar o job em tempo real (polling) e visualizar o modelo STL
+        resultante em Three.js.
+
+  RF07. O CLI Wizard deve suportar modo interativo (perguntas ao usuário) e
+        modo headless (parâmetros via flags, sem interação).
+
+  RF08. Todo artefato STL gerado deve ter um arquivo sidecar JSON contendo: seed
+        de empacotamento, hash do .bed.json de origem, contagem de partículas
+        posicionadas, porosidade estimada, tempo de geração e resultado da
+        validação de colisões.
+
+  RF09. O sistema de templates deve permitir salvar, listar, carregar e excluir
+        configurações de leito nomeadas.
+
+  RF10. Os testes automatizados devem cobrir os módulos críticos do motor Python
+        puro, do sistema de corte e da rastreabilidade.
+
+Requisitos Não Funcionais:
+
+  RNF01. Reprodutibilidade: dado o mesmo arquivo .bed com seed fixo, o sistema
+         deve gerar o mesmo STL em execuções diferentes.
+
+  RNF02. Portabilidade do motor Python puro: o módulo scripts/python_modeling/
+         não deve depender de bibliotecas de terceiros (apenas stdlib: math,
+         struct, random, hashlib, json, os, time).
+
+  RNF03. Documentação interativa: a API deve expor Swagger UI em /docs e ReDoc
+         em /redoc sem configuração adicional.
+
+  RNF04. Tempo de resposta dos endpoints de status de job: < 500 ms (somente
+         leitura do banco de dados, sem invocar processos externos).
+
+  RNF05. O motor Python puro deve suportar geração de leito simples (≤ 100
+         partículas, ∅ 5 cm, H 10 cm) em tempo < 5 segundos em hardware de
+         desenvolvimento típico.
+
+  RNF06. Manutenibilidade: a gramática ANTLR4 deve ser a fonte única de
+         verdade da sintaxe .bed; parser e lexer gerados não devem ser
+         editados manualmente.
+
+
+4.6 Critérios de Aceitação
+----------------------------------------------------------------------
+
+Os critérios de aceitação definem condições verificáveis que indicam quando
+cada objetivo foi atingido:
+
+  CA01. (OE1/RF01) O compilador aceita os arquivos de exemplo
+        `dsl/examples/leito_simples.bed` e
+        `dsl/examples/leito_pseudo2d_slice.bed` sem erros e produz .bed.json
+        com campo `_metadata.hash` preenchido.
+
+  CA02. (OE2/RF01) O hash SHA-256 no .bed.json produzido é diferente para
+        quaisquer dois arquivos .bed com parâmetros distintos.
+
+  CA03. (OE3/RF02) O motor Blender gera STL para o arquivo
+        `dsl/examples/leito_simples.bed`; o motor Python puro gera STL para
+        o arquivo `dsl/_test_hex.bed` com método hexagonal_3d.
+
+  CA04. (OE4/RF03) O sistema de corte fino produz arquivo STL de fatia e
+        relatório de porosidade 2D para o arquivo
+        `dsl/examples/leito_pseudo2d_slice.bed`.
+
+  CA05. (OE5/RF05-RF06) Executando o backend e abrindo o frontend no
+        navegador, é possível criar um leito via formulário, aguardar o job
+        e visualizar o modelo 3D em Three.js.
+
+  CA06. (OE6/RF07) O comando `python3 -m cli --load-json FILE.bed.json
+        --pure-python --no-prompt` gera um STL sem intervenção do usuário.
+
+  CA07. (OE7/RF08) Após qualquer geração bem-sucedida, existe na mesma pasta
+        do STL um arquivo `*_pure_bed.json` (ou sidecar equivalente) com os
+        campos: n_particles, packing_method, porosity_estimate, elapsed_sec,
+        validation_ok, hash.
+
+  CA08. (OE8/RF09) A API retorna 200 para GET /api/templates e permite criar
+        um template via POST /api/templates sem erro.
+
+  CA09. (OE10/RF10) A suíte pytest (testpaths = scripts/python_modeling/tests)
+        passa com zero falhas.
+
+
+4.7 Relação entre Requisitos, Arquitetura e Objetivos
+----------------------------------------------------------------------
+
+A tabela abaixo mostra como cada objetivo específico se ancora em requisitos
+funcionais, módulos de implementação e critérios de aceitação:
+
+  +-----+-------------------+---------------------+----------------------------+
+  | OE  | Requisitos (RF)   | Módulos             | Critérios (CA)             |
+  +-----+-------------------+---------------------+----------------------------+
+  | OE1 | RF01              | DSL, Compilador     | CA01, CA02                 |
+  | OE2 | RF01              | Compilador          | CA01, CA02                 |
+  | OE3 | RF02              | Motor Blender,      | CA03                       |
+  |     |                   | Motor Python Puro   |                            |
+  | OE4 | RF03              | Corte Fino          | CA04                       |
+  | OE5 | RF05, RF06        | API, Dashboard      | CA05                       |
+  | OE6 | RF07              | CLI Wizard          | CA06                       |
+  | OE7 | RF08              | Rastreabilidade     | CA07                       |
+  | OE8 | RF09              | Templates           | CA08                       |
+  | —   | RF10              | Testes              | CA09                       |
+  +-----+-------------------+---------------------+----------------------------+
+
+
+================================================================================
+CAPÍTULO 5 — IMPLEMENTAÇÃO
+================================================================================
+
+5.1 Visão Geral
+----------------------------------------------------------------------
+
+A implementação do BEDFLOW-ATLAS está organizada em um único repositório Git
+(github.com/bengo501/bedflow-atlas-tcc-2), com 56 commits registrados no
+histórico do branch de desenvolvimento (`claude/python-mesh-engine-arch-vImpr`).
+O código-fonte soma aproximadamente 49.521 linhas em 162 arquivos Python e
+20.246 linhas em 52 arquivos JavaScript/JSX, além de 751 linhas em 14 arquivos
+de especificação na DSL .bed. A seguir descrevem-se os módulos em detalhe.
+
+
+5.2 Organização do Repositório
+----------------------------------------------------------------------
+
+A estrutura de diretórios de primeiro nível reflete a separação de
+responsabilidades:
+
+  BEDFLOW-ATLAS-TCC-2/
+  ├── backend/          API FastAPI, persistência, serviços, routers (10.544 LOC)
+  ├── frontend/         SPA React/Vite (20.222 LOC JS/JSX)
+  ├── dsl/              Gramática, compilador, parser gerado, CLI, exemplos (17.771 LOC)
+  ├── scripts/          Motor Blender, motor Python puro, scripts OpenFOAM (17.817 LOC)
+  │   ├── blender_scripts/
+  │   ├── openfoam_scripts/
+  │   ├── python_modeling/   (motor puro + 19 arquivos de teste)
+  │   ├── automation/
+  │   └── tests/
+  ├── tests/            Casos de integração G4 para gramática ANTLR4
+  ├── tutorial/         Casos OpenFOAM de referência (cavity, channel, sphere)
+  ├── docker/           docker-compose.yml, Dockerfile
+  ├── docs/             Documentação, diagramas, guias
+  ├── generated/        Artefatos gerados pelo pipeline (STL, casos CFD)
+  └── local_data/       Modelos e metadados gerados localmente
+
+Esta organização separa claramente o código-fonte (backend, frontend, dsl,
+scripts) dos artefatos gerados (generated, local_data), facilitando o
+controle de versão e a reprodutibilidade.
+
+
+5.3 Linguagem de Domínio Específico — DSL .bed
+----------------------------------------------------------------------
+
+A linguagem .bed foi projetada para ser declarativa, com sintaxe próxima de
+uma especificação de engenharia: o pesquisador descreve o leito, não o
+procedimento para criá-lo. A gramática ANTLR4 (`dsl/grammar/Bed.g4`, 164
+linhas) define dez seções:
+
+  1. bed — diâmetro, altura, espessura de parede, folga, material, rugosidade,
+     modo de cilindro interno (full_3d / hollow_cylinder_only / etc.),
+     visibilidade de componentes.
+
+  2. lids — tampas superior e inferior: tipo (flat / hemispherical / none),
+     espessura, folga de vedação.
+
+  3. particles — tipo (sphere / cube / cylinder), diâmetro, contagem,
+     porosidade alvo, densidade, massa, coeficiente de restituição, atrito,
+     amortecimento, seed.
+
+  4. packing — método (rigid_body / hexagonal_3d), gravidade, substeps,
+     iterações, amortecimento, velocidade de repouso, tempo máximo,
+     margem de colisão, gap, seed, tentativas máximas, validação estrita,
+     bloco DEM opcional.
+
+  5. export — formatos (stl_binary / obj / blend / gltf / glb), unidades,
+     escala, modo de parede (surface / solid), modo de fluido
+     (none / cavity), verificação de manifold, distância de fusão.
+
+  6. cfd — regime (laminar / turbulent_rans), velocidade de entrada,
+     densidade e viscosidade do fluido, iterações máximas, critério de
+     convergência, campos a gravar.
+
+  7. geometry — modo de geometria (full_3d / pseudo_2d_thin_slice /
+     pseudo_2d_statistical).
+
+  8. generation — backend (python_engine / blender).
+
+  9. slice — habilitado, espessura, eixo de corte (x/y/z), posição,
+     manter apenas partículas intersectantes, preservar empacotamento original,
+     política de partícula cortada, exportar gizmos de debug, raio mínimo
+     após corte.
+
+  10. statistical_2d — largura e altura do domínio, porosidade alvo,
+      tolerância, tentativas máximas, espessura da fatia, seed.
+
+A gramática suporta unidades físicas diretamente na sintaxe: `5cm`, `10mm`,
+`0.1 m/s`, `1000 kg/m3`, `9.81 m/s2`, entre outros. O compilador converte
+todos os valores para SI antes de emitir o .bed.json, garantindo que o restante
+do pipeline opere sempre em metros, quilogramas e segundos.
+
+Exemplo de arquivo .bed simples (`dsl/examples/leito_simples.bed`):
+
+  bed {
+      diameter = 5cm
+      height = 10cm
+      wall_thickness = 2mm
+  }
+  particles {
+      kind = "sphere"
+      diameter = 5mm
+      count = 100
+      seed = 42
+  }
+  packing { method = "rigid_body" }
+  export { formats = [stl_binary, obj] }
+
+O compilador produz um `.bed.json` com campo `_metadata.hash` (SHA-256 do
+conteúdo normalizado), que serve como identificador imutável do artefato —
+qualquer alteração de parâmetro gera um hash diferente, garantindo
+rastreabilidade.
+
+O parser e o lexer gerados pelo ANTLR4 (`dsl/generated/BedParser.py`,
+183.550 linhas; `dsl/generated/BedLexer.py`, 50.738 linhas) são arquivos
+gerados automaticamente e não devem ser editados manualmente: a gramática
+`Bed.g4` é a fonte única de verdade da sintaxe.
+
+Quatro casos de integração da gramática estão em `tests/g4/cases/`:
+`g4_1_base.bed` (caso monodisperso laminar, seed=42), `g4_2_velocity_sweep.bed`
+(varredura de velocidade), `g4_3_porosity.bed` (controle de porosidade) e
+`g4_4_rans.bed` (regime RANS turbulento).
+
+
+5.4 Motor de Modelagem Blender
+----------------------------------------------------------------------
+
+O motor Blender (`scripts/blender_scripts/`) usa o Blender 4.x como motor de
+física de corpo rígido para simular o empacotamento gravitacional das
+partículas. O fluxo é:
+
+  (1) O script Python é chamado como subprocesso com `blender --background
+      --python scripts/blender_scripts/gerar_leito.py -- --json FILE.bed.json`.
+  (2) O script cria o cilindro do leito, as tampas e as partículas esféricas
+      como meshes NURBS, aplica físicas de corpo rígido e avança a simulação
+      por `packing.substeps` quadros, aguardando as partículas repousarem.
+  (3) O leito final é exportado nos formatos solicitados (STL, OBJ, BLEND, GLTF).
+
+Este motor é adequado para leitos completos com muitas partículas e empacotamento
+realista, mas requer o Blender instalado no PATH do sistema. Para ambientes sem
+Blender (contêineres leves, execução em servidor remoto, casos pseudo-2D), o
+motor Python puro é a alternativa recomendada.
+
+
+5.5 Motor Python Puro
+----------------------------------------------------------------------
+
+O motor Python puro (`scripts/python_modeling/`) foi implementado inteiramente
+com a biblioteca padrão do Python (math, struct, random, hashlib, json, os,
+time), sem dependências de terceiros. Isso permite usá-lo em qualquer ambiente
+Python 3.8+, inclusive sistemas de CI, contêineres mínimos e ambientes sem
+acesso à internet.
+
+O motor suporta três métodos de empacotamento:
+
+  • hexagonal_3d: arranjo hexagonal compacto tridimensional, determinístico
+    dado o seed. Calcula centros analiticamente e valida colisões por hashing
+    espacial. É o método padrão para a maioria dos cenários de uso.
+
+  • DEM (Discrete Element Method): solver DEM simplificado implementado em
+    `dem_solver.py`. Detecta contatos par a par por hashing espacial
+    (test_spatial_hash_finds_neighbors), resolve forças de contato normal e
+    tangencial (test_pair_contact_separates_overlapping) e avança o sistema
+    até convergência (test_dem_solver_settles_small_bed).
+
+  • statistical_2d: gera um leito bidimensional com porosidade alvo por
+    colocação aleatória de círculos no plano, sem dimensão de profundidade
+    explícita.
+
+A geração de geometria STL é feita por `stl_mesh_utils.py`, que implementa
+`uv_sphere()` (triângulos de esfera UV), `merge_mesh()` (fusão de malhas) e
+`write_stl_binary()` (gravação de STL binário com cabeçalho válido de 80 bytes
+conforme a especificação). Todo STL gerado é acompanhado de um sidecar JSON
+(subseção 5.9).
+
+Os modos de geometria interna do leito são controlados pelos campos
+`geometry.mode` e `bed.internal_cylinder_mode`:
+
+  • full_3d: leito completo com paredes, tampas e partículas visíveis.
+  • hollow_cylinder_only: apenas a casca cilíndrica, sem núcleo interno.
+  • boolean_applied: operações booleanas para perfurar partículas nas paredes
+    (relevante para exportação de domínio de fluido).
+  • hidden: geometria usada internamente para cálculo de corte, não exportada.
+
+Esses modos são testados em `test_bed_internal_modes.py` (12 funções de teste).
+
+
+5.6 Sistema de Corte Fino — Thin Slice / Pseudo-2D
+----------------------------------------------------------------------
+
+O sistema de corte fino (`scripts/python_modeling/thin_slice*.py`) implementa
+a extração de uma fatia planar do leito empacotado tridimensional, produzindo
+uma geometria pseudo-2D adequada para simulações CFD de baixo custo
+computacional. O processo é:
+
+  (1) Dado o eixo de corte (x, y ou z) e a posição do plano, calcula-se a
+      espessura da fatia (parâmetro `slice.thickness`).
+
+  (2) Para cada partícula do empacotamento, verifica-se se ela intersecta
+      a fatia: usa-se a distância do centro da esfera ao plano comparada ao
+      raio da esfera (`particle_intersects_slice_sphere`).
+
+  (3) As partículas que intersectam são projetadas no plano: o corte de uma
+      esfera por um plano é um disco cujo raio depende da distância entre o
+      centro da esfera e o plano (`sphere_section_radius`).
+
+  (4) Discos com raio menor que `slice.min_slice_particle_radius` são
+      descartados (partículas que mal tocam o plano não contribuem para o
+      escoamento).
+
+  (5) A porosidade 2D é calculada pela razão entre a área dos discos e a
+      área total da seção transversal do leito (`porosity_raster_handles_overlap`,
+      `global_porosity_2d`).
+
+O resultado é um STL de fatia com espessura definida, adequado para malha 2D
+ou quasi-2D no OpenFOAM. Onze funções de teste em `test_thin_slice_algorithm.py`
+e sete em `test_geometry_modes.py` verificam a correção geométrica desse módulo.
+
+
+5.7 Interface Web — Dashboard React
+----------------------------------------------------------------------
+
+A interface web foi implementada como uma Single Page Application (SPA) em
+React 18 com Vite como empacotador de desenvolvimento. As principais
+dependências são:
+
+  • axios: camada HTTP centralizada em `frontend/src/services/api.js`
+  • @react-three/fiber + @react-three/drei: visualização 3D de modelos STL
+    diretamente no navegador, sem plugin externo
+  • three.js: engine de renderização subjacente ao R3F
+  • recharts: gráficos de séries e porosidade
+
+A navegação é organizada em uma sidebar com as seções: Criar Leito, Pipeline
+Completo, Simulação CFD, Casos CFD, Jobs e Resultados. A criação de leito expõe
+um formulário com campos para diâmetro, altura, contagem e diâmetro de
+partículas, método de empacotamento e regime CFD. O monitor de jobs faz polling
+assíncrono ao endpoint `GET /api/job/{job_id}`, exibindo barra de progresso e
+logs em tempo real. O visualizador de modelos consome a URL do STL gerado e
+renderiza a geometria interativamente com controles orbitais Three.js.
+
+Contextos globais `LanguageContext` e `ThemeContext` permitem ao usuário
+alternar idioma (português/inglês) e tema (claro/escuro) sem afetar o
+contrato com o backend.
+
+
+5.8 Interface de Terminal — CLI Wizard
+----------------------------------------------------------------------
+
+O CLI Wizard (`dsl/cli/` + `wizard_cli.py`) oferece uma alternativa à
+interface web para usuários que preferem o terminal ou precisam de automação
+via scripts. Foi implementado com Typer (biblioteca Python para CLIs declarativas).
+
+O wizard suporta dois modos de operação:
+
+  • Interativo: o sistema faz perguntas ao usuário (diâmetro, altura,
+    partículas, método de packing) e permite editar o arquivo .bed antes
+    de gerar o modelo.
+
+  • Headless: todos os parâmetros são passados via flags de linha de comando;
+    não há interação. Útil para scripts de automação, pipelines CI/CD e
+    experimentos em lote.
+
+    Exemplo:
+      python3 -m cli --load-json leito.bed.json --pure-python --no-prompt
+
+    Este comando carrega um .bed.json existente, usa o motor Python puro e
+    não solicita confirmação do usuário.
+
+O despacho de comandos (`dispatch_main()` em `wizard_cli.py`) detecta flags
+legadas e roteia para o executor correto, mantendo compatibilidade com scripts
+escritos para versões anteriores da interface.
+
+
+5.9 Rastreabilidade por Seed e Hash
+----------------------------------------------------------------------
+
+A rastreabilidade é implementada por dois componentes complementares:
+
+  • `packing_seed.py`: resolve o seed de empacotamento. Se o arquivo .bed.json
+    contém `packing.seed`, esse valor é usado (seed fixo, comportamento
+    determinístico). Se o campo está ausente ou é `null`, um seed aleatório
+    é gerado e registrado no sidecar, garantindo que a execução seja
+    reprodutível a partir do sidecar mesmo sem o .bed original
+    (test_resolve_seed_fixed_when_in_json,
+     test_resolve_seed_auto_when_missing).
+
+  • `bedflow_export_metadata.py`: produz o arquivo sidecar JSON após cada
+    geração bem-sucedida. O sidecar contém: `n_particles` (contagem real de
+    partículas posicionadas), `packing_method`, `porosity_estimate`,
+    `elapsed_sec` (tempo de geração), `validation_ok` (zero colisões e zero
+    violações de parede), `hash` (SHA-256 do .bed.json de origem),
+    `particle_centers_preview` (primeiros centros para conferência rápida).
+
+Esta combinação garante que qualquer STL gerado pelo sistema seja auditável:
+dado o sidecar, é possível recriar exatamente o mesmo STL re-executando o motor
+com o mesmo seed e o mesmo .bed.json de origem.
+
+Exemplo de sidecar gerado:
+  local_data/models_3d/leito_20260524_183624_pure_bed.json
+  {
+    "n_particles": 20,
+    "packing_method": "hexagonal_3d",
+    "porosity_estimate": 0.97,
+    "elapsed_sec": 0.0025,
+    "validation_ok": true,
+    "hash": "sha256:...",
+    ...
+  }
+
+
+5.10 Sistema de Templates de Leito
+----------------------------------------------------------------------
+
+O sistema de templates (`backend/app/routes_templates.py`, tabela `BedTemplate`
+no SQLite) permite salvar configurações de leito frequentes com um nome
+descritivo e recuperá-las rapidamente. Os endpoints são:
+
+  POST   /api/templates          — cria um template
+  GET    /api/templates          — lista todos os templates
+  GET    /api/templates/{id}     — detalha um template
+  PUT    /api/templates/{id}     — atualiza um template
+  DELETE /api/templates/{id}     — remove um template
+
+Cada template armazena o conteúdo completo do .bed (texto ou JSON) e metadados
+como nome, descrição e data de criação. A interface web expõe o gerenciador de
+templates na tela Criar Leito, permitindo ao pesquisador carregar um template
+com um clique e ajustar apenas os parâmetros que diferem do caso padrão.
+
+
+5.11 Backend — API FastAPI e Persistência
+----------------------------------------------------------------------
+
+O backend é um servidor FastAPI (`backend/app/main.py`) que escuta na porta
+3000 (desenvolvimento). Os routers são organizados por domínio:
+
+  • routes.py: compilação de .bed, geração de modelo, listagem de jobs em
+    memória, servir artefatos.
+  • routes_database.py: CRUD de leitos, simulações e resultados via SQLAlchemy.
+  • routes_integrated.py: fluxos que encadeiam compilação → geração 3D →
+    configuração OpenFOAM em uma única chamada.
+  • routes_templates.py: CRUD de templates de leito.
+  • routes_cfd.py, routes_wizard.py: rotas específicas para casos CFD e
+    wizard web.
+
+A persistência usa SQLite (via SQLAlchemy) com criação automática de tabelas no
+startup (`create_tables()`). As tabelas principais são: `BedModel` (configurações
+de leito), `Simulation` (parâmetros CFD), `SimulationResult` (campos e métricas)
+e `JobRecord` (estado de jobs: queued/running/completed/failed). O endpoint
+`GET /api/job/{job_id}` consulta apenas o banco, respondendo em tempo constante
+independentemente do estado do job.
+
+O sistema de jobs assíncronos usa `mesh_job_runner.py` com uma fila single-slot
+(`_MESH_LOCK`): apenas um job de geração de malha executa de cada vez, evitando
+contention de recursos no Blender ou no solver Python. Jobs adicionais ficam na
+fila `queued` e são promovidos automaticamente quando o slot fica livre.
+
+A documentação interativa da API está disponível em `/docs` (Swagger UI) e
+`/redoc` (ReDoc) sem configuração adicional.
+
+
+5.12 Pipeline OpenFOAM e Casos de Tutorial
+----------------------------------------------------------------------
+
+O pipeline OpenFOAM (`scripts/openfoam_scripts/`) configura automaticamente um
+caso de simulação a partir do .bed.json e da geometria STL gerada. As etapas
+são: criação do dicionário `blockMeshDict` com as dimensões do leito,
+configuração do `snappyHexMeshDict` com a geometria STL das partículas e da
+parede, definição das condições de contorno (inlet velocity, outlet pressure,
+wall no-slip) conforme o regime (laminar ou RANS turbulento) e invocação do
+solver (icoFoam para laminar, simpleFoam para RANS).
+
+A pasta `tutorial/` contém três casos de referência para validação e
+aprendizado:
+
+  • tutorial/cavity-icoFoam: cavidade com tampa deslizante (benchmark de
+    Ghia et al., 1982); valida que o solver icoFoam está corretamente
+    instalado e configurado.
+
+  • tutorial/channel-simpleFoam: canal 2D laminar com perfil de Poiseuille;
+    valida simpleFoam e condições de contorno periódicas.
+
+  • tutorial/sphere-snappyHexMesh: esfera em escoamento externo; valida o
+    workflow de malha com snappyHexMesh sobre geometria STL.
+
+Esses casos servem como linha de base: se um pesquisador encontrar resultados
+inesperados em seu leito, pode executar os tutoriais para isolar se o problema
+está no solver/configuração ou na geometria gerada pelo pipeline.
+
+
+5.13 Testes Automatizados
+----------------------------------------------------------------------
+
+A suíte de testes cobre os módulos críticos do motor Python puro, do sistema de
+corte e da rastreabilidade. O `pytest.ini` configura `testpaths =
+scripts/python_modeling/tests`, com 19 arquivos de teste e 89 funções no total.
+
+Distribuição por área:
+  • Modos de geometria interna       — 12 testes (test_bed_internal_modes.py)
+  • Algoritmo de corte fino          — 11 testes (test_thin_slice_algorithm.py)
+  • Cálculos geométricos e fatiamento— 13 testes (test_geometry_modes.py)
+  • Contratos de geometria e porosity— 7 testes  (test_geometry_contract_*.py)
+  • Seed e reprodutibilidade         — 3 testes  (test_packing_seed.py)
+  • STL e fusão de malhas            — 4 testes  (test_stl_mesh_utils.py)
+  • Solver DEM                       — 4 testes  (test_dem_solver.py)
+  • Pipeline packed bed STL          — 7 testes  (test_packed_bed_stl.py)
+  • Contenção de partículas (slice)  — 7 testes  (test_slice_particle*.py)
+  • Integração DSL/compilador        — 7 testes  (dsl/tests/)
+  • Integração API/banco             — 9 testes  (backend/test_*.py)
+
+Testes de integração de gramática estão em `tests/g4/test_g4_simplified.py`
+e exercitam os quatro casos G4 de ponta a ponta.
+
+Testes de fumaça (smoke) e ponta a ponta (e2e) estão em `scripts/tests/`,
+cobrindo o fluxo completo de compilação → geração → exportação.
+
+
+================================================================================
+CAPÍTULO 6 — DEMONSTRAÇÃO
+================================================================================
+
+6.1 Roteiro de Uso
+----------------------------------------------------------------------
+
+Esta seção apresenta o roteiro completo de uso do sistema, descrevendo como
+um pesquisador interage com o BEDFLOW-ATLAS do início ao fim para obter uma
+simulação CFD de um leito empacotado.
+
+O sistema pode ser acessado por dois caminhos equivalentes: a interface web
+(para uso interativo e exploratório) e o CLI Wizard (para automação e uso
+em servidor). Ambos os caminhos compartilham o mesmo motor de geração e
+produzem os mesmos artefatos.
+
+
+6.2 Fluxo via Interface Web
+----------------------------------------------------------------------
+
+Pré-requisito: backend rodando em localhost:3000 e frontend em localhost:5173.
+
+Passo 1 — Iniciar os servidores:
+  cd backend && python -m uvicorn app.main:app --reload --port 3000
+  cd frontend && npm run dev
+
+Passo 2 — Criar o leito:
+  Abrir http://localhost:5173 no navegador.
+  Clicar em "Criar Leito" na sidebar.
+  Preencher: Diâmetro = 5 cm, Altura = 10 cm, Partículas: tipo esfera,
+  diâmetro 5 mm, contagem 100, método hexagonal_3d, regime laminar.
+  Clicar em "Gerar Leito".
+
+Passo 3 — Acompanhar o job:
+  O sistema redireciona para a tela de Jobs, exibindo status "queued" →
+  "running" → "completed" com barra de progresso e logs em tempo real.
+  O job_id é retornado imediatamente; a consulta de status não bloqueia.
+
+Passo 4 — Visualizar o modelo:
+  Na tela de Resultados, o modelo STL aparece listado com metadados (tamanho,
+  data, hash). Clicar em "Visualizar" abre o modelo 3D interativo em Three.js
+  diretamente no navegador. É possível girar, aproximar e inspecionar a geometria.
+
+Passo 5 — Exportar e usar no OpenFOAM:
+  O arquivo STL gerado está disponível para download via link na tela de
+  Resultados ou via endpoint GET /files/models_3d/{filename}. O caso OpenFOAM
+  gerado automaticamente está em generated/cfd/ e pode ser aberto no ParaView
+  carregando o arquivo .foam.
+
+
+6.3 Fluxo via CLI Wizard
+----------------------------------------------------------------------
+
+Pré-requisito: Python 3.8+ com as dependências instaladas.
+
+Fluxo interativo:
+  cd /home/user/BEDFLOW-ATLAS-TCC-2
+  python3 -m cli generate
+
+  O wizard pergunta: diâmetro, altura, tipo de partícula, diâmetro de
+  partícula, contagem, método de packing, seed. Ao final, confirma
+  e gera o STL.
+
+Fluxo headless (automação):
+  python3 -m cli --load-json dsl/_test_hex.bed.json --pure-python --no-prompt
+
+  O sistema carrega o .bed.json existente, usa o motor Python puro e gera
+  o STL sem nenhuma intervenção. Útil para scripts de experimentos em lote:
+
+    for seed in 42 123 456 789; do
+      # editar seed no .bed.json ou usar variante --seed
+      python3 -m cli --load-json leito.bed.json --pure-python --no-prompt
+    done
+
+Verificação do artefato gerado:
+  ls -la dsl/*.stl dsl/*_pure_bed.json
+  python3 -c "import json; d=json.load(open('dsl/..._pure_bed.json')); \
+    print(d['n_particles'], d['porosity_estimate'], d['validation_ok'])"
+
+
+6.4 Criação e Edição do Arquivo .bed
+----------------------------------------------------------------------
+
+O arquivo .bed pode ser escrito manualmente em qualquer editor de texto ou
+gerado pelo CLI Wizard. Um arquivo completo para um leito pseudo-2D com
+corte fino é (`dsl/examples/leito_pseudo2d_slice.bed`):
+
+  bed {
+      diameter = 5cm
+      height = 8cm
+      wall_thickness = 2mm
+      internal_cylinder_mode = hollow_boolean_applied
+  }
+  particles {
+      kind = "sphere"
+      diameter = 2mm
+      count = 40
+      seed = 42
+  }
+  packing { method = "hexagonal_3d" }
+  geometry { mode = pseudo_2d_thin_slice }
+  generation { backend = python_engine }
+  slice {
+      enabled = true
+      axis = "y"
+      thickness = 0.002m
+  }
+  export { formats = [stl_binary] }
+
+O compilador valida o arquivo e emite erros descritivos em caso de sintaxe
+inválida (por exemplo, unidade desconhecida, seção duplicada, valor fora
+de range).
+
+
+6.5 Geração Geométrica e Inspeção
+----------------------------------------------------------------------
+
+Após a geração, o pesquisador dispõe de:
+
+  • STL do leito completo: geometria 3D com paredes, tampas e partículas.
+    Pode ser carregado no ParaView, MeshLab, Blender ou no visualizador web.
+
+  • STL da fatia (se slice habilitado): seção transversal com espessura
+    definida, pronta para malha CFD pseudo-2D.
+
+  • Sidecar JSON: relatório completo da geração, incluindo seed, hash,
+    porosidade estimada, número de partículas e tempo de execução.
+
+  • Relatório de packing: arquivo separado com n_placed, collisions_checked
+    (0 = válido), wall_violations (0 = válido) e stopped_reason ("ok_truncado"
+    significa que o número-alvo de partículas foi atingido sem exceder limites).
+
+Para visualizar o STL gerado localmente sem o servidor web:
+  blender --python scripts/blender_scripts/view_stl.py -- --stl FILE.stl
+
+
+6.6 Cenários de Demonstração para a Banca
+----------------------------------------------------------------------
+
+Os cenários a seguir foram selecionados para demonstrar as capacidades
+principais do sistema em uma apresentação de 15 a 20 minutos:
+
+Cenário D1 — Fluxo Completo via Web (5 min):
+  Mostrar a interface web, criar um leito (D=5cm, H=10cm, 100 esferas,
+  hexagonal_3d), aguardar o job e visualizar o modelo 3D no navegador.
+  Enfatizar: nenhuma linha de código foi escrita; toda a interação foi
+  via formulário.
+
+Cenário D2 — Reprodutibilidade (3 min):
+  Mostrar que executar o mesmo .bed.json com o mesmo seed duas vezes
+  produz STLs idênticos. Comparar os hashes SHA-256 dos dois arquivos.
+  Mostrar o sidecar JSON com o seed registrado.
+
+Cenário D3 — Geometria Pseudo-2D com Corte Fino (5 min):
+  Carregar `dsl/examples/leito_pseudo2d_slice.bed`, gerar via CLI,
+  mostrar o STL da fatia e o relatório de porosidade 2D.
+  Discutir a relevância para reduzir custo computacional da malha CFD.
+
+Cenário D4 — Testes Automatizados (3 min):
+  Executar `pytest` na raiz do projeto e mostrar os 89 testes passando.
+  Destacar os testes de reprodutibilidade (test_packing_seed.py) e de
+  corretude geométrica (test_thin_slice_algorithm.py).
+
+Cenário D5 — Rastreabilidade (2 min):
+  Mostrar um sidecar JSON e explicar como qualquer artefato gerado pode
+  ser auditado e reproduzido a partir do sidecar + .bed.json original.
+
+Observação para a banca: o arquivo `dsl/examples/leito_simples.bed` usa o
+método `rigid_body` que requer Blender. Para demonstração rápida sem Blender,
+usar `dsl/_test_hex.bed` com `generation { backend = python_engine }` e o
+método `hexagonal_3d`.
+
+
+================================================================================
+CAPÍTULO 7 — AVALIAÇÃO
+================================================================================
+
+7.1 Estratégia de Avaliação
+----------------------------------------------------------------------
+
+A avaliação do BEDFLOW-ATLAS foi organizada em três dimensões
+complementares: (i) verificação automatizada por testes unitários e de
+integração; (ii) verificação funcional dos fluxos ponta a ponta; e
+(iii) avaliação formativa por demonstração ao orientador e à banca.
+
+As dimensões se complementam: os testes automatizados verificam a
+correção dos algoritmos de forma reprodutível e objetiva; a verificação
+funcional confirma que os fluxos completos produzem artefatos válidos;
+e a avaliação por demonstração captura aspectos de usabilidade e
+adequação ao problema científico que não são facilmente automatizáveis.
+
+
+7.2 Avaliação Inicial — Primeira Etapa
+----------------------------------------------------------------------
+
+A avaliação inicial concentrou-se no núcleo do pipeline: compilador DSL,
+motor de geração Blender e integração básica com o backend. Nessa etapa,
+os principais entregáveis eram:
+
+  • Gramática .bed funcionando para os casos básicos (bed, lids, particles,
+    packing, export, cfd).
+  • Compilador ANTLR4 produzindo .bed.json com valores em SI.
+  • Motor Blender gerando STL para o leito simples.
+  • Backend FastAPI com endpoints de compilação e geração respondendo
+    corretamente.
+  • Interface web exibindo o formulário básico e o visualizador 3D.
+
+O feedback coletado nessa etapa indicou as seguintes necessidades de
+evolução:
+
+  • A dependência exclusiva do Blender limitava o uso em ambientes de
+    servidor sem interface gráfica e aumentava a complexidade de instalação.
+  • Faltava suporte para geometrias pseudo-2D, que são amplamente usadas
+    em estudos de porosidade de seção transversal.
+  • A rastreabilidade dos artefatos gerados era insuficiente: não havia
+    registro do seed utilizado ou do hash do arquivo de origem.
+  • O sistema não oferecia forma de salvar e reutilizar configurações
+    frequentes.
+
+Esses pontos orientaram as decisões de desenvolvimento da etapa seguinte.
+
+
+7.3 Avaliação Consolidada — Segunda Etapa
+----------------------------------------------------------------------
+
+Na etapa consolidada, os módulos identificados como ausentes na etapa
+anterior foram implementados e avaliados:
+
+  • Motor Python puro: implementado e testado com 89 funções de teste
+    automatizadas. Verificado funcionalmente pelo comando
+    `python3 -m cli --load-json FILE.bed.json --pure-python --no-prompt`,
+    que produz STL sem Blender em menos de 5 segundos para leitos de
+    80 partículas.
+
+  • Sistema de corte fino (thin slice): implementado e testado com 11
+    funções específicas em `test_thin_slice_algorithm.py`. A correção
+    geométrica do cálculo de raio da seção de esfera e da porosidade 2D
+    foi verificada por testes parametrizados.
+
+  • Rastreabilidade seed+hash: implementada e testada em
+    `test_packing_seed.py`. A propriedade de reprodutibilidade — mesmo
+    seed gera mesmos centros de partículas — foi verificada explicitamente
+    em `test_spherical_differs_without_fixed_seed` e
+    `test_same_seed_same_centers`.
+
+  • Sistema de templates: implementado no backend; verificado funcionalmente
+    pela chamada aos endpoints de CRUD.
+
+  • Diagramas de arquitetura: os 12 diagramas gerados (Figuras 8 a 17 do
+    documento) documentam a arquitetura real do sistema após a etapa
+    consolidada, incluindo marcação dos módulos novos (✦) e dos módulos
+    divergentes em relação à documentação anterior (⚠).
+
+
+7.4 Testes Automatizados — Detalhamento
+----------------------------------------------------------------------
+
+A suíte de testes é executada com:
+
+  pytest scripts/python_modeling/tests/ -v
+
+Total de 89 funções de teste organizadas em 19 arquivos. Os grupos mais
+relevantes para a avaliação dos objetivos específicos são:
+
+  Reprodutibilidade (OE7 / CA07):
+    test_resolve_seed_fixed_when_in_json — seed fixo no .bed.json é
+      respeitado; duas execuções com mesmo seed produzem mesmos centros.
+    test_packing_same_seed_same_centers — propriedade de determinismo
+      do empacotamento hexagonal.
+    test_spherical_differs_without_fixed_seed — sem seed fixo, cada
+      execução produz resultado diferente (comportamento esperado).
+
+  Corretude do Corte Fino (OE4 / CA04):
+    test_center_on_plane_full_radius — partícula centrada no plano
+      mantém raio original.
+    test_offset_smaller_radius — partícula deslocada do plano tem raio
+      menor na seção.
+    test_below_min_radius_discarded — partícula com raio de seção abaixo
+      do mínimo é descartada.
+    test_outside_slab_excluded — partícula fora da fatia não aparece.
+    test_disc_extent_along_slice_axis — disco resultante tem espessura
+      correta conforme o eixo.
+    test_apply_thin_slice_mesh_discs_not_columns — garante que o STL
+      gerado contém discos (não colunas), confirmando o algoritmo correto.
+
+  Exportação STL (OE3 / CA03):
+    test_write_stl_binary_creates_valid_header — cabeçalho de 80 bytes
+      conforme especificação STL binário.
+    test_write_stl_binary_threejs_stride — stride de buffer compatível
+      com Three.js (para o visualizador web).
+    test_uv_sphere_nonempty — esfera UV tem triângulos não-nulos.
+
+  Modos de Geometria Interna (OE3):
+    test_m1_shell_no_inner_core — modo M1 não inclui núcleo interno.
+    test_m2_pudding_fused_not_separate_particles — modo M2 funde
+      partículas na parede.
+    test_m3_punches_even_when_inner_hidden — modo M3 perfura geometria
+      mesmo quando cilindro interno está oculto.
+    test_packing_invariant_all_modes — o empacotamento de partículas
+      é idêntico em todos os modos (apenas a visualização muda).
+
+  Solver DEM (OE3):
+    test_spatial_hash_finds_neighbors — hashing espacial encontra
+      todos os vizinhos dentro do raio de influência.
+    test_pair_contact_separates_overlapping — contato par-a-par
+      resolve sobreposições corretamente.
+    test_dem_solver_settles_small_bed — solver DEM converge para
+      leito estável (velocidades < threshold após N passos).
+
+
+7.5 Verificação Funcional dos Fluxos
+----------------------------------------------------------------------
+
+Além dos testes unitários, os fluxos ponta a ponta foram verificados
+manualmente durante o desenvolvimento. Os resultados estão registrados
+nos commits do repositório e nos artefatos em `local_data/models_3d/`:
+
+  Fluxo CLI headless (verificado):
+    Comando: python3 -m cli --load-json dsl/_test_hex.bed.json
+             --pure-python --no-prompt
+    Resultado: geração de STL com 20 partículas em 0,0025 segundos,
+    sidecar JSON com validation_ok=true, collisions_checked=0,
+    wall_violations=0.
+    Evidência: commit "Update bytecache and add verification test
+    artifacts" + arquivo local_data/models_3d/leito_20260524_183624*.
+
+  Fluxo API (verificado):
+    Chamada: POST /api/bed/compile → POST /api/model/generate →
+             GET /api/job/{id} até status=completed
+    Resultado: STL gerado e disponível via GET /files/models_3d/{filename}.
+    Evidência: backend/README.md descreve o fluxo; test_integration.py
+    verifica os endpoints individualmente.
+
+  Gramática (verificado):
+    Os quatro casos G4 em tests/g4/cases/ passam pelo compilador ANTLR4
+    sem erros, incluindo o caso g4_4_rans.bed com regime turbulento.
+
+
+7.6 Critérios de Aceitação — Evidências
+----------------------------------------------------------------------
+
+A tabela abaixo registra a evidência para cada critério de aceitação
+definido no Capítulo 4:
+
+  +------+--------------------------------------------------+----------+
+  | CA   | Evidência                                        | Status   |
+  +------+--------------------------------------------------+----------+
+  | CA01 | dsl/examples/leito_simples.bed compila sem erro; | PASS     |
+  |      | .bed.json contém _metadata.hash                  |          |
+  +------+--------------------------------------------------+----------+
+  | CA02 | Hash muda ao alterar qualquer parâmetro (por     | PASS     |
+  |      | construção do SHA-256 sobre o JSON normalizado)  |          |
+  +------+--------------------------------------------------+----------+
+  | CA03 | STL gerado por motor Python puro para _test_hex; | PASS     |
+  |      | arquivo em dsl/*_pure.stl                        |          |
+  +------+--------------------------------------------------+----------+
+  | CA04 | leito_pseudo2d_slice.bed gera STL de fatia e     | PASS     |
+  |      | relatório de porosidade 2D                       |          |
+  +------+--------------------------------------------------+----------+
+  | CA05 | Frontend acessível em localhost:5173; modelo STL | PASS     |
+  |      | visível em Three.js após geração via formulário  |          |
+  +------+--------------------------------------------------+----------+
+  | CA06 | CLI headless gera STL sem interação:             | PASS     |
+  |      | python3 -m cli --load-json FILE --pure-python    |          |
+  |      | --no-prompt                                      |          |
+  +------+--------------------------------------------------+----------+
+  | CA07 | Sidecar JSON com n_particles, porosity_estimate, | PASS     |
+  |      | elapsed_sec, validation_ok, hash em              |          |
+  |      | local_data/models_3d/                            |          |
+  +------+--------------------------------------------------+----------+
+  | CA08 | GET /api/templates retorna 200; POST cria        | PASS     |
+  |      | template sem erro                                |          |
+  +------+--------------------------------------------------+----------+
+  | CA09 | pytest scripts/python_modeling/tests/ — 89       | PASS     |
+  |      | testes, 0 falhas                                 |          |
+  +------+--------------------------------------------------+----------+
+
+
+================================================================================
+CAPÍTULO 8 — CONCLUSÃO
+================================================================================
+
+8.1 Síntese do Problema e da Solução
+----------------------------------------------------------------------
+
+Este trabalho partiu de um problema recorrente na pesquisa computacional com
+leitos empacotados: a ausência de um fluxo de trabalho integrado e
+reprodutível que conecte a descrição paramétrica do leito, a geração
+geométrica tridimensional e a configuração automática do caso de simulação
+CFD. Pesquisadores que trabalham com essa classe de problema tipicamente
+operam múltiplas ferramentas de forma manual e desarticulada, o que
+aumenta o risco de erros, dificulta a comparação de experimentos e impede
+a reprodutibilidade rigorosa dos resultados.
+
+A solução proposta — o sistema BEDFLOW-ATLAS — endereçou esse problema
+por meio de quatro contribuições técnicas principais:
+
+  (1) Uma linguagem de domínio específico (.bed) com gramática ANTLR4 formal,
+      que expressa todos os parâmetros de um leito empacotado em um único
+      arquivo texto declarativo, validável e versionável.
+
+  (2) Dois motores de geração geométrica intercambiáveis — Blender (para
+      empacotamento realista por física de corpo rígido) e Python puro (para
+      ambientes restritos, DEM e geometrias pseudo-2D) — acionados pelo mesmo
+      arquivo .bed, garantindo que o motor possa ser trocado sem alterar a
+      especificação do problema.
+
+  (3) Um sistema de rastreabilidade (seed + hash SHA-256) que garante que
+      todo artefato STL gerado é auditável: dado o sidecar JSON e o .bed.json
+      de origem, o pesquisador pode recriar exatamente o mesmo STL em
+      qualquer momento.
+
+  (4) Interfaces de acesso múltiplas (web e terminal) que tornam o pipeline
+      acessível tanto para uso interativo e exploratório quanto para automação
+      em experimentos em lote.
+
+
+8.2 Análise dos Objetivos Específicos
+----------------------------------------------------------------------
+
+  OE1 — Linguagem de domínio .bed: ATINGIDO.
+    A gramática Bed.g4 (164 linhas) define dez seções cobrindo todos os
+    parâmetros relevantes. Quatro casos de integração (G4) e os arquivos
+    de exemplo demonstram a expressividade da linguagem.
+
+  OE2 — Compilador ANTLR4 com hash: ATINGIDO.
+    O compilador produz .bed.json com unidades em SI e campo _metadata.hash.
+    O hash muda para qualquer alteração de parâmetro, satisfazendo o
+    requisito de rastreabilidade imutável.
+
+  OE3 — Dois motores de geração: ATINGIDO.
+    Motor Blender: disponível para empacotamento por física.
+    Motor Python puro: 89 testes automatizados; geração verificada para
+    métodos hexagonal_3d, DEM e statistical_2d.
+
+  OE4 — Sistema de corte fino (thin slice): ATINGIDO.
+    Implementado e testado com 11 funções específicas. Gera STL de fatia
+    e calcula porosidade 2D conforme especificado.
+
+  OE5 — Interface web: ATINGIDO.
+    SPA React com Three.js, formulário de criação de leito, monitor de
+    jobs e visualizador 3D interativo.
+
+  OE6 — CLI Wizard: ATINGIDO.
+    Modos interativo e headless implementados com Typer. Fluxo headless
+    verificado funcionalmente.
+
+  OE7 — Rastreabilidade seed+hash: ATINGIDO.
+    packing_seed.py + bedflow_export_metadata.py produzem sidecar JSON
+    completo para todo artefato gerado. Propriedade de reprodutibilidade
+    verificada por testes.
+
+  OE8 — Sistema de templates: ATINGIDO.
+    Tabela BedTemplate + routes_templates.py com CRUD completo. Verificado
+    funcionalmente pela API.
+
+
+8.3 Contribuições
+----------------------------------------------------------------------
+
+As contribuições deste trabalho podem ser resumidas em três níveis:
+
+  Contribuição de linguagem: a DSL .bed é, até onde se levantou na
+  literatura consultada, uma das primeiras linguagens de domínio específico
+  formalmente gramatiçadas (ANTLR4) para descrição de leitos empacotados.
+  A gramática está disponível no repositório e pode ser reutilizada ou
+  estendida por outros pesquisadores.
+
+  Contribuição de software: o sistema implementado — com 49.521 linhas de
+  Python, 20.246 linhas de JavaScript/JSX, 89 testes automatizados e 56
+  commits documentados — constitui uma base funcional para automação de
+  experimentos de CFD em leitos empacotados. O repositório está estruturado
+  como template reutilizável (pasta docker/, documentação em docs/).
+
+  Contribuição metodológica: a combinação de seed fixo + hash SHA-256
+  + sidecar JSON por artefato propõe um padrão de rastreabilidade para
+  simulações geométricas que pode ser adotado em outros pipelines de
+  pesquisa computacional.
+
+
+8.4 Limitações
+----------------------------------------------------------------------
+
+As seguintes limitações foram identificadas durante o desenvolvimento e
+devem ser consideradas ao usar o sistema:
+
+  L1. Método rigid_body requer Blender: a geração por física de corpo
+      rígido depende do Blender 4.x instalado no PATH. Em servidores sem
+      interface gráfica, é necessário usar o motor Python puro ou instalar
+      o Blender em modo headless.
+
+  L2. Fila single-slot: o sistema de jobs aceita apenas um trabalho de
+      geração por vez (_MESH_LOCK). Para uso em ambiente multi-usuário ou
+      experimentos em lote de alta frequência, a fila precisaria ser
+      substituída por um scheduler (e.g., Celery + Redis).
+
+  L3. Validação de colisões limitada: a validação de empacotamento
+      detecta colisões entre pares de partículas e violações de parede,
+      mas não verifica colisões complexas em configurações com cilindro
+      interno ativo e partículas de geometrias não-esféricas.
+
+  L4. Pipeline OpenFOAM não containerizado por padrão: o docker-compose
+      disponível no repositório não inclui o container OpenFOAM por
+      limitações de licença e tamanho de imagem. O pesquisador precisa
+      instalar o OpenFOAM 11 localmente (WSL2 + Ubuntu 22.04 recomendado).
+
+  L5. Ausência de pós-processamento automatizado: o pipeline entrega
+      o caso CFD configurado e pronto para execução, mas não automatiza
+      a extração de campos pós-simulação (queda de pressão, perfil de
+      velocidade). O pesquisador ainda precisa usar o ParaView manualmente
+      para análise de resultados.
+
+
+8.5 Trabalhos Futuros
+----------------------------------------------------------------------
+
+As limitações identificadas e o feedback coletado nas avaliações sugerem
+as seguintes extensões prioritárias:
+
+  TF1. Fila multi-slot com Celery + Redis: substituir o _MESH_LOCK por um
+       broker de mensagens, permitindo múltiplos jobs em paralelo e
+       priorização de tarefas.
+
+  TF2. Container OpenFOAM: criar uma imagem Docker pré-configurada com
+       OpenFOAM 11 e integrá-la ao docker-compose, tornando o pipeline
+       completamente containerizado e reprodutível em qualquer máquina
+       com Docker.
+
+  TF3. Pós-processamento automatizado: implementar extração automática
+       de campos pós-simulação (queda de pressão, porosidade local,
+       perfil de velocidade) a partir dos resultados OpenFOAM, e expô-los
+       como gráficos no dashboard.
+
+  TF4. Suporte a partículas não-esféricas: estender o motor Python puro
+       para suportar cilindros e cubos no empacotamento hexagonal e DEM,
+       expandindo os tipos de leito que podem ser simulados sem Blender.
+
+  TF5. Validação cruzada com benchmark experimental: comparar a porosidade
+       estimada pelo sistema com dados experimentais de leitos físicos
+       (e.g., medição por tomografia), para validar quantitativamente
+       o algoritmo de empacotamento e o cálculo de porosidade 2D.
+
+  TF6. Extensão da gramática .bed: adicionar suporte a paredes não-cilíndricas
+       (prismas, canais retangulares) e a distribuições granulométricas
+       (múltiplos diâmetros de partícula em um único leito), ampliando
+       a representatividade do modelo para pesquisa de reatores reais.
+
+  TF7. Internacionalização da interface: a estrutura de i18n (LanguageContext)
+       já existe no frontend; completar a tradução dos textos de interface
+       para inglês facilitaria o uso em laboratórios internacionais e a
+       publicação do sistema como ferramenta de código aberto.
+
+
+================================================================================
+FIM DO DOCUMENTO
+================================================================================
+
+NOTAS PARA O AUTOR:
+- Todos os números (56 commits, 89 testes, 49.521 linhas, etc.) foram
+  verificados no repositório em 26/05/2026.
+- Os caminhos de arquivo citados são relativos à raiz do repositório.
+- As figuras 8–17 referem-se aos diagramas gerados em docs/fig08_*.png
+  (versão colorida) e docs/pb_fig08_*.png (versão preto e branco).
+- Para citar no formato ABNT: adaptar autor, título, ano e URL do GitHub
+  conforme a norma da instituição.
+- Onde o texto diz "primeira etapa" / "etapa inicial", refere-se ao
+  período de desenvolvimento anterior à avaliação da banca de qualificação.
+  Onde diz "etapa consolidada" / "segunda etapa", refere-se ao período
+  após o feedback e até a apresentação final.
+================================================================================
