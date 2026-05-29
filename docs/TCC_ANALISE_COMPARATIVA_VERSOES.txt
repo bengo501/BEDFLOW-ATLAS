@@ -1,0 +1,1222 @@
+================================================================================
+ANÁLISE COMPARATIVA E TEXTOS PARA O TCC — BEDFLOW-ATLAS
+Versão inicial (primeira avaliação) × Versão consolidada (etapa atual)
+================================================================================
+
+NOTA METODOLÓGICA E DE HONESTIDADE DAS EVIDÊNCIAS
+--------------------------------------------------------------------------------
+Este documento foi produzido a partir da análise direta do código-fonte e do
+histórico do repositório bengo501/BEDFLOW-ATLAS-TCC-2. Sempre que possível,
+citam-se caminhos de arquivo, funções e linhas. Adotam-se as seguintes
+classificações de evidência, conforme solicitado:
+
+  • evidência implementada — verificada no código atual;
+  • evidência documentada — presente em README, docs/ ou releases;
+  • evidência visual — prints/figuras fornecidos pelo autor (não verificáveis
+    no código);
+  • evidência inferida — deduzida da arquitetura, mas não diretamente medida;
+  • evidência pendente / não identificada — não encontrada no repositório.
+
+Base de comparação verificada:
+  • Versão inicial (primeira avaliação): commit 62cb4fc, de 19/11/2025, que é
+    o merge do Pull Request #101 ("fix/testes-g4-correcoes") — exatamente o
+    marco do conjunto G4. Esse commit foi recuperado e comparado (diff real)
+    com a versão consolidada (HEAD do branch de desenvolvimento atual).
+  • Diferença agregada entre as duas versões: 400 arquivos alterados,
+    +72.788 / −33.713 linhas.
+
+Convenção de termos (não se usam "TCC1"/"TCC2" no texto final):
+  • "versão inicial" / "primeira avaliação" / "etapa anterior"  ≡ primeiro semestre;
+  • "versão consolidada" / "etapa atual" / "segunda demonstração" ≡ segundo semestre.
+
+Limitações de insumo desta análise (declaradas para transparência):
+  • Os prints 1–8 e o arquivo Apresentacao_SIC_Bernardo_Klein_Heitz.pdf NÃO
+    foram anexados a esta sessão nem estão versionados no repositório; portanto,
+    as menções a eles são tratadas como EVIDÊNCIA VISUAL fornecida pelo autor,
+    e não como algo verificado por inspeção.
+  • A integração com o COMSOL NÃO foi encontrada no código (grep por "COMSOL"
+    retorna vazio). O uso no COMSOL é tratado como EVIDÊNCIA VISUAL / uso
+    externo do artefato exportado (STL), nunca como funcionalidade de código.
+
+
+================================================================================
+PARTE 1 — RESUMO DA ANÁLISE DO CÓDIGO
+================================================================================
+
+A versão consolidada do BEDFLOW-ATLAS preserva o núcleo avaliado na primeira
+etapa (DSL .bed, compilador ANTLR4, backend FastAPI, frontend React, stack
+Docker) e adiciona, sobre ele, uma camada inteiramente nova de modelagem
+geométrica em Python puro, com destaque para o sistema de corte do leito 3D em
+um plano 2D (thin slice / pseudo-2D).
+
+A comparação direta entre o commit da primeira avaliação (62cb4fc, 19/11/2025)
+e a versão atual evidencia que:
+
+  • O diretório scripts/python_modeling/ NÃO EXISTIA na primeira avaliação
+    (0 arquivos) e passou a ter 60 arquivos novos na versão consolidada,
+    incluindo o motor Python puro, o solver DEM, o sistema de corte e o
+    visualizador desktop. (evidência implementada — git diff)
+
+  • A gramática dsl/grammar/Bed.g4 cresceu de 100 para 163 linhas, passando
+    de 6 para 10 seções. As quatro seções novas — geometry, generation, slice
+    e statistical_2d — são exatamente as que sustentam o recurso de corte 2D
+    e os modos pseudo-2D. (evidência implementada)
+
+  • A interface por terminal (dsl/cli/, baseada em Typer) NÃO EXISTIA antes
+    (0 arquivos) e passou a existir. (evidência implementada)
+
+  • O número de arquivos de teste cresceu de 6 para 27. (evidência implementada)
+
+  • O frontend recebeu 40 arquivos novos em frontend/src/ e o backend, 18 novos
+    em backend/app/. (evidência implementada)
+
+Em síntese, a primeira avaliação mediu um pipeline funcional centrado em
+Blender + OpenFOAM com rastreabilidade por hash; a segunda demonstração avalia
+uma plataforma consolidada, com motor alternativo independente de Blender,
+corte geométrico 3D→2D, visualização desktop e ampliação substancial da
+cobertura de testes.
+
+
+================================================================================
+PARTE 2 — PRINCIPAIS MUDANÇAS ENCONTRADAS
+================================================================================
+
+(1) Motor de modelagem em Python puro (scripts/python_modeling/), sem
+    dependências de terceiros, com submódulo engine/ contendo
+    dem_solver.py, rigid_body.py, collision.py, spatial_hash.py, domain.py,
+    particles.py, pipeline.py e reports.py. (evidência implementada — net-new)
+
+(2) Sistema de corte do leito 3D em plano 2D (thin slice), distribuído entre
+    thin_slice_particles.py, thin_slice_build.py, geometry_modes.py e
+    slice_debug_export.py, com cálculo de raio aparente, substituição de
+    esferas por discos/cilindros, alinhamento ao plano, descarte de partículas
+    que "vazam" e cálculo de porosidade 2D. (evidência implementada — net-new)
+
+(3) Visualizador desktop (scripts/python_modeling/mesh_viewer/), com
+    scientific_app.py, camera_controller.py, cut_controller.py,
+    mesh_visibility_controller.py e geometry_core.py — viewer interativo com
+    plano de corte, distinto do visualizador web. (evidência implementada — net-new)
+
+(4) Ampliação da gramática .bed: seções geometry, generation, slice e
+    statistical_2d; novos parâmetros em bed (internal_cylinder_mode,
+    visibility) e packing (bloco DEM). (evidência implementada)
+
+(5) Interface por terminal com Typer (dsl/cli/) nos modos interativo e
+    headless. (evidência implementada — net-new)
+
+(6) Rastreabilidade ampliada por metadados sidecar (bedflow_export_metadata.py)
+    e resolução de seed (packing_seed.py), com porosidade estimada, tempo de
+    geração e validação de colisões registrados por artefato. (evidência implementada)
+
+(7) Sistema de templates de leito persistido (BedTemplate, routes_templates.py)
+    e diretório dsl/wizard_templates/ com 19 fixtures, várias delas de cenários
+    pseudo-2D/slice. (evidência implementada)
+
+(8) Crescimento da suíte de testes de 6 para 27 arquivos, com 29 funções de
+    teste dedicadas exclusivamente ao corte/slice. (evidência implementada)
+
+(9) Casos OpenFOAM de referência (tutorial/cavity-icoFoam, channel-simpleFoam,
+    sphere-snappyHexMesh) versionados. (evidência implementada)
+
+
+================================================================================
+PARTE 3 — COMPARAÇÃO SIC 2025 × VERSÃO INICIAL × VERSÃO CONSOLIDADA
+================================================================================
+
+A trajetória do trabalho pode ser lida em três estágios sucessivos. O primeiro,
+apresentado no Salão de Iniciação Científica de 2025, foi um protótipo
+exploratório de modelagem de leitos de extração em Blender e Godot 4. O segundo
+estágio, avaliado na primeira etapa deste trabalho, consolidou um pipeline
+declarativo com DSL, hash e dashboard. O terceiro estágio, objeto da etapa
+atual, amadureceu a plataforma com motor Python puro, corte 2D e visualização.
+
+Tabela 1 — Evolução entre SIC 2025, versão inicial e versão consolidada.
+(Antes: a tabela contrasta o protótipo exploratório, a versão da primeira
+avaliação e a versão consolidada atual.)
+
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Dimensão                | SIC 2025 (protótipo) | Versão inicial       | Versão consolidada   |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Ferramenta principal    | Blender + Godot 4    | DSL + Blender +      | DSL + Blender +      |
+  |                         |                      | OpenFOAM             | Python puro + OFOAM  |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Entrada                 | GUI interativa       | arquivo .bed         | arquivo .bed (10     |
+  |                         | (manual)             | declarativo (6 seç.) | seções)              |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Empacotamento           | colisores em tempo   | rigid_body (Blender) | rigid_body, hexag.,  |
+  |                         | real (instável)      |                      | DEM, statistical_2d  |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Partículas              | cúbicas; esferas com | esféricas            | esfera/cubo/cilindro |
+  |                         | falha de colisor     |                      |                      |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Exportação              | STL não concluída    | STL/OBJ/BLEND        | STL/OBJ/BLEND/GLTF + |
+  |                         | (pendência)          |                      | sidecar JSON         |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Rastreabilidade         | inexistente          | hash por execução    | hash + seed + sidecar|
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Corte 3D→2D             | inexistente          | inexistente          | implementado (thin   |
+  |                         |                      |                      | slice / pseudo-2D)   |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Visualização            | tempo real (Godot)   | dashboard web 3D     | web 3D + desktop     |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Uso em CFD externo      | previsto             | OpenFOAM (parcial)   | OpenFOAM + uso        |
+  |                         | (COMSOL/Fluent)      |                      | externo no COMSOL*   |
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Reprodutibilidade       | baixa                | média (hash)         | alta (hash+seed+test)|
+  +-------------------------+----------------------+----------------------+----------------------+
+  | Resultado típico citado | leito cilíndrico 138 | leitos paramétricos  | leitos + fatias 2D   |
+  |                         | partículas cúbicas,  | com 6 casos G4       | exportáveis          |
+  |                         | porosidade ~0,65     |                      |                      |
+  +-------------------------+----------------------+----------------------+----------------------+
+
+  * COMSOL: evidência visual / uso externo do STL exportado; não implementado
+    em código (grep "COMSOL" = vazio).
+  Fonte: produção autoral, a partir da apresentação do SIC 2025 (evidência
+  visual) e da análise do repositório (evidência implementada).
+
+
+================================================================================
+PARTE 4 — TABELA COMPARATIVA: VERSÃO INICIAL × VERSÃO CONSOLIDADA
+================================================================================
+
+Tabela 2 — Evolução por dimensão entre a versão inicial e a versão consolidada.
+(Antes: para cada dimensão, registra-se a situação na primeira avaliação, a
+situação na etapa atual, a evidência no código/GitHub e o impacto no trabalho.)
+
+  DIMENSÃO: DSL .bed
+    Inicial:     6 seções (bed, lids, particles, packing, export, cfd);
+                 Bed.g4 com 100 linhas.
+    Consolidada: 10 seções (+geometry, generation, slice, statistical_2d);
+                 Bed.g4 com 163 linhas.
+    Evidência:   git diff FETCH_HEAD..HEAD em dsl/grammar/Bed.g4.
+    Impacto:     habilita o corte 2D e a seleção de motor pela própria DSL.
+
+  DIMENSÃO: Compilador
+    Inicial:     parsing ANTLR + normalização SI + hash (presente).
+    Consolidada: mesmo núcleo + flatten_compiled_bed_json (canonização) e
+                 patches pós-compilação para slice/export/statistical.
+    Evidência:   dsl/compiler/bed_compiler_antlr_standalone.py;
+                 dsl/wizard_json_loader.py.
+    Impacto:     contrato de saída alinhado aos dois motores.
+
+  DIMENSÃO: Mensagens do compilador
+    Inicial:     erros de sintaxe via BedErrorListener; média 5/5 na avaliação.
+    Consolidada: mantido; validação semântica adicional em
+                 validate_geometry_contract (geometry_modes.py).
+    Evidência:   bed_compiler_antlr_standalone.py:203-214; geometry_modes.py.
+    Impacto:     erros de contrato (slice×statistical) detectados cedo.
+
+  DIMENSÃO: Reprodutibilidade
+    Inicial:     hash por execução (6 hashes únicos no G4).
+    Consolidada: hash + seed fixo + sidecar + 3 testes de determinismo.
+    Evidência:   packing_seed.py; tests/test_packing_seed.py.
+    Impacto:     mesma seed reproduz centros (verificado por teste).
+
+  DIMENSÃO: Hash SHA-256
+    Inicial:     presente (8 chars) em _metadata.
+    Consolidada: idêntico; SHA-256 sobre JSON canônico, 8 chars em _metadata.
+    Evidência:   bed_compiler_antlr_standalone.py:791-800.
+    Impacto:     identidade imutável por configuração (mantida).
+
+  DIMENSÃO: Seed
+    Inicial:     campo seed na DSL.
+    Consolidada: resolução explícita (fixo vs automático) + registro no sidecar.
+    Evidência:   packing_seed.py; test_resolve_seed_*.
+    Impacto:     reprodutibilidade auditável a partir do sidecar.
+
+  DIMENSÃO: Geração geométrica
+    Inicial:     Blender (rigid_body).
+    Consolidada: Blender + Python puro (hexagonal_3d, DEM, statistical_2d).
+    Evidência:   scripts/python_modeling/engine/ (net-new).
+    Impacto:     geração sem Blender, em qualquer ambiente Python 3.8+.
+
+  DIMENSÃO: Motor Blender
+    Inicial:     principal e único.
+    Consolidada: mantido; selecionável por generation { backend = blender }.
+    Evidência:   scripts/blender_scripts/.
+    Impacto:     compatibilidade preservada.
+
+  DIMENSÃO: Motor Python puro
+    Inicial:     inexistente.
+    Consolidada: implementado, sem dependências externas.
+    Evidência:   scripts/python_modeling/ (0 → 60 arquivos).
+    Impacto:     portabilidade e testabilidade (núcleo da etapa atual).
+
+  DIMENSÃO: Corte 2D (thin slice)
+    Inicial:     inexistente.
+    Consolidada: implementado (interseção, raio aparente, discos, alinhamento,
+                 descarte de vazamento, porosidade 2D).
+    Evidência:   thin_slice_particles.py, geometry_modes.py, thin_slice_build.py.
+    Impacto:     principal contribuição da etapa atual; foco do SIC 2026.
+
+  DIMENSÃO: Exportação para COMSOL
+    Inicial:     não verificada.
+    Consolidada: STL exportado usado em simulações no COMSOL (uso externo).
+    Evidência:   EVIDÊNCIA VISUAL (prints do autor); "COMSOL" não aparece no código.
+    Impacto:     demonstra interoperabilidade do artefato com simulador comercial.
+
+  DIMENSÃO: Operações booleanas
+    Inicial:     metadados de boolean iniciais.
+    Consolidada: modos de cilindro interno e status booleano consolidados.
+    Evidência:   bed_internal_modes.py; test_bed_internal_modes.py (12 testes).
+    Impacto:     controle de domínio sólido/fluido para malha.
+
+  DIMENSÃO: Visualização 3D
+    Inicial:     web (Three.js); avaliada 4/5.
+    Consolidada: web + visualizador desktop com plano de corte interativo.
+    Evidência:   mesh_viewer/scientific_app.py, cut_controller.py.
+    Impacto:     inspeção do corte fora do navegador.
+
+  DIMENSÃO: Dashboard
+    Inicial:     navegação, busca por hash, download (4,8/5).
+    Consolidada: +40 arquivos em frontend/src (jobs, resultados, templates,
+                 comparações, modal de info).
+    Evidência:   git diff em frontend/src; commits 7afeb66, 2b5ac88, de500f3.
+    Impacto:     experiência ampliada (histórico, paginação, viewer de malha).
+
+  DIMENSÃO: Terminal
+    Inicial:     wizard inicial.
+    Consolidada: CLI Typer (dsl/cli/) modos interativo e headless.
+    Evidência:   dsl/cli/ (net-new).
+    Impacto:     automação e uso em servidor.
+
+  DIMENSÃO: Relatórios
+    Inicial:     params/manifest por execução.
+    Consolidada: sidecar JSON + packing_report.json + relatórios web.
+    Evidência:   bedflow_export_metadata.py; engine/reports.py.
+    Impacto:     auditoria por artefato.
+
+  DIMENSÃO: Testes
+    Inicial:     6 arquivos de teste.
+    Consolidada: 27 arquivos; 29 funções só para o corte.
+    Evidência:   git diff; pytest.ini.
+    Impacto:     evidência objetiva de corretude geométrica.
+
+  DIMENSÃO: Documentação
+    Inicial:     READMEs + docs/tcc2.
+    Consolidada: + guias, diagramas (12 figuras), texto metodológico.
+    Evidência:   docs/ (fig08–fig17, GUIA_EXECUCAO_RAPIDO.md).
+    Impacto:     reprodutibilidade documental.
+
+  DIMENSÃO: Critérios de aceitação
+    Inicial:     atendidos parcialmente (solver/curvas pendentes no G4).
+    Consolidada: critérios geométricos e de exportação atendidos; ver Tabela 3.
+    Evidência:   Tabela 3 e suíte de testes.
+    Impacto:     ampliação do escopo atendido.
+
+  DIMENSÃO: Facilidade de uso
+    Inicial:     3/5 (edição da DSL) e 3/5 (uso geral).
+    Consolidada: CLI + templates + formulário web ampliado (instrumento a
+                 reaplicar — ver Parte 12 e Tabela 9).
+    Evidência:   dsl/cli/, routes_templates.py, frontend/src.
+    Impacto:     endereça a principal limitação subjetiva da primeira avaliação.
+
+  DIMENSÃO: Confiabilidade
+    Inicial:     confiança 4/5.
+    Consolidada: + determinismo testado + validação de containment.
+    Evidência:   test_packing_seed.py; test_slice_particle_containment.py.
+    Impacto:     base objetiva para a confiança declarada.
+
+  DIMENSÃO: Artefatos exportados
+    Inicial:     .blend, STL, params/manifest.
+    Consolidada: + STL de fatia 2D + sidecar + gizmos de debug opcionais.
+    Evidência:   slice_debug_export.py; thin_slice_build.py.
+    Impacto:     novos artefatos para estudos 2D.
+
+  DIMENSÃO: Template reutilizável
+    Inicial:     estrutura inicial (docs/tcc2/USO_COMO_TEMPLATE.md).
+    Consolidada: arquitetura modular com motores intercambiáveis e DSL
+                 reaproveitável (ver Parte 13).
+    Evidência:   separação dsl/ × scripts/ × backend/ × frontend/.
+    Impacto:     base para novas versões com outros motores 3D.
+
+  Fonte: produção autoral, a partir de git diff (62cb4fc → HEAD) e inspeção
+  de código.
+
+
+================================================================================
+PARTE 5 — CRITÉRIOS DE ACEITAÇÃO DA VERSÃO CONSOLIDADA
+================================================================================
+
+Tabela 3 — Critérios de aceitação da versão consolidada.
+(Antes: critérios verificáveis, forma de verificação, evidência esperada e
+status na etapa atual. Status: Atende / Parcial / Pendente / Evidência visual.)
+
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | Critério                          | Como verificar              | Evidência esperada           | Status   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | .bed compila sem erro             | compilar exemplos           | .json com _metadata.hash     | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | Erros indicam problema de sintaxe | inserir erro proposital     | mensagem de BedErrorListener | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | params/.bed.json é gerado         | rodar compilador            | arquivo .json                | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | hash determinístico               | compilar duas vezes         | mesmo hash p/ mesma entrada  | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | seed fixa reproduz empacotamento  | gerar com mesma seed        | mesmos centros               | Atende   |
+  |                                   |                             | (test_packing_seed)          |          |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | artefatos geométricos gerados     | gerar leito                 | STL + sidecar JSON           | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | sistema de corte funciona         | gerar com slice.enabled     | STL de fatia + porosidade 2D | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | corte 2D gera plano utilizável    | abrir fatia em malhador     | discos no plano (não colunas)| Atende   |
+  |                                   |                             | (test ..._discs_not_columns) |          |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | visualizador abre o modelo        | abrir STL (web/desktop)     | render 3D interativo         | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | modelo aceito no COMSOL           | importar STL no COMSOL      | malha/simulação 2D           | Ev.visual|
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | dashboard lista execuções         | abrir frontend              | lista de jobs/resultados     | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | terminal permite fluxo completo   | CLI headless                | STL sem interação            | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | arquivos podem ser exportados     | download/endpoint /files    | STL/OBJ/JSON                 | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | testes automatizados passam       | pytest                      | suíte verde                  | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | documentação explica uso          | ler README/docs             | guias + diagramas            | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | GitHub contém evidências          | inspecionar repo            | commits/releases/tests       | Atende   |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+  | malha/curvas Δp/L do OpenFOAM     | rodar solver completo       | células, Δp/L × U            | Pendente |
+  +-----------------------------------+-----------------------------+------------------------------+----------+
+
+  Fonte: produção autoral. "Ev.visual" = evidência visual (prints); "Pendente"
+  = depende de execução completa do OpenFOAM, fora do escopo verificado.
+
+
+================================================================================
+PARTE 6 — ANÁLISE DO FLUXO DA DSL ATÉ OS ARTEFATOS
+================================================================================
+
+O fluxo declarativo descrito na etapa anterior — (1) arquivo .bed; (2) parsing;
+(3) validação; (4) normalização SI; (5) defaults e derivados; (6) canonização;
+(7) geração do JSON; (8) hash; (9) geração geométrica; (10) artefatos;
+(11) visualização e download — permanece válido na versão consolidada, com
+ampliações. As etapas 1 a 8 estão integralmente implementadas no compilador
+(ver Parte 7). As etapas 9 a 11 foram expandidas: a geração geométrica agora
+admite dois motores; os artefatos incluem o STL de fatia 2D e o sidecar; e a
+visualização passou a contar com um visualizador desktop além do web.
+
+Diferença relevante a documentar (ajuste de escopo): na descrição da etapa
+anterior previa-se a publicação das saídas em diretórios do tipo runs/<hash>/
+com arquivos params.json, params.hash e report.txt. Na implementação atual do
+compilador, o hash (8 caracteres) é gravado dentro do próprio JSON, no campo
+_metadata.hash, e não se encontrou o padrão de diretório runs/<hash>/ nem a
+emissão de params.hash/report.txt pelo compilador. Trata-se de uma divergência
+entre o planejado e o implementado, que deve ser registrada como pendência de
+documentação / ajuste de escopo, e não como falha (a rastreabilidade por hash
+foi preservada, apenas em outro formato de armazenamento).
+
+
+================================================================================
+PARTE 7 — FLUXO INTERNO DO MÓDULO COMPILADOR DSL (FIGURA 25)
+================================================================================
+
+Figura 25 — Fluxo Interno do Módulo Compilador DSL.
+Fonte: produção autoral (2025).
+A figura apresenta o fluxo interno do compilador da DSL, desde a leitura do
+arquivo .bed, passando pelas etapas de parsing, validação, normalização,
+canonização e geração do hash, até a publicação dos artefatos rastreáveis.
+
+Tabela 14 — Verificação do fluxo interno do compilador no código atual.
+(Antes: para cada etapa do fluxo previsto, indica-se se existe no código,
+o módulo relacionado, a evidência e uma observação.)
+
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | Etapa do fluxo                    | Existe?  | Arquivo / módulo                    | Evidência / observação             |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 1. Entrada do arquivo .bed        | Sim      | bed_compiler_antlr_standalone.py    | compile_bed_file(), leitura UTF-8  |
+  |                                   |          | (linha 750)                         | → InputStream                      |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 2. Parsing (lexer/parser ANTLR)   | Sim      | mesmo arquivo (750-786);            | BedLexer, BedParser, regra         |
+  |                                   |          | dsl/generated/                      | bedFile(); BedErrorListener        |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 3. Validação física/coerência     | Sim      | BedCompilerListener (216-722);      | exitBed*(); validação de contrato  |
+  |                                   |          | geometry_modes.validate_geometry_   | geométrico                         |
+  |                                   |          | contract                            |                                    |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 4. Normalização para o SI         | Sim      | _parse_number_with_unit (223-271)   | mm→m, cm→m, g→kg, etc.             |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 5. Defaults e derivados           | Sim      | dataclasses + __post_init__ (49-202)| instâncias default automáticas     |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 6. Canonização                    | Sim      | flatten_compiled_bed_json,          | remove None/vazios; reordena dem;  |
+  |                                   |          | _drop_none (724-747)                | indent=2, ensure_ascii=False       |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 7. Geração do params.json         | Sim      | json.dump (789-809)                 | .bed → .json                       |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 8. Cálculo do hash SHA-256        | Sim      | hashlib.sha256 (791-800)            | 8 chars em _metadata.hash          |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 9. Publicação em runs/<hash>/     | Não      | —                                   | NÃO IDENTIFICADO no compilador;    |
+  |                                   |          |                                     | grep "runs/" = vazio. Hash fica no |
+  |                                   |          |                                     | JSON. Pendência de documentação.   |
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+  | 10. params.hash / report.txt /    | Parcial  | BedErrorListener (erros);           | erros e modo verbose existem;      |
+  |     avisos / ignorados            |          | wizard_json_loader.py (patches)     | params.hash/report.txt NÃO gerados |
+  |                                   |          |                                     | pelo compilador (ajuste de escopo).|
+  +-----------------------------------+----------+-------------------------------------+------------------------------------+
+
+  Fonte: produção autoral, a partir da inspeção de
+  dsl/compiler/bed_compiler_antlr_standalone.py.
+
+Contribuição do fluxo (texto acadêmico): o encadeamento descrito assegura, em
+conjunto, a padronização da entrada (uma gramática única em Bed.g4 como fonte de
+verdade), a validação sintática e semântica (parser ANTLR mais verificações de
+contrato), a normalização para o Sistema Internacional (toda grandeza convertida
+a m, kg, s, Pa, N antes de qualquer cálculo), a rastreabilidade e a
+reprodutibilidade (hash determinístico sobre o JSON canônico, somado à seed
+fixa), e a geração de artefatos auditáveis e comparáveis entre execuções (dois
+JSON com parâmetros distintos produzem hashes distintos). A divergência relativa
+à publicação em runs/<hash>/ e a relatórios de texto deve ser apresentada como
+evolução de implementação: a finalidade — identidade imutável e auditabilidade —
+foi mantida, ainda que a forma de persistência tenha sido simplificada para um
+único arquivo com metadados embutidos.
+
+
+================================================================================
+PARTE 8 — ANÁLISE DA GERAÇÃO GEOMÉTRICA
+================================================================================
+
+A geração geométrica na versão consolidada admite dois motores selecionáveis
+pela seção generation { backend } da DSL:
+
+  • Motor Blender (scripts/blender_scripts/): empacotamento por física de corpo
+    rígido; gera o recipiente cilíndrico, tampas e partículas, avança a
+    simulação e exporta nos formatos solicitados. Adequado a leitos completos
+    com empacotamento realista; requer Blender no PATH.
+
+  • Motor Python puro (scripts/python_modeling/engine/): independente de
+    terceiros. Submódulos: particles.py (criação de partículas), domain.py
+    (domínio/recipiente), rigid_body.py e dem_solver.py (empacotamento),
+    collision.py e spatial_hash.py (detecção de contatos por hashing espacial),
+    pipeline.py (orquestração) e reports.py (relatórios). Suporta hexagonal_3d,
+    DEM e statistical_2d.
+
+Recipiente, partículas e empacotamento são parametrizados pela DSL; a seed fixa
+torna o empacotamento determinístico; a porosidade é estimada e registrada no
+sidecar. As operações sobre o cilindro interno (modos de visibilidade e status
+booleano) são tratadas em bed_internal_modes.py e cobertas por 12 testes em
+test_bed_internal_modes.py. A exportação STL é feita por stl_mesh_utils.py
+(uv_sphere, merge_mesh, write_stl_binary), com cabeçalho binário válido
+verificado por teste.
+
+
+================================================================================
+PARTE 9 — ANÁLISE ESPECIAL DA FEATURE DE CORTE 2D (FOCO DO SIC 2026)
+================================================================================
+
+9.1 O que a feature faz e como está implementada
+--------------------------------------------------------------------------------
+O sistema de corte recebe o leito 3D empacotado e produz uma representação
+bidimensional do plano de corte, adequada a estudos de escoamento e a
+simuladores externos. As etapas implementadas são:
+
+  (a) Seleção do plano de corte por eixo (x, y ou z) e posição (seção slice da
+      DSL). [thin_slice_particles.py: SliceParticleConfig]
+
+  (b) Identificação das partículas que intersectam o plano. Para esferas, usa-se
+      a distância do centro ao plano. [geometry_modes.particle_intersects_slice]
+
+  (c) Cálculo do raio aparente da seção. A interseção de uma esfera de raio R por
+      um plano a uma distância d do centro é um disco de raio:
+
+          r_aparente = sqrt(R^2 - d^2)        (com r=0 se d >= R)
+
+      Implementado em geometry_modes.sphere_section_radius (linha 447) e usado
+      por thin_slice_particles.compute_slice_radius.
+
+  (d) Substituição da seção por disco (esfera/cilindro em z) ou caixa (cubo, ou
+      cilindro cortado fora do eixo), com espessura controlada (slice.thickness,
+      padrão 0,002 m). [thin_slice_particles.create_slice_cylinder_mesh;
+      geometry_modes.slice_footprint_spec]
+
+  (e) Alinhamento dos elementos ao plano de corte, com opção de preservar o
+      empacotamento original (projeção) ou reposicionar.
+      [thin_slice_particles.align_center_to_slice_plane]
+
+  (f) Tratamento das partículas que "vazam" para fora do plano útil, com quatro
+      motivos de descarte explícitos:
+          DROP_POLICY          — reprovada na política de seleção;
+          DROP_OUTSIDE_SLICE   — não intersecta a fatia;
+          DROP_BELOW_MIN_RADIUS— raio de seção abaixo de min_slice_particle_radius;
+          DROP_LEAK_RADIAL     — extrapola o raio útil do cilindro.
+      Há ainda o "snap" radial à parede (snap_radial_to_wall) para recuperar
+      partículas que ultrapassam levemente o raio útil.
+      [thin_slice_particles.prepare_slice_particle_for_mesh, linhas 130-212]
+
+  (g) Validação final dos vértices da malha dentro da fatia e do raio útil.
+      [thin_slice_particles.validate_slice_particle_vertices]
+
+  (h) Cálculo da porosidade 2D por rasterização do anel (r_int a r_ext):
+      porosidade = 1 − (células sólidas / células do anel).
+      [geometry_modes.compute_thin_slice_porosity]
+
+  (i) Exportação do STL da fatia e de artefatos de depuração opcionais (JSON de
+      resumo e gizmos STL). [thin_slice_build.apply_thin_slice_mesh;
+      slice_debug_export.write_slice_debug_json / export_debug_gizmo_stl]
+
+Tabela 12 — Análise da feature de corte 2D.
+(Antes: componentes da feature, arquivo/função, evidência e classificação.)
+
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Componente                    | Arquivo / função                           | Classificação          |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Configuração do corte         | thin_slice_particles.SliceParticleConfig   | implementada           |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Interseção partícula-plano    | geometry_modes.particle_intersects_slice   | implementada           |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Raio aparente sqrt(R^2-d^2)   | geometry_modes.sphere_section_radius:447   | implementada           |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Disco/cilindro com espessura  | thin_slice_particles.create_slice_cylinder | implementada           |
+  |                               | _mesh; geometry_modes.slice_footprint_spec |                        |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Alinhamento ao plano          | thin_slice_particles.align_center_to_slice | implementada           |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Descarte de vazamento         | prepare_slice_particle_for_mesh            | implementada           |
+  | (4 motivos + snap)            | (DROP_LEAK_RADIAL etc.)                    |                        |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Porosidade 2D                 | geometry_modes.compute_thin_slice_porosity | implementada           |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Exportação da fatia + debug   | thin_slice_build; slice_debug_export       | implementada           |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Viewer desktop com corte      | mesh_viewer/cut_controller.CutController   | implementada           |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Testes do corte               | test_thin_slice_algorithm (10),            | implementada           |
+  |                               | test_slice_particle_containment (7),       | (29 funções no total)  |
+  |                               | test_geometry_modes (12)                   |                        |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Validação visual no Blender   | prints 1 e 2 do autor                      | evidência visual       |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Uso no COMSOL                 | prints 3, 4 e 5 do autor                   | evidência visual       |
+  +-------------------------------+--------------------------------------------+------------------------+
+  | Tentativas anteriores (erro)  | prints 6, 7 e 8 do autor                   | evidência visual       |
+  +-------------------------------+--------------------------------------------+------------------------+
+
+  Fonte: produção autoral, a partir da inspeção de scripts/python_modeling/.
+
+9.2 Erros intermediários e correções (histórico)
+--------------------------------------------------------------------------------
+Os prints 6, 7 e 8, fornecidos pelo autor, registram tentativas anteriores em
+que o plano 2D foi gerado de forma incorreta (evidência visual). O histórico do
+repositório evidencia a maturação da feature por meio de commits sucessivos:
+
+  • 568df94 "Add thin-slice (pseudo-2D) feature" — introdução do recurso;
+  • 76c2b86 "Add slice tests, lang prefs and collision tol" — testes iniciais;
+  • 95058bf "Prefer python_engine for DEM/pseudo-2D; y slice" — escolha de eixo;
+  • 7868234 "Add min_slice_particle_radius & export handling" — descarte por raio
+    mínimo e tratamento de exportação (correção do "vazamento");
+  • 19ddcfa "Add slice options and modeling utilities";
+  • a9bdb1b "Export metadata + thin-slice fixes" — correções finais.
+
+A leitura conjunta desses commits com os testes (por exemplo
+test_apply_thin_slice_mesh_discs_not_columns, que garante que a saída são discos
+no plano e não "colunas" 3D residuais, e test_fixture_slice_edge_outside_plane_
+drops, que garante o descarte de partículas na borda) indica que os erros
+visuais das primeiras tentativas — colunas em vez de discos, partículas
+vazando para fora do plano útil, seções de raio nulo — foram tratados por:
+introdução do raio mínimo, do snap radial à parede, da política de containment e
+da validação final de vértices. A versão atual difere das tentativas erradas
+justamente por impor essas verificações geométricas antes da exportação.
+
+9.3 Texto para o Salão de Iniciação Científica de 2026
+--------------------------------------------------------------------------------
+(Sugestão de texto para a seção/painel do SIC 2026.)
+
+"A transformação de um leito empacotado tridimensional em um corte bidimensional
+responde a uma necessidade prática de estudos de fluidodinâmica computacional:
+simulações 2D, ou quasi-2D, reduzem drasticamente o custo de malha e de
+processamento, preservando informação representativa da seção transversal —
+em particular, a porosidade local. O desafio geométrico central é converter a
+interseção de cada partícula esférica com o plano de corte em um elemento plano
+coerente: a seção de uma esfera de raio R por um plano situado a uma distância d
+de seu centro é um disco de raio sqrt(R^2 - d^2), que se anula quando a esfera
+apenas tangencia o plano. As primeiras tentativas de implementação produziram
+artefatos incorretos — colunas tridimensionais residuais em vez de discos
+planos, partículas que extrapolavam o raio útil do recipiente e seções de raio
+negligenciável que poluíam a malha. A correção exigiu introduzir um raio mínimo
+de seção, o reposicionamento controlado dos centros sobre o plano, o ajuste
+radial das partículas próximas à parede e uma validação final dos vértices, de
+modo a garantir que o modelo exportado contivesse apenas discos de espessura
+controlada, contidos no domínio. O resultado foi validado visualmente no Blender
+e, em seguida, importado no COMSOL Multiphysics, onde a geometria de corte foi
+utilizada como domínio para simulações de escoamento — demonstrando a
+interoperabilidade do artefato com um simulador comercial. Em relação ao trabalho
+anterior, apresentado no SIC 2025 — que se limitava à modelagem 3D de leitos com
+partículas cúbicas e enfrentava instabilidades de colisores —, esta etapa
+introduz um caminho geométrico reprodutível do leito 3D para um plano 2D
+diretamente utilizável em simulação, consolidando uma contribuição original do
+projeto."
+
+
+================================================================================
+PARTE 10 — ANÁLISE DA INTEGRAÇÃO COM O COMSOL
+================================================================================
+
+Esclarecimento importante de evidência: não há, no código do BEDFLOW-ATLAS,
+qualquer integração programática com o COMSOL (a busca por "COMSOL" em todo o
+repositório retorna vazio). O que existe, e é legítimo apresentar, é o USO
+EXTERNO do artefato STL exportado pelo sistema: a geometria de corte 2D gerada
+pelo pipeline é importada manualmente no COMSOL Multiphysics e ali utilizada
+como domínio de simulação. Essa interoperabilidade é comprovada por evidência
+visual (prints 3, 4 e 5 fornecidos pelo autor), não por inspeção de código.
+
+Tabela 15 — Evidências do uso externo no COMSOL.
+(Antes: itens do uso externo, tipo de evidência e observação.)
+
+  +-------------------------------------------+--------------------+-----------------------------------+
+  | Item                                      | Tipo de evidência  | Observação                        |
+  +-------------------------------------------+--------------------+-----------------------------------+
+  | STL de corte 2D exportado pelo pipeline   | implementada       | thin_slice_build / write_stl_*    |
+  +-------------------------------------------+--------------------+-----------------------------------+
+  | Importação do STL no COMSOL               | visual             | prints do autor (não no código)   |
+  +-------------------------------------------+--------------------+-----------------------------------+
+  | Simulação de escoamento sobre o corte     | visual             | prints 3-5; resultados no COMSOL  |
+  +-------------------------------------------+--------------------+-----------------------------------+
+  | Integração programática com COMSOL        | não identificada   | grep "COMSOL" = vazio             |
+  +-------------------------------------------+--------------------+-----------------------------------+
+
+  Fonte: produção autoral. A interoperabilidade é por troca de arquivo (STL),
+  não por acoplamento de software.
+
+
+================================================================================
+PARTE 11 — ANÁLISE DA INTERFACE E DA DEMONSTRAÇÃO
+================================================================================
+
+A versão consolidada oferece três superfícies de uso:
+
+  • Web (frontend/src): SPA React/Vite com Three.js; navegação por sidebar
+    (Criar Leito, Pipeline Completo, Simulação CFD, Casos CFD, Jobs, Resultados);
+    formulário de parâmetros, monitor de jobs por polling e visualizador 3D.
+
+  • Desktop (scripts/python_modeling/mesh_viewer): aplicação científica
+    (scientific_app.py) com controle de câmera e, sobretudo, plano de corte
+    interativo (cut_controller.CutController, geometry_core.crop_mesh_slab),
+    permitindo inspecionar o corte fora do navegador.
+
+  • Terminal (dsl/cli, Typer): modos interativo e headless; o headless
+    (python3 -m cli --load-json FILE.bed.json --pure-python --no-prompt) gera
+    STL sem interação, viabilizando automação e experimentos em lote.
+
+Roteiro de demonstração sugerido (segunda demonstração): criar o leito (web ou
+CLI) → acompanhar o job → visualizar o modelo 3D → habilitar o corte → gerar e
+inspecionar a fatia 2D (desktop) → exportar o STL → importar no COMSOL
+(evidência visual) → exibir o sidecar JSON e os hashes para comprovar
+rastreabilidade → rodar a suíte de testes.
+
+
+================================================================================
+PARTE 12 — ANÁLISE DOS TESTES E EVIDÊNCIAS; REAPLICAÇÃO DA AVALIAÇÃO
+================================================================================
+
+12.1 Testes automatizados (evidência objetiva)
+--------------------------------------------------------------------------------
+O número de arquivos de teste cresceu de 6 (primeira avaliação) para 27 (etapa
+atual). A área de corte concentra 29 funções de teste (10 em
+test_thin_slice_algorithm.py, 7 em test_slice_particle_containment.py, 12 em
+test_geometry_modes.py). Há ainda testes de DEM, de seed, de exportação STL, de
+modos internos e de integração de API/banco.
+
+12.2 Reaplicação dos instrumentos da primeira avaliação
+--------------------------------------------------------------------------------
+A primeira avaliação combinou questionário, entrevista, observação moderada,
+execução de caso-tipo, registro de tempos, análise de erros da DSL, taxa de
+sucesso do pipeline e satisfação (escala 0–5). Propõe-se reaplicar o mesmo
+protocolo na etapa atual, acrescentando a tarefa específica de corte 2D e
+exportação para o COMSOL.
+
+ATENÇÃO (honestidade): os valores subjetivos da segunda demonstração (clareza,
+facilidade, satisfação) só devem ser preenchidos com dados reais após nova
+coleta. As tabelas a seguir trazem, para a coluna "versão inicial", os valores
+REAIS informados pelo autor; e, para a "versão consolidada", uma PROJEÇÃO
+FUNDAMENTADA (a substituir pelos números reais após a coleta), justificada pelas
+mudanças de código verificadas. As dimensões TÉCNICAS já trazem resultados
+verificados.
+
+Tabela 5 — Testes/avaliações reaplicados (estrutura comparativa).
+(Antes: bloco de avaliação, resultado na primeira avaliação e situação esperada
+na segunda demonstração.)
+
+  +----------------------------+---------------------------+-----------------------------------+
+  | Bloco                      | Primeira avaliação        | Segunda demonstração              |
+  +----------------------------+---------------------------+-----------------------------------+
+  | DSL .bed (média)           | 4,5 / 5                   | a reaplicar (proj. ≥ 4,5)*        |
+  |  - clareza da sintaxe      | 5                         | a reaplicar                       |
+  |  - facilidade de edição    | 3                         | proj. ↑ (CLI + templates)         |
+  |  - compreensão parâmetros  | 5                         | a reaplicar                       |
+  |  - comentários/doc         | 5                         | a reaplicar                       |
+  +----------------------------+---------------------------+-----------------------------------+
+  | Mensagens do compilador    | 5 / 5                     | a reaplicar (proj. = 5)           |
+  +----------------------------+---------------------------+-----------------------------------+
+  | Dashboard (média)          | 4,8 / 5                   | a reaplicar                       |
+  |  - navegação               | 5                         | a reaplicar                       |
+  |  - busca por hash          | 5                         | a reaplicar                       |
+  |  - visualização 3D         | 4                         | proj. ↑ (viewer desktop + corte)  |
+  |  - gráficos/curvas         | 5                         | a reaplicar                       |
+  |  - download                | 5                         | a reaplicar                       |
+  +----------------------------+---------------------------+-----------------------------------+
+  | Confiança/satisfação       | 4 / 5                     | a reaplicar                       |
+  |  - confiança nos resultados| 4                         | proj. ↑ (determinismo testado)    |
+  |  - facilidade geral        | 3                         | proj. ↑ (3 superfícies de uso)    |
+  |  - recomendaria            | 5                         | a reaplicar                       |
+  +----------------------------+---------------------------+-----------------------------------+
+
+  * "proj." = projeção fundamentada, NÃO medida; substituir pelos valores reais
+    após nova coleta. Fonte: produção autoral; valores da versão inicial
+    informados pelo autor.
+
+Tabela 9 — Resultados da segunda demonstração (dimensões técnicas verificadas).
+(Antes: resultados objetivos da etapa atual, com evidência.)
+
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Dimensão técnica                  | Resultado (etapa atual)   | Evidência                       |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Compilação sem erros bloqueantes  | Atende                    | exemplos compilam; _metadata    |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Hash determinístico               | Atende                    | sha256→8 chars (compiler:791)   |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Seed reproduz empacotamento       | Atende                    | test_packing_seed (3 testes)    |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Geração STL (Blender e Python)    | Atende                    | engine/pipeline; stl_mesh_utils |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Corte 2D gera discos no plano     | Atende                    | test ..._discs_not_columns      |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Porosidade 2D calculada           | Atende                    | compute_thin_slice_porosity     |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Containment do corte              | Atende                    | test_slice_particle_containment |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Exportação STL utilizável         | Atende                    | write_stl_binary (header válido)|
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Uso externo no COMSOL             | Evidência visual          | prints 3-5 (não no código)      |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Suíte de testes                   | 27 arquivos / 29 só corte | pytest.ini; tests/              |
+  +-----------------------------------+---------------------------+---------------------------------+
+  | Malha/curvas Δp/L do OpenFOAM     | Pendente                  | depende do solver completo      |
+  +-----------------------------------+---------------------------+---------------------------------+
+
+  Fonte: produção autoral, a partir de inspeção de código e testes.
+
+Tabela 11 — Riscos e ameaças à validade da avaliação.
+(Antes: mesma estrutura da primeira avaliação, atualizada para a etapa atual.)
+
+  +-------------------------+----------------------------+------------------------------------+
+  | Ameaça                  | Risco associado            | Mitigação                          |
+  +-------------------------+----------------------------+------------------------------------+
+  | Amostra pequena         | baixa generalização        | dados ricos de observação/entrev.  |
+  +-------------------------+----------------------------+------------------------------------+
+  | Efeito do avaliador     | influência nas respostas   | roteiro neutro e padronizado       |
+  +-------------------------+----------------------------+------------------------------------+
+  | Variação de hardware    | diferenças de desempenho   | ambiente padronizado               |
+  +-------------------------+----------------------------+------------------------------------+
+  | Solver não executado    | lacunas em malha/Δp/L      | reportar como pendência; usar      |
+  | integralmente           |                            | tutoriais como linha de base       |
+  +-------------------------+----------------------------+------------------------------------+
+  | Projeções subjetivas    | superestimar melhoria      | coletar dados reais antes de       |
+  |                         |                            | afirmar ganhos de satisfação       |
+  +-------------------------+----------------------------+------------------------------------+
+
+  Fonte: produção autoral.
+
+12.3 Evidências no GitHub
+--------------------------------------------------------------------------------
+Tabela 4 — Evidências no GitHub.
+(Antes: tipos de evidência e situação no repositório.)
+
+  +----------------------------+------------------------------------------------------------+
+  | Evidência                  | Situação                                                   |
+  +----------------------------+------------------------------------------------------------+
+  | Commits                    | 57 no branch atual; histórico completo na origem; PR #101  |
+  |                            | é o marco da primeira avaliação (G4).                      |
+  +----------------------------+------------------------------------------------------------+
+  | Releases                   | v0.5.1 e v0.5.1-fix (13/10/2025) e pré-release "releases"   |
+  |                            | (09/10/2025). PENDENTE: release que marque a versão        |
+  |                            | consolidada (sugere-se criar tag pós-corte 2D).            |
+  +----------------------------+------------------------------------------------------------+
+  | Tags                       | v0.5.1, v0.5.1-fix, releases.                              |
+  +----------------------------+------------------------------------------------------------+
+  | Branches                   | main; claude/python-mesh-engine-arch-vImpr (desenvolv.).   |
+  +----------------------------+------------------------------------------------------------+
+  | Pull requests              | PR #101 (fix/testes-g4-correcoes) documentado.             |
+  +----------------------------+------------------------------------------------------------+
+  | README / docs              | README raiz + backend/frontend/tutorial + docs/ (guias,    |
+  |                            | 12 diagramas).                                             |
+  +----------------------------+------------------------------------------------------------+
+  | Exemplos .bed              | dsl/examples/ (leito_simples, leito_pseudo2d_slice) +      |
+  |                            | dsl/wizard_templates/ (19 fixtures).                       |
+  +----------------------------+------------------------------------------------------------+
+  | Scripts de teste           | pytest.ini; 27 arquivos test_*.py.                         |
+  +----------------------------+------------------------------------------------------------+
+  | Artefatos gerados          | local_data/models_3d/ (STL + sidecar + packing_report).    |
+  +----------------------------+------------------------------------------------------------+
+  | Arquivos do corte 2D       | scripts/python_modeling/thin_slice*.py, geometry_modes.py. |
+  +----------------------------+------------------------------------------------------------+
+  | Evidência COMSOL no GitHub | NÃO IDENTIFICADA (uso externo, por prints do autor).       |
+  +----------------------------+------------------------------------------------------------+
+  | Estrutura como template    | separação modular dsl/scripts/backend/frontend +           |
+  |                            | docs/tcc2/USO_COMO_TEMPLATE.md.                            |
+  +----------------------------+------------------------------------------------------------+
+
+  Como citar no TCC: referenciar commits por hash curto (ex.: 568df94 para a
+  introdução do corte), releases por tag (v0.5.1) e o PR #101 como marco da
+  primeira avaliação; indicar caminhos de arquivo para cada funcionalidade.
+  Fonte: produção autoral, a partir da API do GitHub e do histórico Git.
+
+
+================================================================================
+PARTE 13 — ANÁLISE DO PROJETO COMO TEMPLATE REUTILIZÁVEL
+================================================================================
+
+A arquitetura da versão consolidada favorece o reúso, com graus distintos de
+maturidade que devem ser diferenciados:
+
+  JÁ IMPLEMENTADO (evidência no código):
+    • DSL .bed e compilador independentes do motor de geração — qualquer motor
+      que leia o .bed.json pode ser acoplado;
+    • dois motores intercambiáveis selecionáveis pela DSL (generation.backend),
+      provando, na prática, que a troca de motor é suportada pela arquitetura;
+    • separação clara entre linguagem (dsl/), motores (scripts/), API (backend/)
+      e interface (frontend/);
+    • documento docs/tcc2/USO_COMO_TEMPLATE.md.
+
+  FACILITADO PELA ARQUITETURA (não é "pronto", mas a estrutura permite):
+    • adicionar um terceiro motor (basta consumir o .bed.json e produzir STL +
+      sidecar no mesmo contrato);
+    • criar novos exportadores de formato;
+    • reusar a DSL/compilador em outro pipeline.
+
+  POSSIBILIDADE DE TRABALHO FUTURO (não implementado):
+    • variantes do fluxo com Maya 3D, outras versões de Blender, ou motores
+      gráficos como a Godot — apresentadas como potencial de extensão, e não como
+      algo já existente no repositório.
+
+Em texto: "o projeto evoluiu de uma ferramenta fechada para um modelo de
+referência, no qual a especificação declarativa e o contrato de saída
+desacoplam a descrição do problema do motor que o resolve; a coexistência de um
+motor em Blender e de um motor em Python puro, ambos acionados pelo mesmo
+arquivo .bed, demonstra concretamente essa capacidade de substituição, abrindo
+caminho para implementações futuras com outras ferramentas de modelagem."
+
+
+================================================================================
+PARTE 14 — TRABALHOS RELACIONADOS (INCLUINDO UM TERCEIRO)
+================================================================================
+
+Terceiro trabalho proposto: Partopour & Dixon (2017).
+Referência: PARTOPOUR, B.; DIXON, A. G. "An integrated workflow for
+resolved-particle packed bed models with complex particle shapes." Powder
+Technology, v. 322, p. 258-272, 2017.
+  • Objetivo: gerar e malhar computacionalmente leitos empacotados resolvidos
+    de partículas de formas arbitrárias.
+  • Metodologia: empacotamento por um pacote automatizado baseado na biblioteca
+    Bullet Physics; método de shrink-wrap para tratar os contatos entre
+    partículas na malha.
+  • Ferramentas: Bullet Physics (empacotamento) + abordagem de malha por
+    shrink-wrap; STL como geometria de entrada.
+  • Geometria/simulação: partículas não esféricas resolvidas; CFD de reatores
+    de leito fixo.
+  • Limitações: foco em geração/malha (não propõe uma DSL declarativa nem
+    rastreabilidade por hash; pipeline orientado a ferramentas específicas).
+  • Relação com o BEDFLOW-ATLAS: compartilha o uso de física baseada em
+    biblioteca de corpos rígidos (Bullet ≈ rigid_body do Blender) e a exportação
+    de geometria para CFD; difere por não oferecer entrada declarativa,
+    rastreabilidade por hash/seed, nem o corte 3D→2D.
+  • Contribuição comparativa: reforça que o diferencial do BEDFLOW-ATLAS está
+    menos na geração geométrica em si e mais na camada declarativa, rastreável
+    e reprodutível, somada ao corte 2D.
+
+Tabela 13 — Comparação entre trabalhos relacionados.
+(Antes: comparação por ferramentas, automação, entrada declarativa,
+rastreabilidade, corte 2D, visualização, exportação CFD e limitações.)
+
+  +--------------------+------------------+----------+-------------+--------------+---------+-------------+--------------+
+  | Trabalho           | Ferramentas      | Automação| Entrada     | Rastreabilid.| Corte 2D| Visualização| Export. CFD  |
+  |                    |                  |          | declarativa |              |         |             |              |
+  +--------------------+------------------+----------+-------------+--------------+---------+-------------+--------------+
+  | Boccardo (2015)    | Blender+OpenFOAM | parcial  | não         | não          | não     | ParaView    | sim (OFOAM)  |
+  |                    | +ParaView        |          |             |              |         |             |              |
+  +--------------------+------------------+----------+-------------+--------------+---------+-------------+--------------+
+  | Fernengel (2018)   | Bash/Python +    | sim      | scripts     | não          | não     | limitada    | sim (OFOAM)  |
+  |                    | OpenFOAM         | (script) |             |              |         |             |              |
+  +--------------------+------------------+----------+-------------+--------------+---------+-------------+--------------+
+  | Partopour & Dixon  | Bullet Physics + | parcial  | não         | não          | não     | n/d         | sim          |
+  | (2017)             | shrink-wrap      |          |             |              |         |             |              |
+  +--------------------+------------------+----------+-------------+--------------+---------+-------------+--------------+
+  | BEDFLOW-ATLAS      | DSL .bed + ANTLR | sim      | sim (.bed)  | sim          | sim     | web +       | sim (OFOAM)  |
+  | (este trabalho)    | + Blender +      | (e2e)    |             | (hash+seed)  |         | desktop     | + uso COMSOL*|
+  |                    | Python puro      |          |             |              |         |             |              |
+  +--------------------+------------------+----------+-------------+--------------+---------+-------------+--------------+
+
+  Limitações: Boccardo — sem entrada declarativa/rastreabilidade; Fernengel —
+  configuração por scripts, sem DSL formal; Partopour & Dixon — foco em
+  malha/formas, sem DSL/hash/corte 2D; BEDFLOW-ATLAS — execução completa do
+  solver e curvas Δp/L ainda pendentes; COMSOL por uso externo (*).
+  Fonte: produção autoral, a partir das referências citadas.
+
+
+================================================================================
+PARTE 15 — SUGESTÕES DE TEXTO PARA O TCC
+================================================================================
+
+15.1 Proposta
+--------------------------------------------------------------------------------
+"O BEDFLOW-ATLAS propõe uma plataforma para geração, visualização, corte e
+rastreamento de geometrias de leitos empacotados, construída sobre ferramentas
+de código aberto. A proposta articula uma linguagem de domínio específico (.bed),
+um compilador baseado em gramática ANTLR4, dois motores de modelagem
+intercambiáveis (Blender e Python puro), um mecanismo de corte do leito 3D em um
+plano 2D e uma camada de rastreabilidade por hash e seed. O objetivo é permitir
+que o pesquisador descreva o problema de forma declarativa e obtenha, de modo
+reprodutível e auditável, a geometria tridimensional, a fatia bidimensional e os
+artefatos exportáveis para simulação."
+
+15.2 Implementação
+--------------------------------------------------------------------------------
+"A versão consolidada preserva o núcleo declarativo avaliado anteriormente e
+acrescenta uma camada de modelagem em Python puro, com 60 arquivos novos em
+scripts/python_modeling/, organizados em um submódulo engine/ (empacotamento,
+DEM, colisões, hashing espacial) e em um conjunto de módulos de corte
+(thin_slice_particles.py, thin_slice_build.py, geometry_modes.py). A gramática
+.bed foi ampliada de seis para dez seções, incorporando geometry, generation,
+slice e statistical_2d. A interface ganhou um visualizador desktop com plano de
+corte, além do dashboard web, e uma interface por terminal baseada em Typer. A
+cobertura de testes cresceu de 6 para 27 arquivos. O histórico do repositório
+documenta essa evolução em commits identificáveis (por exemplo, 568df94 para a
+introdução do corte e 7868234 para o tratamento de partículas que extrapolam o
+plano)."
+
+15.3 Demonstração
+--------------------------------------------------------------------------------
+"O uso típico parte da escrita de um arquivo .bed, compilado para um JSON
+normalizado com hash. A geração geométrica pode ser disparada pela web, pelo
+terminal (inclusive em modo headless, sem interação) ou pelo visualizador
+desktop. Habilitando a seção slice, o sistema produz, além do leito 3D, uma
+fatia 2D do plano de corte, exportada em STL e acompanhada do cálculo de
+porosidade. O artefato pode ser visualizado no navegador, inspecionado no
+visualizador desktop e importado em simuladores externos, como o COMSOL."
+
+15.4 Avaliação
+--------------------------------------------------------------------------------
+"Os instrumentos da primeira avaliação — questionário, entrevista, observação
+moderada e métricas de tempo e sucesso — foram tomados como base para avaliar a
+versão consolidada. As limitações então apontadas orientaram o desenvolvimento:
+a baixa facilidade de edição da DSL (nota 3) motivou a interface por terminal e o
+sistema de templates; a visualização 3D (nota 4) foi complementada por um
+visualizador desktop com corte; e a demanda por mais testes foi atendida com a
+ampliação de 6 para 27 arquivos de teste. As dimensões técnicas foram verificadas
+objetivamente; as dimensões subjetivas devem ser remedidas com nova coleta antes
+de se afirmarem ganhos de satisfação."
+
+15.5 Resultados
+--------------------------------------------------------------------------------
+"Tecnicamente, a etapa atual entrega: compilação determinística com hash;
+empacotamento reprodutível por seed; geração de STL por dois motores; corte 3D→2D
+com cálculo de raio aparente (sqrt(R^2 - d^2)), substituição por discos de
+espessura controlada e porosidade 2D; e exportação de artefatos auditáveis. O
+corte foi validado por 29 funções de teste e, visualmente, no Blender e no
+COMSOL. Permanecem pendentes a execução integral do solver OpenFOAM e a geração
+das curvas Δp/L × U, já identificadas como limitação na etapa anterior."
+
+15.6 Seção sobre o SIC 2025
+--------------------------------------------------------------------------------
+"O trabalho apresentado no Salão de Iniciação Científica de 2025 constituiu a
+origem metodológica deste projeto. Naquela etapa exploratória, investigou-se a
+modelagem de leitos de extração em Blender e o desenvolvimento de uma ferramenta
+própria na engine Godot 4, com gravidade, atributos físicos e colisores. Os
+resultados iniciais incluíram um leito cilíndrico com partículas cúbicas
+(cerca de 138 partículas, porosidade aproximada de 0,65, vaso de 10 cm de altura
+e 2,5 cm de diâmetro). A tentativa de substituir as partículas cúbicas por
+esféricas esbarrou em falhas de sincronização de colisores e sobreposição, e a
+exportação STL não foi concluída. Essas dificuldades — sobretudo a instabilidade
+do empacotamento e a exportação — definiram os requisitos que o BEDFLOW-ATLAS
+viria a atender de forma robusta e reprodutível."
+
+15.7 Seção sobre o SIC 2026
+--------------------------------------------------------------------------------
+(Ver o texto completo em 9.3.)
+
+15.8 Conclusão
+--------------------------------------------------------------------------------
+"Os objetivos centrais da etapa atual foram atingidos: a plataforma passou a
+contar com um motor independente de Blender, com corte do leito 3D em plano 2D e
+com visualização desktop, mantendo a rastreabilidade por hash e seed. As
+evidências são objetivas (git diff, 27 arquivos de teste, 29 funções dedicadas ao
+corte, commits identificáveis) e, no caso do uso externo no COMSOL, visuais.
+Permanecem como limitações a execução completa do solver e a geração das curvas
+de queda de pressão, recomendadas como trabalho futuro, ao lado de uma fila de
+jobs multi-slot, da containerização do OpenFOAM e do pós-processamento
+automatizado."
+
+
+================================================================================
+PARTE 16 — TABELAS COMPLEMENTARES
+================================================================================
+
+Tabela 6 — Funcionalidades implementadas na versão consolidada.
+(Antes: funcionalidade, módulo e classificação de evidência.)
+
+  +-------------------------------------+--------------------------------------+----------------+
+  | Funcionalidade                      | Módulo                               | Evidência      |
+  +-------------------------------------+--------------------------------------+----------------+
+  | Compilação .bed → JSON + hash       | dsl/compiler/                        | implementada   |
+  | Normalização SI                     | _parse_number_with_unit              | implementada   |
+  | Canonização do JSON                 | flatten_compiled_bed_json            | implementada   |
+  | Motor Blender                       | scripts/blender_scripts/             | implementada   |
+  | Motor Python puro                   | scripts/python_modeling/engine/      | implementada   |
+  | Solver DEM                          | engine/dem_solver.py                 | implementada   |
+  | Corte 3D→2D (thin slice)            | thin_slice_*.py, geometry_modes.py   | implementada   |
+  | Porosidade 2D                       | compute_thin_slice_porosity          | implementada   |
+  | Viewer desktop com corte            | mesh_viewer/cut_controller.py        | implementada   |
+  | Dashboard web 3D                    | frontend/src/                        | implementada   |
+  | CLI Typer (interativo/headless)     | dsl/cli/                             | implementada   |
+  | Rastreabilidade seed+hash+sidecar   | packing_seed, bedflow_export_metadata| implementada   |
+  | Templates de leito                  | routes_templates.py, BedTemplate     | implementada   |
+  | Sistema de jobs assíncronos         | mesh_job_runner.py                   | implementada   |
+  | Exportação STL/OBJ/BLEND/GLTF       | stl_mesh_utils, export handlers      | implementada   |
+  | Uso externo no COMSOL               | (prints do autor)                    | visual         |
+  | Curvas Δp/L × U                     | —                                    | pendente       |
+  +-------------------------------------+--------------------------------------+----------------+
+  Fonte: produção autoral.
+
+Tabela 7 — Limitações resolvidas e pendentes.
+(Antes: limitação da primeira avaliação e situação na etapa atual.)
+
+  +------------------------------------------+-----------------------------------------------+
+  | Limitação (primeira avaliação)           | Situação na versão consolidada                |
+  +------------------------------------------+-----------------------------------------------+
+  | Facilidade de edição da DSL (3/5)        | Resolvida parcialmente: CLI + templates +     |
+  |                                          | formulário web (remedir com usuários).        |
+  +------------------------------------------+-----------------------------------------------+
+  | Funcionalidades em desenvolvimento       | Resolvida em parte: motor Python e corte 2D   |
+  |                                          | concluídos; solver completo ainda pendente.   |
+  +------------------------------------------+-----------------------------------------------+
+  | Visualização 3D a melhorar (4/5)         | Resolvida parcialmente: viewer desktop com    |
+  |                                          | corte interativo.                             |
+  +------------------------------------------+-----------------------------------------------+
+  | Consolidar fluxo completo de geração     | Resolvida: fluxo .bed→STL+fatia verificado.   |
+  +------------------------------------------+-----------------------------------------------+
+  | Registrar melhor evidências/artefatos    | Resolvida: sidecar + packing_report + hash.   |
+  +------------------------------------------+-----------------------------------------------+
+  | Ampliar testes automatizados             | Resolvida: 6 → 27 arquivos.                   |
+  +------------------------------------------+-----------------------------------------------+
+  | Documentar melhor o sistema              | Resolvida: guias + 12 diagramas + textos.     |
+  +------------------------------------------+-----------------------------------------------+
+  | Curvas/malha do solver                   | Pendente: depende do OpenFOAM completo.       |
+  +------------------------------------------+-----------------------------------------------+
+  | Release da versão consolidada            | Pendente: criar tag pós-corte 2D.             |
+  +------------------------------------------+-----------------------------------------------+
+  Fonte: produção autoral.
+
+Tabela 8 — Relação entre objetivos e evidências.
+(Antes: objetivo, evidência principal e status.)
+
+  +-------------------------------------------+-------------------------------------+----------+
+  | Objetivo                                  | Evidência                           | Status   |
+  +-------------------------------------------+-------------------------------------+----------+
+  | DSL declarativa para leitos               | Bed.g4 (10 seções)                  | Atingido |
+  | Compilador com hash                       | bed_compiler_antlr_standalone.py    | Atingido |
+  | Motor alternativo independente de Blender | scripts/python_modeling/engine/     | Atingido |
+  | Corte 3D→2D                               | thin_slice_*.py                     | Atingido |
+  | Visualização (web + desktop)              | frontend/src; mesh_viewer/          | Atingido |
+  | Interface por terminal                    | dsl/cli/                            | Atingido |
+  | Rastreabilidade (hash+seed)               | packing_seed; export_metadata       | Atingido |
+  | Exportação para CFD externo               | STL; uso no COMSOL (visual)         | Atingido*|
+  | Execução completa do solver/curvas        | —                                   | Pendente |
+  +-------------------------------------------+-------------------------------------+----------+
+  * exportação implementada; uso no COMSOL por evidência visual.
+  Fonte: produção autoral.
+
+Tabela 10 — Artefatos gerados pelo pipeline.
+(Antes: artefato, origem e conteúdo.)
+
+  +-----------------------------+--------------------------------+----------------------------------+
+  | Artefato                    | Origem                         | Conteúdo                         |
+  +-----------------------------+--------------------------------+----------------------------------+
+  | .bed.json                   | compilador                     | parâmetros SI + _metadata.hash   |
+  | STL do leito 3D             | motor (Blender/Python)         | malha do leito empacotado        |
+  | STL da fatia 2D             | thin_slice_build               | discos no plano de corte         |
+  | sidecar *_pure_bed.json     | bedflow_export_metadata        | seed, hash, porosidade, tempo    |
+  | packing_report.json         | engine/reports                 | n_placed, colisões, violações    |
+  | gizmos de debug (STL/JSON)  | slice_debug_export             | geometria diagnóstica (opcional) |
+  | caso OpenFOAM               | scripts/openfoam_scripts       | dicionários + condições de CC    |
+  | diagramas (PNG)             | docs/                          | arquitetura (fig08–fig17)        |
+  +-----------------------------+--------------------------------+----------------------------------+
+  Fonte: produção autoral.
+
+(As Tabelas 1–5, 9 e 11–15 encontram-se nas Partes 3, 4, 5, 12, 9, 10 e 14.)
+
+
+================================================================================
+PARTE 17 — PENDÊNCIAS E TRABALHOS FUTUROS
+================================================================================
+
+Pendências técnicas observadas (declaradas honestamente):
+  • Execução integral do solver OpenFOAM e geração das curvas Δp/L × U
+    (pendência herdada da etapa anterior).
+  • Padrão runs/<hash>/ e relatórios params.hash/report.txt previstos na
+    documentação não estão implementados no compilador (ajuste de escopo: o
+    hash foi mantido no _metadata do JSON).
+  • Ausência de release/tag marcando a versão consolidada.
+  • Coleta real dos dados subjetivos da segunda demonstração (as projeções não
+    substituem medição).
+
+Trabalhos futuros recomendados:
+  • Fila de jobs multi-slot (Celery + Redis) para concorrência.
+  • Containerização do OpenFOAM e pós-processamento automatizado (Δp/L,
+    porosidade local, perfis de velocidade) exibido no dashboard.
+  • Integração programática (e não apenas por arquivo) com simuladores externos.
+  • Suporte a partículas não esféricas no empacotamento Python.
+  • Variantes do pipeline com outros motores de modelagem (Maya, Godot) —
+    viabilizadas pela arquitetura, mas ainda não implementadas.
+  • Validação cruzada da porosidade com dados experimentais.
+
+
+================================================================================
+PARTE 18 — CONCLUSÃO SOBRE OS OBJETIVOS
+================================================================================
+
+A análise comparativa entre a versão inicial (primeira avaliação, commit
+62cb4fc, 19/11/2025) e a versão consolidada (etapa atual) evidencia uma evolução
+substancial e verificável: 400 arquivos alterados, ampliação da gramática de 6
+para 10 seções, criação de um motor de modelagem em Python puro (0 → 60
+arquivos), implementação do corte do leito 3D em plano 2D, adição de um
+visualizador desktop e de uma interface por terminal, e crescimento da suíte de
+testes de 6 para 27 arquivos.
+
+Os objetivos centrais foram atingidos no plano da implementação, com evidência
+direta no código e no histórico do repositório. A principal contribuição da
+etapa atual — o corte 3D→2D — está implementada, testada (29 funções) e
+validada visualmente, inclusive com uso externo do artefato no COMSOL (evidência
+visual). Permanecem como limitações, a serem tratadas em trabalhos futuros, a
+execução completa do solver OpenFOAM e a geração das curvas de queda de pressão,
+além da recomendação de marcar a versão consolidada com uma release e de coletar
+formalmente os dados subjetivos da segunda demonstração.
+
+Em relação ao protótipo exploratório do SIC 2025 — limitado à modelagem 3D com
+partículas cúbicas e a tentativas instáveis de empacotamento esférico —, o
+BEDFLOW-ATLAS consolidou-se como uma plataforma declarativa, rastreável,
+reprodutível e extensível, capaz de servir como modelo de referência para novas
+implementações.
+
+
+================================================================================
+FIM DO DOCUMENTO
+================================================================================
+
+ÍNDICE DAS 15 TABELAS SOLICITADAS:
+  Tabela 1  — Evolução SIC 2025 / inicial / consolidada ............. Parte 3
+  Tabela 2  — Evolução inicial × consolidada ....................... Parte 4
+  Tabela 3  — Critérios de aceitação da consolidada ................ Parte 5
+  Tabela 4  — Evidências no GitHub ................................. Parte 12.3
+  Tabela 5  — Testes/avaliações reaplicados ........................ Parte 12
+  Tabela 6  — Funcionalidades implementadas ........................ Parte 16
+  Tabela 7  — Limitações resolvidas e pendentes .................... Parte 16
+  Tabela 8  — Relação objetivos × evidências ....................... Parte 16
+  Tabela 9  — Resultados da segunda demonstração (técnico) ......... Parte 12
+  Tabela 10 — Artefatos gerados .................................... Parte 16
+  Tabela 11 — Riscos e ameaças à validade .......................... Parte 12
+  Tabela 12 — Análise da feature de corte 2D ....................... Parte 9
+  Tabela 13 — Comparação entre trabalhos relacionados .............. Parte 14
+  Tabela 14 — Fluxo interno do compilador DSL (Figura 25) .......... Parte 7
+  Tabela 15 — Evidências do uso externo no COMSOL .................. Parte 10
+================================================================================
