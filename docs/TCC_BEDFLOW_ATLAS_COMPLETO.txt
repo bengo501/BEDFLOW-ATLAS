@@ -6,51 +6,107 @@ Orientador: Marco Aurélio Souza Mangan
 ================================================================================
 
 DOCUMENTO INTEGRADO
-Capítulos 1 a 3 reproduzidos do documento original (introdução, referencial
-teórico e trabalhos relacionados); Capítulos 4 a 8 e seções complementares
-elaborados a partir da análise do repositório; Referências ao final.
-
-NOTA DE MONTAGEM (remover na versão final):
-  • Os Capítulos 1, 2 e 3 abaixo foram transcritos do PDF original, preservando
-    o texto e a numeração de seções do autor (incluindo a terminologia
-    "TCC1/TCC2" usada no original).
-  • Os Capítulos 4 a 8 seguem a redação da etapa de análise e adotam, por
-    coerência com as instruções de redação, as expressões "versão inicial"
-    e "versão consolidada" em vez de "TCC1/TCC2". Caso se deseje uniformidade
-    total, basta substituir os termos em um dos blocos.
-  • A Seção 3 do original cita dois trabalhos relacionados; ao final deste
-    documento há uma sugestão de ampliação com um terceiro trabalho
-    (Partopour & Dixon, 2017), pronta para ser incorporada se desejado.
-  • As referências [70]–[79] são citadas no corpo do texto, mas a lista de
-    referências do original termina em [69]; ao final, há uma seção de
-    complementação com as entradas faltantes identificadas.
 
 
 ================================================================================
 LISTA DE SIGLAS / SÍMBOLOS
 ================================================================================
-2D — Bidimensional | 3D — Tridimensional | API — Application Programming
-Interface | CFD — Computational Fluid Dynamics | CLI — Command-Line Interface |
-CSV — Comma-Separated Values | DB — Database | DEM — Discrete Element Method |
-DOE — Design of Experiments | DOI — Digital Object Identifier | DSL —
-Domain-Specific Language | E2E — End to End | FBX — Filmbox | FOAM — Field
-Operation and Manipulation | GCI — Grid Convergence Index | GLB — GL Binary |
-GLTF — GL Transmission Format | GPU — Graphics Processing Unit | GUI — Graphical
-User Interface | HPC — High-Performance Computing | HTTP — Hypertext Transfer
-Protocol | IC — Iniciação Científica | JSON — JavaScript Object Notation | JWT —
-JSON Web Token | LES — Large Eddy Simulation | LTS — Long-Term Support | MIT —
-Licença de software de código aberto | MVP — Minimum Viable Product | OBJ —
+2D — Bidimensional | 3D — Tridimensional | ANTLR — ANother Tool for Language
+Recognition | API — Application Programming Interface | CFD — Computational Fluid
+Dynamics | CLI — Command-Line Interface | CSV — Comma-Separated Values | DB —
+Database | DEM — Discrete Element Method | DOE — Design of Experiments | DOI —
+Digital Object Identifier | DSL — Domain-Specific Language | E2E — End to End |
+FBX — Filmbox | FOAM — Field Operation and Manipulation | GCI — Grid Convergence
+Index | GLB — GL Binary | GLTF — GL Transmission Format | GPU — Graphics
+Processing Unit | GUI — Graphical User Interface | HPC — High-Performance
+Computing | HTTP — Hypertext Transfer Protocol | IC — Iniciação Científica |
+JSON — JavaScript Object Notation | JWT — JSON Web Token | LES — Large Eddy
+Simulation | LOC — Lines of Code (linhas de código) | LTS — Long-Term Support |
+MIT — Licença de software de código aberto | MVP — Minimum Viable Product | OBJ —
 Wavefront OBJ | OpenAPI — OpenAPI Specification | OpenFOAM — Open Field Operation
 and Manipulation | ORM — Object-Relational Mapping | PLY — Polygon File Format |
-RANS — Reynolds-Averaged Navier–Stokes | RBAC — Role-Based Access Control | RBD —
-Rigid Body Dynamics | Re — Número de Reynolds | REST — Representational State
-Transfer | S3 — Simple Storage Service | SI — Sistema Internacional de Unidades |
-SPA — Single Page Application | SQL — Structured Query Language | STL —
-Stereolithography / Standard Tessellation Language | UI — User Interface | URL —
-Uniform Resource Locator | VTK — Visualization Toolkit | VTU — VTK Unstructured
-Grid | YAML — YAML Ain't Markup Language | WSL — Windows Subsystem for Linux |
-Δp — Queda de pressão | Δp/L — Queda de pressão por comprimento | ε — Porosidade
-efetiva do leito
+PUCRS — Pontifícia Universidade Católica do Rio Grande do Sul | RANS —
+Reynolds-Averaged Navier–Stokes | RBAC — Role-Based Access Control | RBD — Rigid
+Body Dynamics | Re — Número de Reynolds | REST — Representational State Transfer |
+R3F — React Three Fiber | S3 — Simple Storage Service | SHA — Secure Hash
+Algorithm | SI — Sistema Internacional de Unidades | SIC — Salão de Iniciação
+Científica | SPA — Single Page Application | SQL — Structured Query Language |
+STL — Stereolithography / Standard Tessellation Language | TCC — Trabalho de
+Conclusão de Curso | UI — User Interface | URL — Uniform Resource Locator |
+VTK — Visualization Toolkit | VTU — VTK Unstructured Grid | YAML — YAML Ain't
+Markup Language | WSL — Windows Subsystem for Linux | Δp — Queda de pressão |
+Δp/L — Queda de pressão por comprimento | ε — Porosidade efetiva do leito
+
+
+================================================================================
+GLOSSÁRIO DE TERMOS TÉCNICOS
+================================================================================
+
+Os termos abaixo são empregados no texto com o significado atribuído no contexto
+deste trabalho. Termos de origem inglesa mantidos na forma original são
+consagrados na literatura técnica e não possuem tradução de uso corrente no meio
+científico brasileiro.
+
+backend — Camada de servidor responsável pelo processamento, persistência e
+    exposição da API; no BEDFLOW-ATLAS, implementada em Python com FastAPI.
+
+boolean operations (operações booleanas) — Operações de geometria sólida (união,
+    interseção, diferença) aplicadas a malhas 3D para construir formas compostas
+    a partir de primitivas geométricas.
+
+containment — Política que garante que partículas processadas no corte geométrico
+    permaneçam dentro do domínio válido (raio útil do recipiente e extensão da
+    fatia).
+
+DEM solver — Solver de Método dos Elementos Discretos (Discrete Element Method);
+    no motor Python puro, implementa integração temporal de forças e detecção de
+    contato entre partículas esféricas.
+
+dispatch — Mecanismo de despacho que roteia uma chamada ao componente correto
+    conforme o contexto (modo de geração, flags de linha de comando, etc.).
+
+frontend — Camada de interface do usuário, executada no navegador; no
+    BEDFLOW-ATLAS, implementada com React, Vite e Three.js.
+
+headless — Modo de execução sem interface gráfica, acionado via linha de comando
+    ou scripts de automação, sem necessidade de monitor ou janela de aplicativo.
+
+hexagonal_3d — Método de empacotamento por arranjo hexagonal tridimensional
+    compacto, implementado no motor Python puro; determinístico dado um seed.
+
+pipeline — Encadeamento automatizado de etapas de processamento; no
+    BEDFLOW-ATLAS, o fluxo que vai da especificação .bed até o artefato STL
+    e o caso OpenFOAM configurado.
+
+pseudo-2D — Configuração de leito empacotado em que a espessura do domínio é
+    reduzida a poucas partículas, permitindo simulações com custo computacional
+    significativamente menor do que em geometrias tridimensionais completas.
+
+rigid body dynamics (RBD) — Simulação física de corpos rígidos, utilizada pelo
+    motor Blender para gerar empacotamentos fisicamente realistas por meio de
+    queda e acomodação gravitacional das partículas.
+
+seed — Valor inicial fornecido ao gerador de números pseudoaleatórios para tornar
+    uma operação estocástica reprodutível; quando fixo, garante que o mesmo
+    empacotamento seja gerado em qualquer execução com os mesmos parâmetros.
+
+sidecar JSON — Arquivo de metadados associado a cada artefato STL gerado,
+    contendo seed, hash SHA-256, número de partículas, porosidade estimada,
+    tempo de geração e resultado de validação de colisões.
+
+snap (snap_radial_to_wall) — Operação que reposiciona partículas levemente
+    extrapoladas para dentro do raio útil do recipiente, evitando descartes
+    desnecessários sem comprometer a integridade geométrica da fatia.
+
+thin slice — Fatia de espessura controlada extraída de um leito empacotado
+    tridimensional por um plano de corte paramétrico; cada partícula
+    interceptada pelo plano é representada por um disco de raio aparente
+    r = sqrt(R² − d²), onde R é o raio da partícula e d é a distância entre
+    o centro da partícula e o plano de corte.
+
+workflow — Sequência estruturada de etapas e ferramentas que compõem um processo
+    de trabalho; no contexto deste trabalho, refere-se aos fluxos automatizados
+    de geração de geometria e configuração de simulação CFD.
 
 
 ================================================================================
@@ -104,22 +160,23 @@ reprodutibilidade: cada execução recebe um identificador SHA-256 gerado a part
 do documento canônico de parâmetros (params.json), enquanto o comportamento
 estocástico do empacotamento é controlado por uma seed fixa [8].
 
-No TCC1, foram definidos a proposta inicial, a arquitetura do sistema e um
-Produto Mínimo Viável funcional. Esse MVP incluiu o compilador da DSL utilizando
-ANTLR 4, a geração geométrica em Blender no modo headless, uma integração inicial
-com OpenFOAM, uma API desenvolvida em FastAPI [18], um dashboard em React [21] e
-um mecanismo de reprodutibilidade baseado em hash. O sistema foi avaliado por
-usuários do laboratório e alcançou média de 4,57 em uma escala de 5,0. O presente
-TCC2 representa a evolução e consolidação desse trabalho. Nesta etapa, foram
-implementados o motor de geração em Python puro, o sistema de corte 3D
-paramétrico, operações booleanas para geometrias compostas, os dois perfis de
-modelagem, visualizadores desktop com Open3D [72] e visualização web com
-Three.js [23], além de uma versão em terminal com menus desenvolvidos utilizando
-Rich [78]. Também foram adicionadas melhorias na interface web, incluindo páginas
-de relatórios, perfil, banco de dados e configurações. Além disso, o sistema foi
-apresentado em dois Salões de Iniciação Científica da PUCRS, em 2025 e 2026, e os
-modelos gerados foram validados externamente por meio de importação direta no
-COMSOL Multiphysics.
+Na versão inicial do BEDFLOW-ATLAS, foram definidos a proposta, a arquitetura do
+sistema e um Produto Mínimo Viável funcional. Esse MVP incluiu o compilador da
+DSL utilizando ANTLR 4, a geração geométrica em Blender no modo headless, uma
+integração inicial com OpenFOAM, uma API desenvolvida em FastAPI [18], um
+dashboard em React [21] e um mecanismo de reprodutibilidade baseado em hash.
+O sistema foi avaliado por usuários do laboratório e alcançou média de 4,57 em
+uma escala de 5,0. A versão consolidada, objeto desta etapa do trabalho,
+representa a evolução e o aprofundamento desse desenvolvimento. Foram implementados
+o motor de geração em Python puro, o sistema de corte 3D paramétrico, operações
+booleanas para geometrias compostas, os dois perfis de modelagem, visualizadores
+desktop com Open3D [72] e visualização web com Three.js [23], além de uma
+interface por terminal com menus desenvolvida com a biblioteca Rich [78]. Também
+foram adicionadas melhorias na interface web, incluindo páginas de relatórios,
+perfil, banco de dados e configurações. Além disso, o sistema foi apresentado em
+dois Salões de Iniciação Científica da PUCRS, em 2025 e 2026, e os modelos
+gerados foram validados externamente por meio de importação direta no COMSOL
+Multiphysics.
 
 A decisão de manter o foco principal na geração geométrica, utilizando o pipeline
 CFD completo como contexto e destino natural dos modelos, foi tomada
@@ -128,8 +185,8 @@ reprodutível de geometrias de leitos empacotados já representa, por si só, um
 problema técnico relevante e uma contribuição significativa para pesquisadores
 que trabalham com CFD em sistemas empacotados [70, 71]. Dessa forma,
 funcionalidades como a conteinerização com Docker Compose [44, 52], iniciadas
-ainda no TCC1, e o deploy em nuvem foram mantidas como possibilidades para
-trabalhos futuros.
+já presentes na versão inicial do projeto, e o deploy em nuvem foram mantidas
+como possibilidades para trabalhos futuros.
 
 Este texto está organizado da seguinte maneira: o Capítulo 2 apresenta o
 referencial teórico necessário para a compreensão do trabalho; o Capítulo 3
@@ -139,28 +196,34 @@ demonstração; o Capítulo 7 aborda a avaliação; e o Capítulo 8 apresenta a
 conclusão, com a análise dos objetivos, contribuições, limitações e trabalhos
 futuros.
 
+Para compreender as escolhas técnicas que sustentam o BEDFLOW-ATLAS — desde o
+uso de uma linguagem formal para descrever leitos até a combinação de hash e
+seed para garantir reprodutibilidade — é necessário percorrer os fundamentos
+teóricos que dão base a essas decisões. É o que o próximo capítulo apresenta.
+
 
 ================================================================================
 2 REFERENCIAL TEÓRICO
 ================================================================================
 
 Este capítulo apresenta os fundamentos teóricos essenciais para a compreensão do
-sistema desenvolvido neste TCC2, retomando e ampliando a base conceitual
-apresentada no TCC1. Inicialmente, são abordados os conceitos relacionados à
-Dinâmica dos Fluidos Computacional (CFD), área da mecânica dos fluidos que
-utiliza métodos numéricos e algoritmos para resolver e analisar problemas de
-escoamento de fluidos [9, 10]. Diferentemente de abordagens baseadas apenas em
-experimentos físicos ou em equações analíticas de difícil solução, a CFD permite
-simular o comportamento de fluidos em geometrias complexas, fornecendo
-visualizações detalhadas de grandezas como velocidade, pressão, temperatura e
-concentração.
+sistema desenvolvido nesta etapa do trabalho, retomando e ampliando a base
+conceitual estabelecida anteriormente. Inicialmente, são abordados os conceitos
+relacionados à Dinâmica dos Fluidos Computacional (CFD), área da mecânica dos
+fluidos que utiliza métodos numéricos e algoritmos para resolver e analisar
+problemas de escoamento de fluidos [9, 10]. Diferentemente de abordagens
+baseadas apenas em experimentos físicos ou em equações analíticas de difícil
+solução, a CFD permite simular o comportamento de fluidos em geometrias
+complexas, fornecendo visualizações detalhadas de grandezas como velocidade,
+pressão, temperatura e concentração.
 
 No contexto deste trabalho, esses conceitos são importantes porque o sistema
 proposto tem como objetivo apoiar a criação e o rastreamento de geometrias de
 leitos empacotados que possam ser utilizadas em simulações CFD. Assim, além dos
-fundamentos já discutidos no TCC1, este capítulo expande o referencial teórico
-com duas subseções diretamente relacionadas ao escopo do TCC2: reprodutibilidade
-computacional e linguagens de domínio específico. Esses temas são necessários
+fundamentos já abordados na literatura de referência, este capítulo expande o
+referencial teórico com duas subseções diretamente relacionadas ao escopo da
+versão consolidada do sistema: reprodutibilidade computacional e linguagens de
+domínio específico. Esses temas são necessários
 para justificar as decisões de projeto adotadas, especialmente o uso de arquivos
 canônicos, hashes, seeds fixas e uma DSL própria para descrição padronizada dos
 leitos empacotados.
@@ -203,7 +266,7 @@ temperatura e concentração se distribuem ao longo do sistema estudado.
 
 A CFD possui grande importância na engenharia, pois auxilia na otimização de
 projetos, na previsão do desempenho de sistemas e na redução da necessidade de
-protótipos físicos, que geralmente possuem custo elevado. No contexto deste TCC2,
+protótipos físicos, que geralmente possuem custo elevado. No contexto deste trabalho,
 sua relevância está diretamente relacionada ao estudo de leitos empacotados, já
 que a técnica possibilita analisar fenômenos complexos que ocorrem nos espaços
 intersticiais entre as partículas, como a distribuição de velocidade e pressão,
@@ -245,8 +308,9 @@ representada por Δp/L, com fatores como a velocidade superficial do fluido, o
 diâmetro das partículas e a porosidade efetiva do empacotamento. Por sua
 simplicidade e ampla aceitação, a equação de Ergun é frequentemente utilizada
 como referência para comparação e validação qualitativa de resultados obtidos em
-simulações computacionais. Neste TCC2, ela também é empregada como um dos
-critérios de validação qualitativa dos resultados produzidos pelo BEDFLOW-ATLAS.
+simulações computacionais. Nesta etapa do trabalho, ela também é empregada como
+um dos critérios de validação qualitativa dos resultados produzidos pelo
+BEDFLOW-ATLAS.
 
 Apesar de sua relevância prática, correlações empíricas apresentam limitações,
 principalmente em situações nas quais a geometria do leito não é ideal ou quando
@@ -347,6 +411,12 @@ organização do sistema, uma vez que os arquivos .bed funcionam como artefatos
 legíveis por humanos, versionáveis em sistemas de controle de versão e auditáveis
 sem a necessidade de executar o software.
 
+Os conceitos apresentados neste capítulo — CFD, leitos empacotados,
+reprodutibilidade e DSL — constituem o vocabulário técnico com o qual o
+BEDFLOW-ATLAS foi projetado. Com esse embasamento, o próximo capítulo analisa
+outros sistemas desenvolvidos para o mesmo problema, situando esta proposta no
+contexto da pesquisa existente.
+
 
 ================================================================================
 3 TRABALHOS RELACIONADOS
@@ -408,44 +478,72 @@ complexidade operacional e tornar o processo mais acessível, organizado e
 reproduzível.
 
 
-3.3 TABELA COMPARATIVA
+3.3 WORKFLOW DE PARTOPOUR E DIXON (2017): FÍSICA DE CORPOS RÍGIDOS + CFD
 ----------------------------------------------------------------------
 
-  +------------------------+---------------------+-------------------+-------------------+
-  | Critério               | BEDFLOW-ATLAS       | Boccardo et al.   | Fernengel et al.  |
-  |                        |                     | (2015)            | (2018)            |
-  +------------------------+---------------------+-------------------+-------------------+
-  | Tipo de entrada        | DSL declarativa     | Scripts manuais   | Arquivos texto +  |
-  |                        | (.bed)              |                   | scripts Bash      |
-  | Perfis de geração      | Blender RBD e       | Blender RBD       | Blender RBD       |
-  |                        | Python puro         | apenas            | apenas            |
-  | Formatos de saída      | STL, OBJ, GLB, PLY  | STL               | STL               |
-  | Sistema de corte 3D    | Sim — paramétrico   | Não               | Não               |
-  | Operações booleanas    | Sim — híbrido       | Manual no Blender | Não documentado   |
-  |                        | (trimesh/Blender)   |                   |                   |
-  | Visualizador web       | Sim — Three.js/R3F  | Não               | Não               |
-  | Visualizador desktop   | Sim — Open3D        | Não (ParaView)    | Não (ParaView)    |
-  | Interface web          | Sim — React/Vite    | Não               | Não               |
-  | CLI/Wizard             | Sim — Typer + Rich  | Não               | Scripts Bash      |
-  | Rastreabilidade (hash) | Sim — SHA-256       | Não               | Não               |
-  | DSL própria            | Sim — ANTLR 4       | Não               | Não               |
-  | Banco de dados         | Sim — PostgreSQL +  | Não               | Não               |
-  |                        | MinIO               |                   |                   |
-  | Integração CFD         | OpenFOAM (infra +   | OpenFOAM          | OpenFOAM +        |
-  |                        | scripts)            |                   | ParaView          |
-  | Exp. COMSOL validada   | Sim (externo,       | Não documentado   | Não documentado   |
-  |                        | manual)             |                   |                   |
-  | Código aberto          | Sim (MIT)           | Sim (workflow)    | Sim (workflow)    |
-  | Conteinerização        | Docker Compose      | Não               | Não               |
-  +------------------------+---------------------+-------------------+-------------------+
+Partopour e Dixon [73] apresentaram, em 2017, um fluxo de trabalho integrado
+para geração e malha de leitos empacotados com partículas de formas arbitrárias,
+publicado na revista Powder Technology. O método combina empacotamento
+baseado na biblioteca Bullet Physics — a mesma utilizada pelo motor de física do
+Blender — com uma técnica de shrink-wrap para tratar os pontos de contato entre
+partículas, problema crítico para a geração de malhas volumétricas de alta
+qualidade. Os resultados foram utilizados em simulações CFD de escoamento ao
+redor de partículas de geometrias não esféricas.
+
+A relevância desse trabalho para o BEDFLOW-ATLAS está na sobreposição
+metodológica: ambos empregam física de corpos rígidos para geração de
+empacotamentos fisicamente realistas e exportam a geometria resultante para
+simuladores CFD. A principal distinção é de escopo e automação: o fluxo de
+Partopour e Dixon é orientado a pesquisadores com proficiência nas ferramentas
+utilizadas, não oferece entrada declarativa estruturada, rastreabilidade formal
+por hash ou seed, sistema de corte geométrico 3D→2D, nem interfaces web ou por
+linha de comando para usuários sem perfil técnico especializado.
 
 
-3.4 POSICIONAMENTO DO BEDFLOW-ATLAS
+3.4 TABELA COMPARATIVA
+----------------------------------------------------------------------
+
+  +------------------------+-----------------+---------------+-----------------+---------------+
+  | Critério               | BEDFLOW-ATLAS   | Boccardo      | Fernengel       | Partopour     |
+  |                        |                 | et al. (2015) | et al. (2018)   | e Dixon (2017)|
+  +------------------------+-----------------+---------------+-----------------+---------------+
+  | Tipo de entrada        | DSL declarativa | Scripts       | Arquivos texto  | Scripts       |
+  |                        | (.bed)          | manuais       | + scripts Bash  | manuais       |
+  | Perfis de geração      | Blender RBD e   | Blender RBD   | Blender RBD     | Bullet RBD    |
+  |                        | Python puro     | apenas        | apenas          | apenas        |
+  | Formas de partícula    | esfera/cubo/    | esfera/cil./  | esfera          | arbitrárias   |
+  |                        | cilindro        | trilobada     |                 |               |
+  | Formatos de saída      | STL, OBJ,       | STL           | STL             | STL/surface   |
+  |                        | GLB, PLY        |               |                 | mesh          |
+  | Sistema de corte 3D    | Sim —           | Não           | Não             | Não           |
+  |                        | paramétrico     |               |                 |               |
+  | Visualizador web       | Sim —           | Não           | Não             | Não           |
+  |                        | Three.js/R3F    |               |                 |               |
+  | Visualizador desktop   | Sim — Open3D    | Não (ParaView)| Não (ParaView)  | Não           |
+  | Interface web          | Sim — React/    | Não           | Não             | Não           |
+  |                        | Vite            |               |                 |               |
+  | CLI/Wizard             | Sim — Typer +   | Não           | Scripts Bash    | Não           |
+  |                        | Rich            |               |                 |               |
+  | Rastreabilidade (hash) | Sim — SHA-256   | Não           | Não             | Não           |
+  | DSL própria            | Sim — ANTLR 4   | Não           | Não             | Não           |
+  | Banco de dados         | Sim — SQLite    | Não           | Não             | Não           |
+  | Integração CFD         | OpenFOAM        | OpenFOAM      | OpenFOAM +      | OpenFOAM /    |
+  |                        | (infra+scripts) |               | ParaView        | Fluent        |
+  | Exp. COMSOL validada   | Sim (externo,   | Não doc.      | Não doc.        | Não doc.      |
+  |                        | manual)         |               |                 |               |
+  | Código aberto          | Sim (MIT)       | Sim (workflow)| Sim (workflow)  | Sim (workflow)|
+  | Conteinerização        | Docker Compose  | Não           | Não             | Não           |
+  +------------------------+-----------------+---------------+-----------------+---------------+
+
+  Fonte: produção autoral, com base nos trabalhos citados.
+
+
+3.5 POSICIONAMENTO DO BEDFLOW-ATLAS
 ----------------------------------------------------------------------
 
 O BEDFLOW-ATLAS ocupa uma posição distinta em relação aos trabalhos analisados.
-Enquanto os workflows anteriores dependem de operações manuais ou de conjuntos de
-scripts especializados, o sistema desenvolvido neste TCC2 foi concebido como uma
+Enquanto os fluxos de trabalho anteriores dependem de operações manuais ou de
+conjuntos de scripts especializados, o BEDFLOW-ATLAS foi concebido como uma
 plataforma de software integrada, capaz de abstrair e automatizar grande parte do
 fluxo de geração geométrica para simulações computacionais.
 
@@ -453,25 +551,21 @@ Entre seus principais diferenciais estão a utilização de uma DSL declarativa 
 definição dos parâmetros do leito, o mecanismo formal de rastreabilidade baseado
 em hash, os recursos integrados de visualização e a possibilidade de uso tanto
 por interface web quanto por linha de comando. Além disso, a existência de dois
-perfis de geração, um baseado em Blender e outro em Python puro, representa um
-diferencial arquitetural importante, especialmente para uso em ambientes
+perfis de geração — um baseado em Blender e outro em Python puro —, representa
+um diferencial arquitetural importante, especialmente para uso em ambientes
 computacionais heterogêneos e com diferentes restrições de infraestrutura.
+O recurso de corte geométrico 3D→2D, ausente nos três trabalhos comparados,
+constitui a principal contribuição técnica da versão consolidada e é detalhado
+no Capítulo 5.
 
+Os fundamentos teóricos apresentados nos capítulos anteriores e o panorama dos
+trabalhos relacionados estabelecem o contexto dentro do qual o BEDFLOW-ATLAS foi
+projetado. O capítulo seguinte descreve formalmente a proposta de solução: seus
+objetivos, a arquitetura do sistema e os critérios que guiaram as decisões de
+projeto.
 
-----------------------------------------------------------------------
-NOTA (opcional) — Sugestão de ampliação da Seção 3 com um terceiro trabalho:
-PARTOPOUR, B.; DIXON, A. G. "An integrated workflow for resolved-particle packed
-bed models with complex particle shapes." Powder Technology, v. 322, p. 258-272,
-2017. O trabalho gera e malha leitos empacotados de partículas de formas
-arbitrárias por meio de empacotamento baseado na biblioteca Bullet Physics e do
-método de shrink-wrap para tratar os contatos entre partículas. Aproxima-se do
-BEDFLOW-ATLAS pelo uso de física de corpos rígidos e pela exportação de geometria
-para CFD, mas não oferece entrada declarativa, rastreabilidade por hash/seed nem
-corte 3D→2D. Caso incorporado, recomenda-se adicioná-lo como nova subseção 3.3 e
-incluir uma coluna correspondente na tabela comparativa.
-----------------------------------------------------------------------
-
-CAPÍTULO 4 — PROPOSTA DE SOLUÇÃO
+================================================================================
+4 PROPOSTA DE SOLUÇÃO
 ================================================================================
 
 4.1 Origem e Contexto Histórico
@@ -746,8 +840,14 @@ Tabela 3 — Critérios de aceitação da versão consolidada.
   * "Visual" = evidência visual (prints). "Pendente" = fora do escopo verificado.
   Fonte: produção autoral.
 
+Com a proposta de solução delineada — objetivos específicos, arquitetura em seis
+camadas, módulos e critérios verificáveis —, o próximo capítulo descreve como
+cada componente foi efetivamente construído: as escolhas de implementação, as
+estruturas de dados, os algoritmos centrais e as evidências verificáveis no
+repositório que demonstram a realização dos requisitos aqui definidos.
+
 ================================================================================
-CAPÍTULO 5 — IMPLEMENTAÇÃO
+5 IMPLEMENTAÇÃO
 ================================================================================
 
 5.1 Visão Geral e Evidências de Desenvolvimento
@@ -1124,9 +1224,15 @@ problema do motor que o resolve; a coexistência de um motor em Blender e de um
 motor em Python puro, ambos acionados pelo mesmo arquivo .bed, demonstra
 concretamente essa capacidade de substituição."
 
+Todos esses componentes — gramática, compilador, motores, API, interfaces e
+testes — formam o sistema descrito no Capítulo 4. Para torná-los concretos
+e verificáveis, o próximo capítulo percorre os principais fluxos de uso do
+BEDFLOW-ATLAS em cenários reais, da criação de um leito pelo formulário web
+até o corte bidimensional pelo visualizador desktop.
+
 
 ================================================================================
-CAPÍTULO 6 — DEMONSTRAÇÃO
+6 DEMONSTRAÇÃO
 ================================================================================
 
 6.1 Roteiro de Uso
@@ -1239,9 +1345,16 @@ crop_mesh_slab(), exibindo a seção transversal do leito.
   Observação para a banca: usar _test_hex.bed com backend=python_engine para
   demonstrações rápidas sem Blender. Para o corte, usar leito_pseudo2d_slice.bed.
 
+Os roteiros apresentados demonstram, em termos operacionais, que o sistema
+produz os artefatos esperados nos diferentes cenários de uso. A pergunta que
+permanece aberta — "o sistema funciona corretamente, e como isso pode ser
+medido de forma sistemática?" — é respondida no próximo capítulo, que descreve
+os instrumentos de avaliação utilizados, os resultados quantitativos obtidos
+e as limitações identificadas ao longo do processo.
+
 
 ================================================================================
-CAPÍTULO 7 — AVALIAÇÃO
+7 AVALIAÇÃO
 ================================================================================
 
 7.1 Estratégia de Avaliação
@@ -1458,9 +1571,16 @@ CA16 (malha/curvas Δp/L OpenFOAM) permanece pendente.)
   marco, releases por tag (v0.5.1) e paths de arquivo por módulo.
   Fonte: produção autoral.
 
+A avaliação confirmou que o sistema atende aos critérios estabelecidos, com
+exceção da execução completa do solver OpenFOAM, identificada como pendência
+desde a primeira avaliação. Os resultados quantitativos, as evidências de testes
+e as referências do repositório sustentam as afirmações que serão sintetizadas
+no capítulo final, juntamente com a análise das contribuições e as perspectivas
+de desenvolvimento futuro.
+
 
 ================================================================================
-CAPÍTULO 8 — CONCLUSÃO
+8 CONCLUSÃO
 ================================================================================
 
 8.1 Síntese do Problema e da Solução
@@ -1600,7 +1720,14 @@ desktop e ampliação substancial da cobertura de testes.
 Os objetivos centrais foram atingidos, com evidências verificáveis no código e
 no histórico do repositório. A plataforma está estruturada como modelo de
 referência reutilizável, capaz de orientar novas implementações com outros
-motores de modelagem.
+motores de modelagem. O caminho percorrido — de um protótipo com exportação
+incompleta até uma plataforma com DSL formal, compilador validado, dois motores
+intercambiáveis, rastreabilidade por hash e seed, e corte geométrico 3D→2D
+coberto por testes automatizados — demonstra que a automação reprodutível da
+geração de geometrias de leitos empacotados é tecnicamente viável com ferramentas
+de código aberto. E, ainda assim, o terreno a explorar segue amplo: integração
+programática com simuladores, pós-processamento automatizado e suporte a
+geometrias mais complexas são os próximos passos naturais dessa trajetória.
 
 
 ================================================================================
@@ -1640,25 +1767,21 @@ diretamente utilizável em simulação, consolidando uma contribuição original
 
 
 ================================================================================
-TABELAS CONSOLIDADAS
+ÍNDICE DE TABELAS
 ================================================================================
 
-As tabelas a seguir são referências rápidas para montagem da versão final do
-documento. Cada uma foi numerada conforme solicitado.
-
-Tabela 1 — Evolução SIC 2025 / inicial / consolidada ........... Seção 4.1
-Tabela 2 — Módulos do sistema ................................... Seção 4.5
-Tabela 3 — Critérios de aceitação ............................... Seção 4.7
-Tabela (4) Trabalhos relacionados ............................... Seção 4.8
-Tabela 5 — Reaplicação dos instrumentos ......................... Seção 7.5
-Tabela 6 — Verificação técnica da segunda demonstração .......... Seção 7.6
-Tabela 7 — Ameaças à validade ................................... Seção 7.4
-Tabela 8 — Evidências no GitHub ................................. Seção 7.9
-Tabela 9 — Objetivos e evidências ............................... Seção 8.2
-Tabela 10 — Limitações resolvidas e pendentes ................... Seção 8.4
-Tabela 11 — Análise da feature de corte 2D ...................... Seção 5.7
-Tabela 12 — Fluxo interno do compilador (Figura 25) ............. Seção 5.4
-Tabela 13 — Comparação com trabalhos relacionados ............... Seção 4.8
+Tabela 1 — Evolução SIC 2025 / versão inicial / versão consolidada .. Seção 4.1
+Tabela 2 — Módulos do sistema ....................................... Seção 4.5
+Tabela 3 — Critérios de aceitação ................................... Seção 4.7
+Tabela 4 — Comparação com trabalhos relacionados .................... Seção 3.4
+Tabela 5 — Fluxo interno do compilador ANTLR4 ....................... Seção 5.4
+Tabela 6 — Análise do recurso de corte 2D ........................... Seção 5.7
+Tabela 7 — Ameaças à validade ....................................... Seção 7.4
+Tabela 8 — Reaplicação dos instrumentos de avaliação ................ Seção 7.5
+Tabela 9 — Verificação técnica da segunda demonstração .............. Seção 7.6
+Tabela 10 — Evidências no GitHub .................................... Seção 7.9
+Tabela 11 — Objetivos específicos e evidências ...................... Seção 8.2
+Tabela 12 — Limitações resolvidas e pendentes ....................... Seção 8.4
 
 ================================================================================
 ARTEFATOS GERADOS PELO PIPELINE
@@ -1687,8 +1810,8 @@ ARTEFATOS GERADOS PELO PIPELINE
 9 REFERÊNCIAS
 ================================================================================
 
-(Reproduzidas do documento original, [1]–[69]. As entradas [70]–[79] são
-citadas no corpo do texto e foram complementadas ao final desta seção.)
+(Lista completa de referências; as entradas [70]–[79] foram adicionadas à lista
+original [1]–[69] para contemplar todas as obras citadas no texto.)
 
 [1] LUTZ, Mark. Learning Python. 5. ed. Sebastopol: O’Reilly Media, 2013.
 [2] MATTHES, Eric. Python Crash Course: A Hands-On, Project-Based Introduction to Programming. 2. ed. San Francisco: No Starch Press,
@@ -1792,32 +1915,22 @@ https://www.openfoam.com/documentation/guides/latest/doc/openfoam-guide-applicat
 [68] Atlassian. “Scrumban”. Disponível em: https://www.atlassian.com/br/agile/project-management/scrumban
 [69] Atlassian. “Kanban”. Disponível em: https://www.atlassian.com/br/agile/kanban
 
---------------------------------------------------------------------------------
-COMPLEMENTAÇÃO DAS REFERÊNCIAS [70]–[79]
-(citadas no corpo, ausentes na lista original — completar/conferir conforme a
-norma da instituição)
---------------------------------------------------------------------------------
-[70] BOCCARDO, Gianluca; et al. Validation of a novel open-source work-flow for
-the simulation of packed-bed reactors. Chemical Engineering Journal, v. 279,
-2015. (conferir lista completa de autores, páginas e DOI)
-[71] FERNENGEL, Jan; HABLA, Florian; HINRICHSEN, Olaf. Scripting as an approach to
-automated CFD simulation for packed bed catalytic reactor modeling. Chemie
-Ingenieur Technik, 2018. (conferir volume/páginas/DOI)
-[72] OPEN3D. Open3D: A Modern Library for 3D Data Processing. Disponível em:
-http://www.open3d.org/docs/
+[70] BOCCARDO, Gianluca; AUGIER, Frédéric; HAROUN, Yacine; FERRÉ, Dominique;
+MARCHISIO, Daniele L. Validation of a novel open-source work-flow for the
+simulation of packed-bed reactors. Chemical Engineering Journal, v. 279,
+p. 809–820, 2015. DOI: 10.1016/j.cej.2015.05.032.
+[71] FERNENGEL, Jan; HABLA, Florian; HINRICHSEN, Olaf. Scripting as an approach
+to automated CFD simulation for packed bed catalytic reactor modeling. Chemie
+Ingenieur Technik, v. 91, n. 3, p. 294–302, 2019. DOI: 10.1002/cite.201800044.
+[72] ZHOU, Qian-Yi; PARK, Jaesik; KOLTUN, Vladlen. Open3D: A Modern Library for
+3D Data Processing. arXiv:1801.09847, 2018. Disponível em: http://www.open3d.org
+[73] PARTOPOUR, Behnam; DIXON, Anthony G. An integrated workflow for
+resolved-particle packed bed models with complex particle shapes. Powder
+Technology, v. 322, p. 258–272, 2017. DOI: 10.1016/j.powtec.2017.09.009.
 [78] McGUGAN, Will (Textualize). Rich: Python library for rich text and beautiful
 formatting in the terminal. Disponível em: https://github.com/Textualize/rich
-[79] COMSOL AB. COMSOL Multiphysics Reference Manual. Disponível em:
-https://www.comsol.com/documentation
-(As referências [73]–[77], se citadas no corpo, devem ser adicionadas aqui.)
-
---------------------------------------------------------------------------------
-REFERÊNCIA ADICIONAL SUGERIDA (caso a Seção 3 seja ampliada com o terceiro
-trabalho relacionado):
---------------------------------------------------------------------------------
-PARTOPOUR, Behnam; DIXON, Anthony G. An integrated workflow for resolved-particle
-packed bed models with complex particle shapes. Powder Technology, v. 322,
-p. 258-272, 2017. DOI: 10.1016/j.powtec.2017.09.009.
+[79] COMSOL AB. COMSOL Multiphysics Reference Manual. Version 6.1. Stockholm:
+COMSOL AB, 2023. Disponível em: https://www.comsol.com/documentation
 
 ================================================================================
 FIM DO DOCUMENTO
