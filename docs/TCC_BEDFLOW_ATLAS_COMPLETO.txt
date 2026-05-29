@@ -643,27 +643,30 @@ Tabela 1 — Evolução entre o SIC 2025, a versão inicial e a versão consolid
 4.2 Motivação e Problema
 ----------------------------------------------------------------------
 
-A simulação por dinâmica dos fluidos computacional (CFD) de leitos empacotados
-é recorrente em pesquisa de engenharia química, processamento de minérios e
-projetos de reatores. Um leito empacotado típico consiste em um recipiente
-cilíndrico ou prismático preenchido por partículas sólidas — esferas, cilindros
-ou cubos — que criam caminhos tortuosos para o escoamento do fluido.
-Reproduzir computacionalmente esse cenário exige três passos distintos e
-interdependentes: (i) descrever a geometria do leito e das partículas de forma
-paramétrica; (ii) gerar a geometria tridimensional com um esquema de
-empacotamento fisicamente plausível; e (iii) executar a simulação CFD sobre
-essa geometria, obtendo campos de velocidade, pressão e porosidade.
+A lacuna técnica que motiva este trabalho não está na ausência de ferramentas
+individuais de simulação ou de geração geométrica — essas existem e são bem
+documentadas —, mas na ausência de integração formal entre elas para o domínio
+específico de leitos empacotados. Na prática, um pesquisador que deseja conduzir
+um estudo paramétrico sobre a relação entre porosidade e queda de pressão precisa,
+a cada variação de configuração: editar manualmente um script de empacotamento
+(sem validação de parâmetros nem registro de versão), executar um segundo programa
+para gerar a geometria 3D e exportá-la em formato compatível, converter ou
+reindexar o arquivo resultante caso o simulador-alvo exija outro dialeto de malha,
+editar manualmente os dicionários de condição de contorno do solver CFD (arquivos
+como blockMeshDict, U, p), e anotar separadamente, em planilha ou caderno de
+laboratório, quais parâmetros foram usados em cada execução. Nenhuma dessas etapas
+é intrinsecamente difícil; o problema está em que qualquer erro ou omissão em
+qualquer ponto quebra a rastreabilidade do experimento inteiro, tornando a
+reprodução posterior dependente da memória do pesquisador ou de documentação
+informal.
 
-Na prática, pesquisadores lidam com esses passos em ferramentas separadas,
-sem integração formal: parâmetros são inseridos manualmente em scripts sem
-validação; o empacotamento é realizado em um programa e exportado para outro;
-a preparação do caso CFD demanda edição manual de dicionários do solver. O
-resultado é um fluxo de trabalho frágil, difícil de reproduzir e de auditar.
-
-Este trabalho propõe uma solução integrada: um pipeline automatizado que unifica
-a descrição paramétrica, a geração geométrica e a configuração CFD em um único
-fluxo rastreável, controlado por uma linguagem de domínio específico (DSL)
-desenvolvida para o contexto de leitos empacotados.
+Além disso, a ausência de uma representação declarativa padronizada impede que
+configurações de leito sejam compartilhadas entre pesquisadores de forma
+inequívoca: um mesmo leito pode ser descrito de maneiras incompatíveis em scripts
+distintos, dificultando a comparação entre estudos. Esta proposta responde a esse
+gap com um pipeline que unifica descrição paramétrica, geração geométrica e
+configuração CFD em um único fluxo rastreável, controlado por uma linguagem de
+domínio específico (DSL) projetada para o contexto de leitos empacotados.
 
 
 4.3 Objetivos da Proposta
@@ -981,6 +984,18 @@ leitos completos com empacotamento realista; requer Blender no PATH.
 5.6 Motor Python Puro
 ----------------------------------------------------------------------
 
+A necessidade de um motor de geração independente do Blender surgiu de três
+exigências concretas do projeto. Primeiro, portabilidade: ambientes de computação
+de alto desempenho (HPC) frequentemente operam em modo headless sem suporte a
+bibliotecas gráficas, inviabilizando o motor Blender. Segundo, determinismo
+geométrico: o motor Python puro implementa algoritmos de empacotamento
+completamente determinísticos dado um seed, propriedade essencial para geometrias
+pseudo-2D onde pequenas variações na posição das partículas alteram
+significativamente o raio aparente calculado no corte. Terceiro, eliminação de
+dependências externas: ao restringir-se à biblioteca padrão do Python 3.8+, o
+motor pode ser integrado a scripts de automação e pipelines CI/CD sem instalação
+de pacotes adicionais.
+
 O motor Python puro (scripts/python_modeling/engine/) foi implementado com
 a biblioteca padrão do Python 3.8+ (math, struct, random, hashlib, json, os,
 time), sem dependências de terceiros. Submódulos:
@@ -1218,11 +1233,12 @@ maturidade:
   Trabalho futuro: variantes com Maya 3D, Godot, FreeCAD ou outros motores —
   viabilizadas pela arquitetura, mas não implementadas.
 
-"O projeto evoluiu de uma ferramenta fechada para um modelo de referência, no
-qual a especificação declarativa e o contrato de saída desacoplam a descrição do
-problema do motor que o resolve; a coexistência de um motor em Blender e de um
-motor em Python puro, ambos acionados pelo mesmo arquivo .bed, demonstra
-concretamente essa capacidade de substituição."
+O projeto evoluiu de uma ferramenta fechada para um modelo de referência: a
+especificação declarativa e o contrato de saída (STL + sidecar JSON) desacoplam
+a descrição do problema do motor que o resolve, de modo que a coexistência de um
+motor em Blender e de um motor em Python puro, ambos acionados pelo mesmo arquivo
+.bed, demonstra concretamente essa capacidade de substituição e consolida o
+princípio de extensibilidade que orienta a arquitetura do sistema.
 
 Todos esses componentes — gramática, compilador, motores, API, interfaces e
 testes — formam o sistema descrito no Capítulo 4. Para torná-los concretos
@@ -1237,6 +1253,13 @@ até o corte bidimensional pelo visualizador desktop.
 
 6.1 Roteiro de Uso
 ----------------------------------------------------------------------
+
+Este capítulo apresenta o BEDFLOW-ATLAS em operação, percorrendo os principais
+fluxos de uso em cenários representativos da prática de pesquisa. O objetivo não
+é descrever a arquitetura do sistema — abordada no Capítulo 5 —, mas tornar
+concretas e verificáveis as capacidades implementadas, mostrando os artefatos
+produzidos, os parâmetros envolvidos e o comportamento observado em cada etapa do
+pipeline.
 
 O BEDFLOW-ATLAS pode ser acessado por três superfícies equivalentes: a interface
 web (exploratória, formulário visual), o terminal CLI Wizard (automação, modos
@@ -1467,8 +1490,11 @@ Casos:
 A segunda demonstração reaplicará os mesmos blocos de avaliação, acrescentando
 a tarefa de corte 2D e exportação para uso externo.
 
-ATENÇÃO: os valores subjetivos da segunda demonstração são PROJEÇÕES FUNDAMENTADAS,
-não medições. Substituir pelos valores reais após nova coleta.
+Nota metodológica: os valores subjetivos registrados na coluna "Segunda demonstração"
+constituem projeções fundamentadas nas melhorias implementadas entre as duas avaliações
+e não substituem medições coletadas diretamente com usuários. A reaplicação formal
+dos instrumentos de avaliação, com coleta de dados primários, está prevista como
+etapa subsequente e deverá produzir os valores definitivos para esta coluna.
 
   +----------------------------+---------------------------+----------------------------------+
   | Bloco / Item               | Primeira avaliação        | Segunda demonstração             |
@@ -1632,6 +1658,10 @@ hash SHA-256 e sidecar JSON por artefato.
 8.3 Contribuições
 ----------------------------------------------------------------------
 
+O trabalho produz quatro contribuições distintas que, em conjunto, avançam o
+estado da prática na geração reprodutível de geometrias de leitos empacotados
+para simulação CFD com ferramentas de código aberto.
+
   Contribuição de linguagem: a DSL .bed com gramática ANTLR4 formal é, até onde
   se levantou na literatura consultada, uma das primeiras linguagens de domínio
   específico gramaticalizadas para descrição de leitos empacotados. A gramática
@@ -1690,6 +1720,13 @@ hash SHA-256 e sidecar JSON por artefato.
 
 8.5 Trabalhos Futuros
 ----------------------------------------------------------------------
+
+As direções de desenvolvimento a seguir decorrem diretamente das limitações
+identificadas na versão consolidada e das possibilidades abertas pela arquitetura
+modular do sistema — em particular, pela separação entre a DSL, os motores de
+geração e a camada de orquestração, que permite estender qualquer um desses
+componentes de forma independente. Cada item representa uma extensão natural que
+preserva a rastreabilidade e a reprodutibilidade como princípios centrais do projeto.
 
   TF1. Fila multi-slot (Celery + Redis) para concorrência de jobs.
   TF2. Container OpenFOAM integrado ao docker-compose.
