@@ -777,7 +777,89 @@ Tabela 2 — Módulos do BEDFLOW-ATLAS com responsabilidades e localização.
   Fonte: produção autoral, a partir da inspeção do repositório.
 
 
-4.6 Requisitos Funcionais e Não Funcionais
+4.6 Componentes Principais e Responsabilidades
+----------------------------------------------------------------------
+
+Cada etapa do pipeline é encapsulada em um componente isolado e conteinerizado,
+com contratos claros de entrada e saída. A identidade única de cada execução é
+assegurada por um hash determinístico, gerado a partir do params.json canônico.
+As subseções a seguir descrevem cada componente principal e apresentam o diagrama
+correspondente ao seu fluxo de dados.
+
+Compilador DSL: Recebe o arquivo .bed, valida sintaxe e semântica, normaliza para
+unidades do Sistema Internacional, emite o params.json canônico e calcula o hash
+SHA-256. O resultado alimenta as próximas etapas de forma independente da API;
+o fluxo completo deste módulo está representado na Figura 8.
+
+[FIGURA: pb_fig08_dsl_compilador.png]
+Figura 8 — Módulo DSL (Compilador)
+Fonte: produção autoral (2025)
+Diagrama do módulo compilador: transformação do arquivo .bed em artefatos normalizados
+(params.json e hash), de forma independente da API, para alimentar as etapas
+seguintes do pipeline.
+
+Módulo de Modelagem Geométrica no Blender: Constrói o cilindro e as tampas do
+leito, realiza o empacotamento das esferas com semente fixa, checa manifold e
+watertight e estima a porosidade efetiva. Exporta geom/leito.stl,
+geom/particulas.stl e porosity.json, operando em modo headless via API Python.
+A organização interna deste módulo é apresentada na Figura 9.
+
+[FIGURA: pb_fig09a_modelagem_blender.png]
+Figura 9 — Módulo de Modelagem Geométrica (Blender 4.x)
+Fonte: produção autoral (2025)
+Diagrama do módulo de modelagem: no Blender 4.x, constrói o leito, empacota as
+partículas e valida a geometria 3D, gerando os artefatos de saída para as etapas
+seguintes.
+
+Módulo de Simulação CFD no OpenFOAM: Prepara o caso, gera a malha com blockMesh
+e snappyHexMesh, executa o solver estacionário simpleFoam e coleta métricas como
+queda de pressão, número de Reynolds, número de células e tempos por etapa.
+A Figura 10 detalha a estrutura deste módulo.
+
+[FIGURA: pb_fig10_cfd_openfoam.png]
+Figura 10 — Módulo de Simulação CFD (OpenFOAM)
+Fonte: produção autoral (2025)
+Diagrama do módulo de simulação: no OpenFOAM LTS, prepara o caso, executa a CFD
+no leito modelado e persiste resultados e métricas para análise.
+
+Módulo de Persistência com PostgreSQL e MinIO: Registra metadados das execuções
+no PostgreSQL — hash, tempos, porosidade, número de células, versões e status
+[27] —, armazena artefatos de grande volume no MinIO como STL, VTK, CSV e logs
+organizados por runs/<hash> [26], e expõe o acesso via SQLAlchemy [47]. A
+Figura 11 ilustra o fluxo completo de persistência.
+
+[FIGURA: pb_fig11_persistencia.png]
+Figura 11 — Módulo de Persistência (PostgreSQL 16 + MinIO)
+Fonte: produção autoral (2025)
+Diagrama do módulo de persistência: organiza e armazena os dados do pipeline,
+usando PostgreSQL 16 para metadados e MinIO (S3) para artefatos volumosos.
+
+API com FastAPI: Expõe endpoints para registrar execuções, consultar metadados e
+artefatos e executar ações administrativas. Autenticação com JWT [48] e
+documentação automática por OpenAPI [55]. Atua como ponto único de integração
+entre o frontend e a camada de persistência, conforme a Figura 12.
+
+[FIGURA: pb_fig12_api_fastapi.png]
+Figura 12 — Cliente HTTP da API (FastAPI)
+Fonte: produção autoral (2025)
+Diagrama da API: FastAPI em Python atua como interface central, atendendo
+requisições HTTP REST, cuidando da autenticação e integrando com a camada de
+persistência.
+
+Dashboard em React [21, 22]: Interface web para listar execuções, visualizar
+modelos 3D em STL com Three.js [23] e plotar curvas no Plotly [25]. Consome
+apenas a API, sem acesso direto aos diretórios de artefatos; a Figura 13 resume
+a arquitetura deste componente.
+
+[FIGURA: pb_fig13_dashboard_react.png]
+Figura 13 — Dashboard (React)
+Fonte: produção autoral (2025)
+Diagrama do dashboard: interface web que consome a API para listar execuções e
+visualizar resultados, oferecendo acesso visual e interativo sem contato direto
+com os artefatos.
+
+
+4.7 Requisitos Funcionais e Não Funcionais
 ----------------------------------------------------------------------
 
 Requisitos Funcionais:
@@ -812,7 +894,7 @@ Requisitos Não Funcionais:
   RNF06. Gramática Bed.g4 como única fonte de verdade da sintaxe .bed.
 
 
-4.7 Critérios de Aceitação
+4.8 Critérios de Aceitação
 ----------------------------------------------------------------------
 
 Tabela 3 — Critérios de aceitação da versão consolidada.
@@ -844,10 +926,11 @@ Tabela 3 — Critérios de aceitação da versão consolidada.
   Fonte: produção autoral.
 
 Com a proposta de solução delineada — objetivos específicos, arquitetura em seis
-camadas, módulos e critérios verificáveis —, o próximo capítulo descreve como
-cada componente foi efetivamente construído: as escolhas de implementação, as
-estruturas de dados, os algoritmos centrais e as evidências verificáveis no
-repositório que demonstram a realização dos requisitos aqui definidos.
+camadas, módulos, critérios verificáveis e diagramas de cada componente —, o
+próximo capítulo descreve como cada componente foi efetivamente construído: as
+escolhas de implementação, as estruturas de dados, os algoritmos centrais e as
+evidências verificáveis no repositório que demonstram a realização dos requisitos
+aqui definidos.
 
 ================================================================================
 5 IMPLEMENTAÇÃO
@@ -1251,129 +1334,250 @@ até o corte bidimensional pelo visualizador desktop.
 6 DEMONSTRAÇÃO
 ================================================================================
 
-6.1 Roteiro de Uso
+Este capítulo apresenta os fluxos de execução do BEDFLOW-ATLAS de forma prática,
+com espaços reservados para as capturas de tela das principais etapas. Os fluxos
+estão organizados em três percursos complementares: via interface web, via
+terminal e o ciclo de reprodutibilidade. Cada placeholder indica o print
+correspondente, com descrição do contexto esperado.
+
+
+6.1 Fluxo via Interface Web
 ----------------------------------------------------------------------
 
-Este capítulo apresenta o BEDFLOW-ATLAS em operação, percorrendo os principais
-fluxos de uso em cenários representativos da prática de pesquisa. O objetivo não
-é descrever a arquitetura do sistema — abordada no Capítulo 5 —, mas tornar
-concretas e verificáveis as capacidades implementadas, mostrando os artefatos
-produzidos, os parâmetros envolvidos e o comportamento observado em cada etapa do
-pipeline.
+O dashboard é acessado pelo navegador após inicialização dos serviços com
+docker compose up na pasta docker/ (ou execução em modo desenvolvimento). A
+tela inicial apresenta um painel de resumo executivo com contadores de execuções
+recentes e jobs ativos.
 
-O BEDFLOW-ATLAS pode ser acessado por três superfícies equivalentes: a interface
-web (exploratória, formulário visual), o terminal CLI Wizard (automação, modos
-interativo e headless) e o visualizador desktop (inspeção do corte em ambiente
-científico). Todos compartilham o mesmo motor de geração e produzem os mesmos
-artefatos.
+[ W1 ]  Dashboard principal — resumo executivo com contadores e execuções recentes
+Figura XX — Dashboard principal do BEDFLOW-ATLAS.
+Fonte: produção autoral (2026)
+Dashboard com contadores de execuções, jobs ativos e métricas gerais visíveis na
+tela inicial da plataforma.
+
+O Wizard de Criação guia em passos sequenciais — geometria, partículas,
+empacotamento, fluido, malha, solver e exportação — sem necessidade de editar
+o arquivo .bed manualmente. O primeiro passo configura as dimensões macro do leito.
+
+[ W2 ]  Wizard Criar Leito — Passo 1: Geometria
+Figura XX — Passo 1 do Wizard de Criação: geometria macro do leito.
+Fonte: produção autoral (2026)
+Formulário de geometria com campos para diâmetro, altura e espessura da parede
+do leito.
+
+[ W3 ]  Wizard — Passo de partículas: tipo, diâmetro e quantidade
+Figura XX — Configuração das partículas no Wizard de Criação.
+Fonte: produção autoral (2026)
+Formulário de partículas com seleção de tipo, diâmetro e quantidade.
+
+[ W4 ]  Wizard — Passo de empacotamento: seed, método e coeficientes
+Figura XX — Configuração do empacotamento com seed e parâmetros físicos.
+Fonte: produção autoral (2026)
+Formulário de empacotamento com campo de seed e seleção de método.
+
+Após a configuração do empacotamento, o wizard oferece a visualização prévia do
+arquivo .bed completo em editor textarea antes do envio para compilação.
+
+[ W5 ]  Página Templates .BED — editor do arquivo .bed em textarea
+Figura XX — Editor de templates .BED com arquivo pronto para revisão.
+Fonte: produção autoral (2026)
+Editor textarea com arquivo .bed gerado e opção de edição antes do envio.
+
+Após confirmar os parâmetros, o pipeline é disparado e monitorado em tempo real.
+O dashboard exibe a progressão de estados queued → running → completed com barra
+de progresso e logs por etapa.
+
+[ W6 ]  Monitoramento de jobs — job RUNNING com indicador de progresso
+Figura XX — Job de geração em execução com status RUNNING.
+Fonte: produção autoral (2026)
+Tela de monitoramento com barra de progresso, etapa atual e logs em tempo real.
+
+[ W7 ]  Monitoramento de jobs — job DONE com hash e links de download
+Figura XX — Job concluído com hash SHA-256 e links de artefatos.
+Fonte: produção autoral (2026)
+Tela com job finalizado, hash copiável e links de download para STL, JSON e logs.
+
+Ao término do job, o modelo STL é carregado automaticamente no visualizador web
+via Three.js, que oferece controles de órbita e zoom sem necessidade de software
+adicional.
+
+[ W8 ]  Visualizador web 3D — leito empacotado renderizado em Three.js
+Figura XX — Leito empacotado no visualizador web com controles de órbita.
+Fonte: produção autoral (2026)
+Visualizador 3D com geometria do leito renderizada, controles de rotação e zoom.
+
+[ W9 ]  Visualizador web 3D — seção transversal após corte (thin slice)
+Figura XX — Seção transversal renderizada no visualizador web.
+Fonte: produção autoral (2026)
+Seção transversal do leito com discos aparentes no plano de corte.
+
+[ W10 ]  Histórico de modelos — hash, seed, porosidade, data e status
+Figura XX — Histórico de execuções do BEDFLOW-ATLAS.
+Fonte: produção autoral (2026)
+Tabela de execuções com colunas de hash, seed, porosidade, data e status.
+
+[ W11 ]  Detalhe de execução — hash copiável, metadados e downloads
+Figura XX — Página de detalhe com hash, metadados e downloads dos artefatos.
+Fonte: produção autoral (2026)
+Página de detalhe com hash SHA-256 copiável, métricas da geração e botões de
+download para todos os artefatos da execução.
+
+As quatro novas páginas desenvolvidas para a etapa atual ampliam as capacidades
+da plataforma em relação à versão anterior, introduzindo acesso ao banco de
+dados, anotações por execução, configurações de perfil e preferências do usuário.
+
+[ W12 ]  Página Banco de Dados — contagens SQL em tempo real
+Figura XX — Página Banco de Dados com contagens das entidades do sistema.
+Fonte: produção autoral (2026)
+Painel com contagens de execuções, templates e jobs diretamente do banco.
+
+[ W13 ]  Página Relatórios — anotação vinculada a uma execução
+Figura XX — Página Relatórios com formulário de criação de anotação.
+Fonte: produção autoral (2026)
+Formulário de criação de anotação com seleção de execução e campo de texto livre.
+
+[ W14 ]  Página Configurações — seleção de perfil de modelagem
+Figura XX — Página Configurações com seleção do perfil Blender ou Python.
+Fonte: produção autoral (2026)
+Painel de configurações com alternância entre os perfis Blender 4.x e Python Puro.
+
+[ W15 ]  Página Perfil de Usuário — preferências pessoais
+Figura XX — Página Perfil de Usuário com preferências de configuração.
+Fonte: produção autoral (2026)
+Página de perfil com configurações de idioma, tema e notificações.
 
 
-6.2 Fluxo via Interface Web
+6.2 Fluxo via Terminal
 ----------------------------------------------------------------------
 
-Pré-requisito: backend rodando em localhost:3000; frontend em localhost:5173.
+O fluxo terminal inicia com python bed_wizard.py na raiz do repositório. O wizard
+exibe um menu principal implementado com Rich, que organiza todas as operações
+disponíveis em uma interface numerada e colorida.
 
-  cd backend && python -m uvicorn app.main:app --reload --port 3000
-  cd frontend && npm run dev
+[ T1 ]  Menu principal do bed_wizard.py com opções numeradas
+Figura XX — Menu principal do BEDFLOW-ATLAS no terminal.
+Fonte: produção autoral (2026)
+Terminal com menu Rich exibindo as opções numeradas de criação, compilação,
+geração e inspeção.
 
-Passo 1 — Criar o leito: abrir http://localhost:5173, clicar em "Criar Leito",
-preencher (D=5cm, H=10cm, esferas de 5mm, 100 partículas, hexagonal_3d, laminar)
-e clicar em "Gerar Leito".
+No modo interativo, o wizard conduz o usuário com perguntas sequenciais para cada
+bloco da DSL. Ao final, o arquivo .bed é montado e exibido para revisão antes
+do envio para compilação.
 
-Passo 2 — Acompanhar o job: o sistema exibe status queued → running → completed
-com barra de progresso e logs em tempo real. O job_id é retornado imediatamente.
+[ T2 ]  Wizard interativo — sequência de perguntas e respostas
+Figura XX — Modo interativo do wizard guiando o preenchimento dos parâmetros.
+Fonte: produção autoral (2026)
+Terminal com pergunta do wizard, resposta do usuário e progressão para o próximo
+campo da DSL.
 
-Passo 3 — Visualizar o modelo: na tela de Resultados, o STL aparece com
-metadados (tamanho, data, hash). Clicar em "Visualizar" abre o render 3D
-interativo em Three.js.
+[ T3 ]  Arquivo .bed completo exibido no terminal
+Figura XX — Arquivo .bed gerado pelo wizard com todos os blocos da DSL.
+Fonte: produção autoral (2026)
+Terminal exibindo o arquivo .bed completo com todos os blocos preenchidos e
+opção de confirmação antes da compilação.
 
-Passo 4 — Exportar: o STL está disponível para download via link ou via
-GET /files/models_3d/{filename}. O caso OpenFOAM gerado está em generated/cfd/
-e pode ser aberto no ParaView carregando o arquivo .foam.
+A compilação é executada com bedc compile cases/meu_leito.bed, gerando
+params.json, hash SHA-256 e report.txt em uma única chamada.
+
+[ T4 ]  Compilação bem-sucedida — params.json e hash SHA-256 exibidos
+Figura XX — Saída do compilador ANTLR ao processar um arquivo .bed válido.
+Fonte: produção autoral (2026)
+Terminal com saída de compilação bem-sucedida, hash SHA-256 e caminho do
+params.json gerado.
+
+[ T5 ]  Compilação com erro intencional — número de linha e correção
+Figura XX — Mensagem de erro do compilador com indicação de linha e correção.
+Fonte: produção autoral (2026)
+Terminal com mensagem de erro do compilador ANTLR indicando a linha, o tipo de
+erro e a sugestão de correção.
+
+A geração segue com bedc generate ou bedc pipeline cases/meu_leito.bed,
+selecionando automaticamente o perfil de modelagem configurado.
+
+[ T6 ]  Geração 3D em execução — saída de progresso por etapa
+Figura XX — Motor de geração em execução com saída de progresso.
+Fonte: produção autoral (2026)
+Terminal com saída passo a passo do motor de geração: criação do cilindro,
+empacotamento, validação e exportação STL.
+
+[ T7 ]  Diretório runs/<hash>/ com árvore de artefatos gerados
+Figura XX — Estrutura de diretório com STL, OBJ, JSON e report após geração.
+Fonte: produção autoral (2026)
+Terminal com saída de tree mostrando a estrutura runs/<hash>/ contendo os
+artefatos da execução.
+
+O sistema de corte 3D permite inspecionar o interior do leito sem software
+externo, produzindo a geometria pseudo-2D a partir de parâmetros de eixo,
+posição e espessura.
+
+[ T8 ]  Corte 3D via terminal — eixo, posição, espessura e artefatos de saída
+Figura XX — Execução do corte 3D paramétrico com saída dos artefatos.
+Fonte: produção autoral (2026)
+Terminal com comando de corte, parâmetros de eixo/espessura e confirmação de
+geração do STL da fatia.
+
+[ T9 ]  Visualizador desktop open3d — leito empacotado completo
+Figura XX — Leito empacotado completo no visualizador desktop open3d.
+Fonte: produção autoral (2026)
+Janela do visualizador desktop com o leito empacotado completo e controles de
+câmera.
+
+[ T10 ]  Visualizador desktop — seção transversal do leito após corte 3D
+Figura XX — Seção transversal renderizada no open3d após operação de corte.
+Fonte: produção autoral (2026)
+Janela do visualizador desktop com a seção transversal do leito, mostrando a
+distribuição das partículas no plano de corte.
 
 
-6.3 Fluxo via CLI Wizard
+6.3 Pipeline Completo: da DSL ao Artefato Final
 ----------------------------------------------------------------------
 
-Modo interativo:
-  cd /home/user/BEDFLOW-ATLAS-TCC-2
-  python3 -m cli generate
-  (o wizard pergunta: diâmetro, altura, tipo de partícula, diâmetro, contagem,
-  método de packing, seed; ao final, confirma e gera o STL)
-
-Modo headless (automação):
-  python3 -m cli --load-json dsl/_test_hex.bed.json --pure-python --no-prompt
-  (carrega .bed.json existente, usa Python puro, gera STL sem interação)
-
-Fluxo típico de inspeção do artefato:
-  ls -la dsl/*.stl dsl/*_pure_bed.json
-  python3 -c "import json; d=json.load(open('SIDECAR.json')); \
-    print(d['n_particles'], d['porosity_estimate'], d['validation_ok'])"
+O pipeline transforma o arquivo .bed em params.json canônico com hash SHA-256,
+que alimenta a geração geométrica (STL + sidecar JSON). O artefato resultante é
+indexado pelo PostgreSQL e disponibilizado via MinIO, e então consumido pelo
+dashboard para visualização e download. Qualquer modificação nos parâmetros
+produz um novo hash, criando uma execução rastreável e comparável às anteriores.
+O resultado é um artefato auditável de ponta a ponta: da descrição declarativa
+em linguagem de domínio específica ao arquivo de malha pronto para solver externo.
 
 
-6.4 Criação e Edição do Arquivo .bed
+6.4 Reprodutibilidade: Seed e Hash em Ação
 ----------------------------------------------------------------------
 
-Exemplo de .bed para leito pseudo-2D com corte fino
-(dsl/examples/leito_pseudo2d_slice.bed):
+No perfil Python, a reprodutibilidade é matematicamente garantida: as funções
+uv_sphere, cylinder_axis e write_stl_binary são determinísticas dado o mesmo
+conjunto de parâmetros e a mesma seed. O hash SHA-256 do STL binário resultante
+é idêntico entre execuções. A política de idempotência no backend bloqueia
+submissões com hash repetido, preservando a integridade do histórico.
 
-  bed {
-      diameter = 5cm
-      height = 8cm
-      wall_thickness = 2mm
-      internal_cylinder_mode = hollow_boolean_applied
-  }
-  particles { kind = "sphere"; diameter = 2mm; count = 40; seed = 42 }
-  packing   { method = "hexagonal_3d" }
-  geometry  { mode = pseudo_2d_thin_slice }
-  generation{ backend = python_engine }
-  slice     { enabled = true; axis = "y"; thickness = 0.002m }
-  export    { formats = [stl_binary] }
+[ R1 ]  Duas execuções com mesma seed — hashes idênticos no histórico
+Figura XX — Mesma seed produz mesmo hash e mesma geometria.
+Fonte: produção autoral (2026)
+Histórico com duas execuções de mesma seed exibindo hashes SHA-256 idênticos.
 
+[ R2 ]  Duas execuções com seeds diferentes — hashes distintos
+Figura XX — Seeds diferentes produzem hashes e geometrias distintos.
+Fonte: produção autoral (2026)
+Histórico com duas execuções de seeds diferentes, evidenciando hashes e
+porosidades distintos.
 
-6.5 Visualização do Corte 2D (Desktop)
-----------------------------------------------------------------------
+[ R3 ]  Sidecar JSON — geometry_mode, seed, hash, porosity_result
+Figura XX — Sidecar JSON com metadados completos de uma malha gerada.
+Fonte: produção autoral (2026)
+Conteúdo do arquivo sidecar JSON com campos geometry_mode, seed, hash SHA-256
+e porosity_result.
 
-Após gerar o leito com slice.enabled, o STL de fatia está disponível em:
-  scripts/python_modeling/_tmp_slice.stl
+[ R4 ]  Download do STL via dashboard — botão e confirmação de arquivo
+Figura XX — Download do STL via interface web para uso em solver externo.
+Fonte: produção autoral (2026)
+Dashboard com botão de download do STL e confirmação de arquivo recebido no
+sistema de arquivos local.
 
-Para inspecionar com o viewer desktop:
-  python3 scripts/python_modeling/mesh_viewer/scientific_app.py --stl FILE.stl
-
-O CutController permite ajustar o plano de corte interativamente via
-crop_mesh_slab(), exibindo a seção transversal do leito.
-
-
-6.6 Cenários de Demonstração para a Banca
-----------------------------------------------------------------------
-
-  D1 — Fluxo Completo via Web (5 min): criar leito no formulário → acompanhar
-       job → visualizar 3D em Three.js. Enfatizar: zero linhas de código.
-
-  D2 — Reprodutibilidade (3 min): rodar o mesmo .bed.json duas vezes com a
-       mesma seed → comparar hashes SHA-256 dos STLs → mostrar sidecar com seed.
-
-  D3 — Corte 2D / Pseudo-2D (5 min): gerar leito_pseudo2d_slice.bed → mostrar
-       o STL da fatia (discos no plano) → exibir a porosidade 2D calculada →
-       abrir no visualizador desktop com CutController.
-
-  D4 — Testes Automatizados (3 min): executar pytest, mostrar 89 testes
-       passando. Destacar test_thin_slice_algorithm.py (raio aparente,
-       descarte) e test_packing_seed.py (determinismo).
-
-  D5 — Rastreabilidade (2 min): mostrar sidecar JSON → apontar hash, seed,
-       n_particles, validation_ok → explicar que qualquer STL pode ser
-       reproduzido a partir do sidecar + .bed.json.
-
-  Observação para a banca: usar _test_hex.bed com backend=python_engine para
-  demonstrações rápidas sem Blender. Para o corte, usar leito_pseudo2d_slice.bed.
-
-Os roteiros apresentados demonstram, em termos operacionais, que o sistema
-produz os artefatos esperados nos diferentes cenários de uso. A pergunta que
-permanece aberta — "o sistema funciona corretamente, e como isso pode ser
-medido de forma sistemática?" — é respondida no próximo capítulo, que descreve
-os instrumentos de avaliação utilizados, os resultados quantitativos obtidos
-e as limitações identificadas ao longo do processo.
+Os fluxos apresentados neste capítulo tornam concretas as capacidades do sistema,
+desde a configuração declarativa pela DSL até a entrega de artefatos rastreáveis.
+A análise rigorosa de como essas capacidades foram avaliadas — incluindo a
+comparação entre a primeira etapa e a etapa atual —, os resultados quantitativos
+obtidos e as limitações identificadas são apresentados no capítulo seguinte.
 
 
 ================================================================================
@@ -1597,12 +1801,79 @@ CA16 (malha/curvas Δp/L OpenFOAM) permanece pendente.)
   marco, releases por tag (v0.5.1) e paths de arquivo por módulo.
   Fonte: produção autoral.
 
+7.10 Evolução da Demonstração — Comparação Crítica entre Etapas
+----------------------------------------------------------------------
+
+A avaliação foi conduzida em duas etapas distintas, separadas por um semestre de
+desenvolvimento. Esta seção compara as demonstrações realizadas em cada etapa,
+identifica os avanços objetivos e aponta as limitações que persistem ou foram
+introduzidas ao longo do processo.
+
+A primeira demonstração, realizada ao fim do primeiro semestre (commit 62cb4fc,
+19/11/2025), avaliou o núcleo do pipeline: DSL .bed com 10 seções, compilador
+ANTLR4 gerando hash SHA-256, motor Blender em modo headless, dashboard React com
+visualizador 3D básico e backend FastAPI com persistência local em SQLite. O
+conjunto G4 percorreu o pipeline em seis execuções, com tempos totais de 74 a
+87 s por execução completa.
+
+Tabela A — Capacidades demonstradas por etapa.
+
+  +------------------------------------+---------------------------+-------------------------------+
+  | Capacidade                         | Primeira etapa            | Etapa atual                   |
+  +------------------------------------+---------------------------+-------------------------------+
+  | Motor de geração                   | Blender (único)           | Blender + Python puro         |
+  | CLI Wizard                         | Não existia               | Interativo + headless         |
+  | Corte 3D / Pseudo-2D               | Não existia               | thin_slice paramétrico        |
+  | Visualizador desktop               | Não existia               | scientific_app + corte        |
+  | Arquivos de teste                  | 6                         | 27 (+ 350 %)                  |
+  | Funções de teste (corte)           | 0                         | 29                            |
+  | Páginas no dashboard               | 5 (básico)                | 9 (+ DB, Rel., Conf., Perf.)  |
+  | Sistema de templates               | Não existia               | CRUD completo (19 fixtures)   |
+  | Sistema de jobs                    | Síncrono                  | Assíncrono (JobRecord)        |
+  | Sidecar JSON por artefato          | Não existia               | seed, hash, porosidade        |
+  +------------------------------------+---------------------------+-------------------------------+
+
+  Fonte: produção autoral, a partir da comparação entre o commit 62cb4fc e o HEAD.
+
+Os resultados da primeira avaliação formativa foram positivos: média de 4,5/5 para
+a DSL, 5,0/5 para o compilador e 4,8/5 para o dashboard. As limitações então
+identificadas foram facilidade geral de edição (3/5) e confiança nos resultados
+(4/5). Ambas orientaram diretamente o desenvolvimento da etapa seguinte: a
+facilidade foi endereçada pelo CLI Wizard, pelo sistema de templates e pelo modo
+headless; a confiança, pelo sistema de seed determinística, pela suíte de 27
+arquivos de teste e pelo sidecar JSON por artefato.
+
+A etapa atual apresenta avanços objetivos e verificáveis. O motor Python puro
+elimina a dependência do Blender para geração básica e permite execução em
+ambientes sem GPU ou licença gráfica. Os 27 arquivos de teste substituem a
+verificação manual por evidências automatizadas, cobrindo o algoritmo de corte
+com 29 funções de teste específicas. O CLI Wizard e o modo headless tornam o
+sistema acessível para scripts e pipelines em lote, e o sistema de templates
+reduz a repetição de configurações de leito.
+
+Do ponto de vista crítico, os avanços concentraram-se principalmente nas camadas
+de geração e automação, enquanto a lacuna de execução completa do solver
+OpenFOAM permanece como a principal limitação técnica não endereçada — a mesma
+identificada na primeira avaliação. Ademais, a introdução de dois motores de
+geração paralelos aumenta a superfície de manutenção do sistema e requer atenção
+para que o comportamento dos dois perfis permaneça consistente à medida que novos
+recursos forem adicionados.
+
+A coleta real dos dados subjetivos da segunda demonstração — clareza, facilidade,
+satisfação — ainda é necessária para confirmar ou refutar as projeções de melhoria
+registradas na Seção 7.5. Por fim, a comparação entre as duas etapas evidencia
+uma mudança de foco deliberada: enquanto a primeira etapa centrou-se na prova do
+pipeline fim a fim (DSL → malha → CFD), a etapa atual ampliou a plataforma em
+direção à reprodutibilidade auditável e à diversificação das superfícies de uso,
+consolidando o sistema como uma plataforma de pesquisa extensível e não apenas
+como um pipeline de geração de geometria.
+
 A avaliação confirmou que o sistema atende aos critérios estabelecidos, com
 exceção da execução completa do solver OpenFOAM, identificada como pendência
-desde a primeira avaliação. Os resultados quantitativos, as evidências de testes
-e as referências do repositório sustentam as afirmações que serão sintetizadas
-no capítulo final, juntamente com a análise das contribuições e as perspectivas
-de desenvolvimento futuro.
+desde a primeira avaliação. Os resultados quantitativos, as evidências de testes,
+a comparação entre etapas e as referências do repositório sustentam as afirmações
+sintetizadas no capítulo final, juntamente com a análise das contribuições e as
+perspectivas de desenvolvimento futuro.
 
 
 ================================================================================

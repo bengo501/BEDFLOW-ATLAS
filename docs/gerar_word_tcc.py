@@ -147,6 +147,48 @@ def note_para(doc, text):
     return p
 
 
+def placeholder_para(doc, text):
+    """Marcador de captura de tela (caixa cinza com borda)."""
+    p = doc.add_paragraph()
+    p.style = "Normal"
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.first_line_indent = Cm(0)
+    p.paragraph_format.space_before = Pt(10)
+    p.paragraph_format.space_after  = Pt(10)
+    _run(p, text, size=11, color=GRAY, italic=True)
+    pPr = p._p.get_or_add_pPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), "EFEFEF")
+    pPr.append(shd)
+    pBdr = OxmlElement("w:pBdr")
+    for side in ("top", "left", "bottom", "right"):
+        border = OxmlElement(f"w:{side}")
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), "6")
+        border.set(qn("w:space"), "4")
+        border.set(qn("w:color"), "AAAAAA")
+        pBdr.append(border)
+    pPr.append(pBdr)
+    return p
+
+
+def render_image(doc, path):
+    """Insere imagem centralizada; exibe marcador se arquivo ausente."""
+    full_path = path if os.path.isabs(path) else os.path.join(BASE, path)
+    if not os.path.exists(full_path):
+        placeholder_para(doc, f"[IMAGEM NÃO ENCONTRADA: {path}]")
+        return
+    para = doc.add_paragraph()
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    para.paragraph_format.first_line_indent = Cm(0)
+    para.paragraph_format.space_before = Pt(8)
+    para.paragraph_format.space_after  = Pt(4)
+    run = para.add_run()
+    run.add_picture(full_path, width=Cm(14))
+
+
 def code_para(doc, text):
     """Bloco de código / exemplo (monoespaçado, recuado)."""
     p = doc.add_paragraph()
@@ -492,11 +534,17 @@ def parse_txt(path):
     def is_note(ln):
         s = ln.strip()
         return (s.startswith("*") or s.startswith("\"Net-new\"") or
-                re.match(r"(?i)^(fonte:|nota (?:de |metodológica|:\s)|observa)", s))
+                re.match(r"(?i)^(fonte:|nota (?:de |metodológica|:\s)|observa|diagrama\s+d)", s))
 
     def is_caption(ln):
         s = ln.strip()
-        return bool(re.match(r"(?i)^figura\s+\d+", s))
+        return bool(re.match(r"(?i)^figura\s+\d+|^figura\s+[A-Z]+\s+—", s))
+
+    def is_image(ln):
+        return ln.strip().startswith("[FIGURA:")
+
+    def is_placeholder(ln):
+        return bool(re.match(r"^\[\s*[WTR]\d+\s*\]", ln.strip()))
 
     # ── Ignorar pré-textuais; começar no cap. 1 ─────────────────────────────
     n = len(lines)
@@ -648,6 +696,20 @@ def parse_txt(path):
                     break
             if code_lines:
                 blocks.append({"type": "code", "lines": code_lines})
+            continue
+
+        # ── Imagem [FIGURA: filename] ─────────────────────────────────────────
+        if is_image(ln):
+            m = re.match(r"^\[FIGURA:\s*(.+?)\s*\]", s)
+            path = m.group(1) if m else s
+            blocks.append({"type": "image", "path": path})
+            i += 1
+            continue
+
+        # ── Placeholder de captura [ W1 ] / [ T1 ] / [ R1 ] ─────────────────
+        if is_placeholder(ln):
+            blocks.append({"type": "placeholder", "text": s})
+            i += 1
             continue
 
         # ── Legenda de figura ─────────────────────────────────────────────────
@@ -824,6 +886,12 @@ def render_blocks(doc, blocks):
 
         elif t == "caption":
             caption_para(doc, blk["text"])
+
+        elif t == "image":
+            render_image(doc, blk["path"])
+
+        elif t == "placeholder":
+            placeholder_para(doc, blk["text"])
 
         elif t == "page_break":
             doc.add_page_break()
