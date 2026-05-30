@@ -608,9 +608,9 @@ def parse_txt(path):
         # ── Seção N.N (linha seguida de ---) ─────────────────────────────────
         sec = re.match(r"^(\d+\.\d+(?:\.\d+)?)\s+(.+)", s)
         if sec and i + 1 < n and is_dash(lines[i + 1]):
-            lvl = s.count(".") + 1
+            # N.N → Heading 2 (subseção); N.N.N → Heading 3 (subsubseção)
             blocks.append({"type": "section", "title": s,
-                            "level": min(lvl + 1, 3)})
+                            "level": min(s.count(".") + 1, 3)})
             i += 2
             continue
 

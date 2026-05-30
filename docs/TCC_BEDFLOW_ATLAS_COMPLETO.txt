@@ -113,6 +113,12 @@ workflow — Sequência estruturada de etapas e ferramentas que compõem um proc
 1 INTRODUÇÃO
 ================================================================================
 
+1.1 Contexto e Motivação
+----------------------------------------------------------------------
+
+1.1.1 Leitos Empacotados e Simulação CFD
+----------------------------------------------------------------------
+
 Os leitos empacotados são utilizados em uma ampla variedade de processos
 industriais e científicos da engenharia química, como reatores catalíticos,
 colunas de absorção, processos de destilação e estudos de transferência de calor
@@ -125,6 +131,9 @@ reproduzidos de maneira consistente. Embora a Dinâmica dos Fluidos Computaciona
 geometrias ainda costuma ser um processo manual, fragmentado e de difícil
 reprodução.
 
+1.1.2 Desafios na Preparação de Geometrias
+----------------------------------------------------------------------
+
 A construção de um leito empacotado realista para aplicações em CFD envolve
 diferentes etapas. É necessário definir os parâmetros geométricos, gerar o
 arranjo das partículas por meio de simulações físicas ou métodos geométricos,
@@ -136,6 +145,12 @@ Como consequência, a ausência de um fluxo padronizado pode resultar em
 geometrias inconsistentes, documentação incompleta dos parâmetros e dificuldades
 na comparação de resultados entre diferentes estudos [1, 7, 32].
 
+1.2 A Proposta BEDFLOW-ATLAS
+----------------------------------------------------------------------
+
+1.2.1 Visão Geral da Plataforma
+----------------------------------------------------------------------
+
 Nesse contexto, este trabalho apresenta o BEDFLOW-ATLAS, uma plataforma
 desenvolvida integralmente com ferramentas de código aberto para geração,
 visualização, corte e rastreamento de geometrias de leitos empacotados. A
@@ -145,6 +160,9 @@ ser utilizada tanto por meio de uma interface web quanto por linha de comando,
 permitindo que o usuário descreva os parâmetros do leito de forma declarativa e
 obtenha modelos geométricos prontos para utilização em simuladores CFD, como
 OpenFOAM [16] e COMSOL Multiphysics [79].
+
+1.2.2 Pilares do Sistema
+----------------------------------------------------------------------
 
 O BEDFLOW-ATLAS foi estruturado sobre três pilares principais. O primeiro é a
 Linguagem de Domínio Específico (DSL), representada pelos arquivos .bed. Essa
@@ -159,6 +177,12 @@ alternativa mais leve, determinística e portável [17]. O terceiro pilar é a
 reprodutibilidade: cada execução recebe um identificador SHA-256 gerado a partir
 do documento canônico de parâmetros (params.json), enquanto o comportamento
 estocástico do empacotamento é controlado por uma seed fixa [8].
+
+1.3 Evolução e Escopo do Trabalho
+----------------------------------------------------------------------
+
+1.3.1 Da Versão Inicial à Versão Consolidada
+----------------------------------------------------------------------
 
 Na versão inicial do BEDFLOW-ATLAS, foram definidos a proposta, a arquitetura do
 sistema e um Produto Mínimo Viável funcional. Esse MVP incluiu o compilador da
@@ -178,6 +202,9 @@ dois Salões de Iniciação Científica da PUCRS, em 2025 e 2026, e os modelos
 gerados foram validados externamente por meio de importação direta no COMSOL
 Multiphysics.
 
+1.3.2 Delimitação do Escopo
+----------------------------------------------------------------------
+
 A decisão de manter o foco principal na geração geométrica, utilizando o pipeline
 CFD completo como contexto e destino natural dos modelos, foi tomada
 principalmente por questões de escopo. A criação confiável, rastreável e
@@ -188,13 +215,38 @@ funcionalidades como a conteinerização com Docker Compose [44, 52], iniciadas
 já presentes na versão inicial do projeto, e o deploy em nuvem foram mantidas
 como possibilidades para trabalhos futuros.
 
-Este texto está organizado da seguinte maneira: o Capítulo 2 apresenta o
-referencial teórico necessário para a compreensão do trabalho; o Capítulo 3
-discute trabalhos relacionados; o Capítulo 4 documenta a proposta de solução; o
-Capítulo 5 descreve a implementação; o Capítulo 6 apresenta os fluxos de
-demonstração; o Capítulo 7 aborda a avaliação; e o Capítulo 8 apresenta a
-conclusão, com a análise dos objetivos, contribuições, limitações e trabalhos
-futuros.
+1.4 Organização do Documento
+----------------------------------------------------------------------
+
+Este capítulo introdutório estabeleceu o problema, motivou a proposta e delimitou
+o escopo do trabalho. As seções a seguir descrevem como o restante do documento
+está estruturado e quais convenções de notação são adotadas ao longo do texto.
+
+1.4.1 Estrutura do Texto
+----------------------------------------------------------------------
+
+O documento está organizado em oito capítulos. O Capítulo 2 apresenta o
+referencial teórico necessário para a compreensão do trabalho, abrangendo CFD,
+leitos empacotados, reprodutibilidade computacional e linguagens de domínio
+específico. O Capítulo 3 discute os principais trabalhos relacionados e posiciona
+o BEDFLOW-ATLAS frente a eles. O Capítulo 4 documenta a proposta de solução,
+incluindo objetivos, arquitetura e requisitos. O Capítulo 5 descreve em detalhe
+a implementação de cada módulo. O Capítulo 6 apresenta os fluxos de demonstração
+passo a passo. O Capítulo 7 aborda a avaliação do sistema, com comparação entre
+as duas etapas do trabalho. O Capítulo 8 conclui com a análise dos objetivos,
+contribuições, limitações e perspectivas futuras.
+
+1.4.2 Convenções e Notação
+----------------------------------------------------------------------
+
+Ao longo do texto, nomes de arquivos, comandos e trechos de código são
+apresentados em fonte monoespaçada (ex.: params.json, bedflow run). Siglas são
+definidas na primeira ocorrência e reutilizadas posteriormente sem redefinição.
+Referências bibliográficas seguem a norma ABNT NBR 6023. Figuras são numeradas
+sequencialmente e referenciadas no corpo do texto no ponto em que se tornam
+relevantes para a leitura. Marcadores no formato [W1], [T1] e [R1] indicam
+capturas de tela da interface e do terminal que serão inseridas na versão final
+do documento.
 
 Para compreender as escolhas técnicas que sustentam o BEDFLOW-ATLAS — desde o
 uso de uma linguagem formal para descrever leitos até a combinação de hash e
@@ -232,6 +284,9 @@ leitos empacotados.
 2.1 DINÂMICA DOS FLUIDOS COMPUTACIONAL (CFD)
 ----------------------------------------------------------------------
 
+2.1.1 Definição e Etapas da Simulação
+----------------------------------------------------------------------
+
 A Dinâmica dos Fluidos Computacional (CFD) é uma área da mecânica dos fluidos que
 utiliza métodos numéricos e algoritmos computacionais para estudar e resolver
 problemas relacionados ao escoamento de fluidos [9, 10]. Em vez de depender
@@ -264,6 +319,9 @@ visualizações tridimensionais. Com isso, é possível compreender melhor o
 comportamento do fluido e observar como variáveis como velocidade, pressão,
 temperatura e concentração se distribuem ao longo do sistema estudado.
 
+2.1.2 Relevância para Leitos Empacotados
+----------------------------------------------------------------------
+
 A CFD possui grande importância na engenharia, pois auxilia na otimização de
 projetos, na previsão do desempenho de sistemas e na redução da necessidade de
 protótipos físicos, que geralmente possuem custo elevado. No contexto deste trabalho,
@@ -283,6 +341,9 @@ reprodutíveis, contribuindo para maior confiabilidade nas simulações realizad
 2.2 LEITOS EMPACOTADOS NA ENGENHARIA QUÍMICA
 ----------------------------------------------------------------------
 
+2.2.1 Caracterização e Aplicações
+----------------------------------------------------------------------
+
 Leitos empacotados são equipamentos amplamente utilizados na indústria química e
 em diferentes áreas da engenharia. De modo geral, consistem em um recipiente,
 normalmente cilíndrico, preenchido por uma grande quantidade de partículas
@@ -299,6 +360,9 @@ comportamento do processo.
   simulation of gas pressure drop in porous packing for rotating packed beds (RPB)
   CO₂ absorbers. Environmental Science and Pollution Research, v. 29,
   p. 71857-71870, 2022. DOI: 10.1007/s11356-022-20859-x.
+
+2.2.2 Correlações Empíricas e o Papel da CFD
+----------------------------------------------------------------------
 
 Ao longo do tempo, diferentes correlações empíricas foram desenvolvidas para
 estimar parâmetros importantes em leitos empacotados. Entre elas, destaca-se a
@@ -345,6 +409,9 @@ geometrias de leitos empacotados utilizadas em simulações computacionais.
 2.3 REPRODUTIBILIDADE COMPUTACIONAL EM SIMULAÇÕES CIENTÍFICAS
 ----------------------------------------------------------------------
 
+2.3.1 Princípios e Hash Criptográfico
+----------------------------------------------------------------------
+
 A reprodutibilidade é um dos princípios fundamentais da ciência. Em termos
 gerais, um resultado científico deve poder ser obtido novamente por outros
 pesquisadores quando os mesmos parâmetros, métodos e condições forem utilizados.
@@ -364,6 +431,9 @@ representar a identidade única de cada execução. Assim, qualquer pesquisador 
 utilize o mesmo arquivo .bed e a mesma versão do sistema consegue reproduzir os
 mesmos artefatos geométricos.
 
+2.3.2 Controle de Seed
+----------------------------------------------------------------------
+
 Além do hash, outro elemento importante para garantir a reprodutibilidade é o
 controle da seed, isto é, o valor inicial utilizado pelo gerador de números
 pseudoaleatórios. Enquanto o hash assegura que os parâmetros de entrada
@@ -374,6 +444,9 @@ constitui a base do mecanismo de reprodutibilidade adotado pelo BEDFLOW-ATLAS.
 
 
 2.4 LINGUAGENS DE DOMÍNIO ESPECÍFICO (DSL)
+----------------------------------------------------------------------
+
+2.4.1 Conceito e Vantagens
 ----------------------------------------------------------------------
 
 Uma Linguagem de Domínio Específico, também conhecida como Domain-Specific
@@ -392,6 +465,9 @@ erros de configuração e melhora a organização dos arquivos de entrada. No ca
 sistemas voltados à simulação computacional, esse tipo de abordagem é
 especialmente útil, pois permite descrever parâmetros, restrições e configurações
 de forma mais controlada e compreensível.
+
+2.4.2 Gramáticas Formais e Classificação
+----------------------------------------------------------------------
 
 Quando a gramática de uma DSL é definida com ferramentas como o ANTLR 4 [51, 66],
 torna-se possível gerar automaticamente componentes responsáveis pela análise da
@@ -429,7 +505,14 @@ relevantes e frequentemente citados na literatura da área, identificados a part
 da revisão de trabalhos publicados em periódicos especializados.
 
 
-3.1 WORKFLOW DE BOCCARDO ET AL. (2015): BLENDER + OPENFOAM
+3.1 WORKFLOWS DE GERAÇÃO E SIMULAÇÃO DE LEITOS
+----------------------------------------------------------------------
+
+Esta seção descreve três workflows de referência da literatura, organizados em
+ordem cronológica, que influenciaram diretamente as decisões metodológicas do
+BEDFLOW-ATLAS e servem de base para a análise comparativa apresentada na sequência.
+
+3.1.1 Boccardo et al. (2015): Blender + OpenFOAM
 ----------------------------------------------------------------------
 
 Boccardo et al. [70] apresentaram um dos primeiros workflows de código aberto
@@ -452,7 +535,7 @@ rastreabilidade formal baseada em hash, sistema de corte geométrico ou históri
 estruturado de execuções.
 
 
-3.2 WORKFLOW DE FERNENGEL ET AL. (2018): SCRIPTS BASH/PYTHON + OPENFOAM
+3.1.2 Fernengel et al. (2018): Scripts Bash/Python + OpenFOAM
 ----------------------------------------------------------------------
 
 Fernengel, Habla e Hinrichsen [71] propuseram, em 2018, uma abordagem mais
@@ -478,7 +561,7 @@ complexidade operacional e tornar o processo mais acessível, organizado e
 reproduzível.
 
 
-3.3 WORKFLOW DE PARTOPOUR E DIXON (2017): FÍSICA DE CORPOS RÍGIDOS + CFD
+3.1.3 Partopour e Dixon (2017): Física de Corpos Rígidos + CFD
 ----------------------------------------------------------------------
 
 Partopour e Dixon [73] apresentaram, em 2017, um fluxo de trabalho integrado
@@ -500,8 +583,15 @@ por hash ou seed, sistema de corte geométrico 3D→2D, nem interfaces web ou po
 linha de comando para usuários sem perfil técnico especializado.
 
 
-3.4 TABELA COMPARATIVA
+3.2 ANÁLISE COMPARATIVA
 ----------------------------------------------------------------------
+
+3.2.1 Quadro Comparativo
+----------------------------------------------------------------------
+
+A tabela a seguir confronta o BEDFLOW-ATLAS com os três workflows discutidos,
+considerando o tipo de entrada, os perfis de geração, os formatos de saída, os
+recursos de visualização e os mecanismos de rastreabilidade.
 
   +------------------------+-----------------+---------------+-----------------+---------------+
   | Critério               | BEDFLOW-ATLAS   | Boccardo      | Fernengel       | Partopour     |
@@ -537,8 +627,22 @@ linha de comando para usuários sem perfil técnico especializado.
 
   Fonte: produção autoral, com base nos trabalhos citados.
 
+3.2.2 Síntese da Comparação
+----------------------------------------------------------------------
 
-3.5 POSICIONAMENTO DO BEDFLOW-ATLAS
+O quadro evidencia que os três workflows compartilham a dependência de operação
+manual e a ausência de uma camada de entrada declarativa, de rastreabilidade
+formal e de interfaces de uso para perfis não especializados. O BEDFLOW-ATLAS é
+o único a reunir, simultaneamente, DSL própria, dois perfis de geração, sistema
+de corte 3D→2D e múltiplas superfícies de uso, sintetizando em uma única
+plataforma capacidades que, nos demais trabalhos, aparecem de forma isolada ou
+inexistente.
+
+
+3.3 POSICIONAMENTO DO BEDFLOW-ATLAS
+----------------------------------------------------------------------
+
+3.3.1 Diferenciais da Proposta
 ----------------------------------------------------------------------
 
 O BEDFLOW-ATLAS ocupa uma posição distinta em relação aos trabalhos analisados.
@@ -554,9 +658,15 @@ por interface web quanto por linha de comando. Além disso, a existência de doi
 perfis de geração — um baseado em Blender e outro em Python puro —, representa
 um diferencial arquitetural importante, especialmente para uso em ambientes
 computacionais heterogêneos e com diferentes restrições de infraestrutura.
+
+3.3.2 Contribuição Distintiva
+----------------------------------------------------------------------
+
 O recurso de corte geométrico 3D→2D, ausente nos três trabalhos comparados,
 constitui a principal contribuição técnica da versão consolidada e é detalhado
-no Capítulo 5.
+no Capítulo 5. Esse recurso, somado à entrada declarativa e à rastreabilidade
+formal por hash e seed, distingue o BEDFLOW-ATLAS como uma plataforma de pesquisa
+extensível, e não apenas como mais um conjunto de scripts de automação.
 
 Os fundamentos teóricos apresentados nos capítulos anteriores e o panorama dos
 trabalhos relacionados estabelecem o contexto dentro do qual o BEDFLOW-ATLAS foi
@@ -568,7 +678,10 @@ projeto.
 4 PROPOSTA DE SOLUÇÃO
 ================================================================================
 
-4.1 Origem e Contexto Histórico
+4.1 Origem e Motivação
+----------------------------------------------------------------------
+
+4.1.1 Origem e Contexto Histórico
 ----------------------------------------------------------------------
 
 A trajetória que resultou no BEDFLOW-ATLAS percorreu três estágios sucessivos,
@@ -640,7 +753,7 @@ Tabela 1 — Evolução entre o SIC 2025, a versão inicial e a versão consolid
   evidência visual para a coluna 1).
 
 
-4.2 Motivação e Problema
+4.1.2 Motivação e Problema
 ----------------------------------------------------------------------
 
 A lacuna técnica que motiva este trabalho não está na ausência de ferramentas
@@ -669,7 +782,10 @@ configuração CFD em um único fluxo rastreável, controlado por uma linguagem 
 domínio específico (DSL) projetada para o contexto de leitos empacotados.
 
 
-4.3 Objetivos da Proposta
+4.2 Objetivos da Proposta
+----------------------------------------------------------------------
+
+4.2.1 Objetivo Geral
 ----------------------------------------------------------------------
 
 Objetivo geral: projetar e implementar o sistema BEDFLOW-ATLAS, um pipeline
@@ -677,6 +793,9 @@ automatizado e reprodutível para simulação CFD de leitos empacotados, que
 permita ao pesquisador descrever o problema em linguagem declarativa e obter
 geometria tridimensional e caso CFD configurado sem intervenção manual em
 múltiplas ferramentas.
+
+4.2.2 Objetivos Específicos
+----------------------------------------------------------------------
 
 Objetivos específicos:
 
@@ -707,7 +826,10 @@ Objetivos específicos:
        frequentes sem redigitar parâmetros.
 
 
-4.4 Arquitetura Geral do Sistema
+4.3 Arquitetura e Módulos do Sistema
+----------------------------------------------------------------------
+
+4.3.1 Arquitetura Geral do Sistema
 ----------------------------------------------------------------------
 
 O BEDFLOW-ATLAS é composto por seis camadas funcionais em sequência:
@@ -724,7 +846,7 @@ tudo de forma assíncrona, com persistência SQLite. As interfaces web, desktop
 e CLI consomem a API.
 
 
-4.5 Módulos do Sistema
+4.3.2 Módulos do Sistema
 ----------------------------------------------------------------------
 
 Tabela 2 — Módulos do BEDFLOW-ATLAS com responsabilidades e localização.
@@ -777,7 +899,7 @@ Tabela 2 — Módulos do BEDFLOW-ATLAS com responsabilidades e localização.
   Fonte: produção autoral, a partir da inspeção do repositório.
 
 
-4.6 Componentes Principais e Responsabilidades
+4.3.3 Componentes Principais e Responsabilidades
 ----------------------------------------------------------------------
 
 Cada etapa do pipeline é encapsulada em um componente isolado e conteinerizado,
@@ -859,7 +981,10 @@ visualizar resultados, oferecendo acesso visual e interativo sem contato direto
 com os artefatos.
 
 
-4.7 Requisitos Funcionais e Não Funcionais
+4.4 Requisitos e Critérios de Aceitação
+----------------------------------------------------------------------
+
+4.4.1 Requisitos Funcionais e Não Funcionais
 ----------------------------------------------------------------------
 
 Requisitos Funcionais:
@@ -894,7 +1019,7 @@ Requisitos Não Funcionais:
   RNF06. Gramática Bed.g4 como única fonte de verdade da sintaxe .bed.
 
 
-4.8 Critérios de Aceitação
+4.4.2 Critérios de Aceitação
 ----------------------------------------------------------------------
 
 Tabela 3 — Critérios de aceitação da versão consolidada.
@@ -936,7 +1061,10 @@ aqui definidos.
 5 IMPLEMENTAÇÃO
 ================================================================================
 
-5.1 Visão Geral e Evidências de Desenvolvimento
+5.1 Visão Geral e Organização
+----------------------------------------------------------------------
+
+5.1.1 Evidências de Desenvolvimento
 ----------------------------------------------------------------------
 
 A implementação do BEDFLOW-ATLAS está organizada em um repositório Git
@@ -964,7 +1092,7 @@ O código-fonte soma aproximadamente 49.521 linhas em 162 arquivos Python e
 .bed.
 
 
-5.2 Organização do Repositório
+5.1.2 Organização do Repositório
 ----------------------------------------------------------------------
 
 A estrutura de diretórios de primeiro nível reflete a separação de
@@ -986,7 +1114,10 @@ responsabilidades:
   └── local_data/       Modelos e metadados gerados localmente
 
 
-5.3 Linguagem de Domínio Específico — DSL .bed
+5.2 A Linguagem .bed e seu Compilador
+----------------------------------------------------------------------
+
+5.2.1 Linguagem de Domínio Específico — DSL .bed
 ----------------------------------------------------------------------
 
 A gramática Bed.g4 (dsl/grammar/Bed.g4) evoluiu de 100 para 163 linhas e de
@@ -1014,7 +1145,7 @@ A gramática suporta unidades físicas na sintaxe (5cm, 0.1 m/s, 1000 kg/m3);
 o compilador converte tudo para SI antes de emitir o .bed.json.
 
 
-5.4 Compilador ANTLR4 — Fluxo Interno
+5.2.2 Compilador ANTLR4 — Fluxo Interno
 ----------------------------------------------------------------------
 
 Figura 25 — Fluxo Interno do Módulo Compilador DSL.
@@ -1053,7 +1184,10 @@ preservada em formato simplificado. Esta divergência deve ser registrada como
 pendência de documentação, e não como falha de rastreabilidade.
 
 
-5.5 Motor de Modelagem Blender
+5.3 Motores de Geração Geométrica
+----------------------------------------------------------------------
+
+5.3.1 Motor de Modelagem Blender
 ----------------------------------------------------------------------
 
 O motor Blender (scripts/blender_scripts/) usa o Blender 4.x como motor de
@@ -1064,7 +1198,7 @@ packing.substeps quadros; (4) exporta nos formatos solicitados. Adequado a
 leitos completos com empacotamento realista; requer Blender no PATH.
 
 
-5.6 Motor Python Puro
+5.3.2 Motor Python Puro
 ----------------------------------------------------------------------
 
 A necessidade de um motor de geração independente do Blender surgiu de três
@@ -1096,7 +1230,7 @@ hollow_cylinder_only, boolean_applied, hidden) são controlados por
 bed_internal_modes.py e cobertos por 12 testes.
 
 
-5.7 Sistema de Corte do Leito 3D em Plano 2D
+5.3.3 Sistema de Corte do Leito 3D em Plano 2D
 ----------------------------------------------------------------------
 
 O sistema de corte (thin slice / pseudo-2D) é a principal contribuição técnica
@@ -1188,8 +1322,15 @@ Tabela — Análise da feature de corte 2D.
   Fonte: produção autoral.
 
 
-5.8 Interface Web — Dashboard React
+5.4 Interfaces, Rastreabilidade e Qualidade
 ----------------------------------------------------------------------
+
+5.4.1 Interfaces de Uso: Web, Desktop e Terminal
+----------------------------------------------------------------------
+
+O sistema oferece três superfícies de uso equivalentes — web, desktop e terminal
+—, todas apoiadas no mesmo motor de geração. A interface web é descrita a seguir,
+seguida do visualizador desktop e da interface de linha de comando.
 
 A interface web é uma SPA (Single Page Application) em React 18 com Vite. As
 principais dependências são: axios (HTTP centralizado em frontend/src/services/
@@ -1209,9 +1350,6 @@ incluindo telas de comparação, histórico de simulações, gerenciador de temp
 modal informativo e paginação de resultados.
 
 
-5.9 Visualizador Desktop
-----------------------------------------------------------------------
-
 O módulo scripts/python_modeling/mesh_viewer/ oferece uma aplicação desktop
 (scientific_app.py) com câmera configurável (camera_controller.py), plano de
 corte interativo (cut_controller.CutController, geometry_core.crop_mesh_slab()),
@@ -1219,10 +1357,6 @@ controle de visibilidade de componentes (mesh_visibility_controller.py) e
 sobreposição de UI (ui_overlay_manager.py). Este visualizador é net-new em
 relação à primeira avaliação e complementa o viewer web, permitindo inspecionar
 o corte 2D em ambiente desktop sem abrir o navegador.
-
-
-5.10 Interface de Terminal — CLI Wizard
-----------------------------------------------------------------------
 
 O CLI Wizard (dsl/cli/ + wizard_cli.py), implementado com Typer (net-new),
 suporta dois modos:
@@ -1234,7 +1368,7 @@ suporta dois modos:
 O despacho (dispatch_main()) detecta flags legadas e roteia ao executor correto.
 
 
-5.11 Rastreabilidade por Seed e Hash
+5.4.2 Rastreabilidade, Templates e Jobs
 ----------------------------------------------------------------------
 
 Dois componentes complementares garantem rastreabilidade completa:
@@ -1251,10 +1385,6 @@ Dois componentes complementares garantem rastreabilidade completa:
 Esta combinação garante que qualquer STL gerado seja auditável: dado o sidecar,
 é possível recriar exatamente o mesmo STL com a mesma seed e o mesmo .bed.json.
 
-
-5.12 Sistemas de Templates e de Jobs
-----------------------------------------------------------------------
-
 O sistema de templates (routes_templates.py, tabela BedTemplate em SQLite)
 persiste configurações de leito nomeadas com CRUD completo (POST/GET/PUT/DELETE
 /api/templates). O diretório dsl/wizard_templates/ contém 19 fixtures, várias
@@ -1266,7 +1396,7 @@ com status queued e são promovidos automaticamente. O estado é persistido na
 tabela JobRecord e consultado por GET /api/job/{id} em tempo constante.
 
 
-5.13 Backend FastAPI e Pipeline OpenFOAM
+5.4.3 Backend, Pipeline OpenFOAM e Testes Automatizados
 ----------------------------------------------------------------------
 
 O backend (backend/app/main.py) escuta na porta 3000. Routers por domínio:
@@ -1278,10 +1408,6 @@ O pipeline OpenFOAM (scripts/openfoam_scripts/) configura blockMeshDict,
 snappyHexMeshDict e condições de contorno a partir do .bed.json e do STL. A
 pasta tutorial/ contém três casos de referência para validação: cavity-icoFoam
 (benchmark de Ghia et al., 1982), channel-simpleFoam e sphere-snappyHexMesh.
-
-
-5.14 Testes Automatizados
-----------------------------------------------------------------------
 
 O pytest.ini configura testpaths = scripts/python_modeling/tests. A suíte
 cresceu de 6 para 27 arquivos de teste entre a primeira avaliação e a etapa
@@ -1299,11 +1425,9 @@ atual. Distribuição por área:
   • Integração API/banco            — 9 funções  (backend/test_*.py).
 
 
-5.15 O Projeto como Modelo de Referência Reutilizável
-----------------------------------------------------------------------
-
-A arquitetura da versão consolidada favorece o reúso, com graus distintos de
-maturidade:
+Por fim, cabe destacar que a arquitetura da versão consolidada favorece o reúso,
+consolidando o projeto como um modelo de referência. Esse reúso apresenta graus
+distintos de maturidade:
 
   Já implementado: DSL e compilador desacoplados do motor; dois motores
   intercambiáveis pela mesma DSL; separação dsl/scripts/backend/frontend;
@@ -1342,6 +1466,9 @@ correspondente, com descrição do contexto esperado.
 
 
 6.1 Fluxo via Interface Web
+----------------------------------------------------------------------
+
+6.1.1 Criação do Leito pelo Wizard
 ----------------------------------------------------------------------
 
 O dashboard é acessado pelo navegador após inicialização dos serviços com
@@ -1383,6 +1510,9 @@ Figura XX — Editor de templates .BED com arquivo pronto para revisão.
 Fonte: produção autoral (2026)
 Editor textarea com arquivo .bed gerado e opção de edição antes do envio.
 
+6.1.2 Monitoramento e Visualização
+----------------------------------------------------------------------
+
 Após confirmar os parâmetros, o pipeline é disparado e monitorado em tempo real.
 O dashboard exibe a progressão de estados queued → running → completed com barra
 de progresso e logs por etapa.
@@ -1422,6 +1552,9 @@ Fonte: produção autoral (2026)
 Página de detalhe com hash SHA-256 copiável, métricas da geração e botões de
 download para todos os artefatos da execução.
 
+6.1.3 Páginas Complementares
+----------------------------------------------------------------------
+
 As quatro novas páginas desenvolvidas para a etapa atual ampliam as capacidades
 da plataforma em relação à versão anterior, introduzindo acesso ao banco de
 dados, anotações por execução, configurações de perfil e preferências do usuário.
@@ -1448,6 +1581,9 @@ Página de perfil com configurações de idioma, tema e notificações.
 
 
 6.2 Fluxo via Terminal
+----------------------------------------------------------------------
+
+6.2.1 Wizard Interativo e Compilação
 ----------------------------------------------------------------------
 
 O fluxo terminal inicia com python bed_wizard.py na raiz do repositório. O wizard
@@ -1491,6 +1627,9 @@ Fonte: produção autoral (2026)
 Terminal com mensagem de erro do compilador ANTLR indicando a linha, o tipo de
 erro e a sugestão de correção.
 
+6.2.2 Geração e Inspeção 3D
+----------------------------------------------------------------------
+
 A geração segue com bedc generate ou bedc pipeline cases/meu_leito.bed,
 selecionando automaticamente o perfil de modelagem configurado.
 
@@ -1532,16 +1671,40 @@ distribuição das partículas no plano de corte.
 6.3 Pipeline Completo: da DSL ao Artefato Final
 ----------------------------------------------------------------------
 
-O pipeline transforma o arquivo .bed em params.json canônico com hash SHA-256,
-que alimenta a geração geométrica (STL + sidecar JSON). O artefato resultante é
-indexado pelo PostgreSQL e disponibilizado via MinIO, e então consumido pelo
-dashboard para visualização e download. Qualquer modificação nos parâmetros
-produz um novo hash, criando uma execução rastreável e comparável às anteriores.
-O resultado é um artefato auditável de ponta a ponta: da descrição declarativa
-em linguagem de domínio específica ao arquivo de malha pronto para solver externo.
+Esta seção acompanha o dado desde a especificação declarativa no arquivo .bed até
+o artefato de malha pronto para simulação, mostrando como cada etapa do pipeline
+contribui para a rastreabilidade do resultado.
+
+6.3.1 Fluxo de Transformação
+----------------------------------------------------------------------
+
+O pipeline inicia com o compilador ANTLR4 lendo o arquivo .bed e produzindo um
+params.json canônico. Sobre esse JSON, o backend calcula o hash SHA-256 que
+identificará unicamente a configuração. Em seguida, o motor de geração geométrica
+escolhido (Blender ou Python puro) consome os parâmetros e produz dois artefatos:
+o arquivo STL com a geometria tridimensional e o sidecar JSON com os metadados
+associados (seed, hash, porosidade, modo de geração). O STL é armazenado no
+MinIO, o registro é persistido no PostgreSQL e o dashboard passa a disponibilizar
+tanto a visualização quanto o download para uso em solvers externos.
+
+6.3.2 Rastreabilidade no Pipeline
+----------------------------------------------------------------------
+
+A rastreabilidade é garantida pelo encadeamento hash → artefato: qualquer
+alteração em qualquer parâmetro do arquivo .bed produz um params.json diferente
+e, consequentemente, um hash distinto, gerando uma nova entrada no histórico sem
+sobrescrever execuções anteriores. A política de idempotência no backend bloqueia
+submissões cujo hash já exista no banco, evitando duplicações. O resultado é um
+histórico auditável de ponta a ponta: da descrição declarativa em linguagem de
+domínio específica ao arquivo de malha rastreável e comparável entre execuções.
+Qualquer modificação nos parâmetros produz um novo hash, criando uma execução
+rastreável e comparável às anteriores.
 
 
 6.4 Reprodutibilidade: Seed e Hash em Ação
+----------------------------------------------------------------------
+
+6.4.1 Determinismo de Seed
 ----------------------------------------------------------------------
 
 No perfil Python, a reprodutibilidade é matematicamente garantida: as funções
@@ -1560,6 +1723,13 @@ Figura XX — Seeds diferentes produzem hashes e geometrias distintos.
 Fonte: produção autoral (2026)
 Histórico com duas execuções de seeds diferentes, evidenciando hashes e
 porosidades distintos.
+
+6.4.2 Sidecar e Exportação
+----------------------------------------------------------------------
+
+Os metadados que sustentam a rastreabilidade ficam registrados no sidecar JSON
+de cada artefato, e o STL correspondente pode ser baixado diretamente pelo
+dashboard para uso em solvers externos.
 
 [ R3 ]  Sidecar JSON — geometry_mode, seed, hash, porosity_result
 Figura XX — Sidecar JSON com metadados completos de uma malha gerada.
@@ -1587,6 +1757,9 @@ obtidos e as limitações identificadas são apresentados no capítulo seguinte.
 7.1 Estratégia de Avaliação
 ----------------------------------------------------------------------
 
+7.1.1 Dimensões de Avaliação
+----------------------------------------------------------------------
+
 A avaliação do BEDFLOW-ATLAS foi organizada em três dimensões complementares:
 (i) verificação objetiva por testes unitários e de integração; (ii) verificação
 funcional dos fluxos ponta a ponta; e (iii) avaliação formativa por demonstração
@@ -1602,8 +1775,27 @@ semestre, avaliou o núcleo do pipeline (DSL, compilador, Blender, dashboard,
 conjunto G4); a segunda, ao fim do segundo semestre, avalia a plataforma
 consolidada com os módulos net-new e compara os resultados com a etapa anterior.
 
+7.1.2 Ameaças à Validade
+----------------------------------------------------------------------
 
-7.2 Primeira Avaliação — Instrumentos e Resultados
+  +------------------------+----------------------------+----------------------------------+
+  | Ameaça                 | Risco                      | Mitigação                        |
+  +------------------------+----------------------------+----------------------------------+
+  | Amostra pequena        | Baixa generalização        | Dados ricos de observação        |
+  | Efeito do avaliador    | Influência nas respostas   | Roteiro neutro e padronizado     |
+  | Variação de hardware   | Diferenças de desempenho   | Ambiente padronizado             |
+  | Solver não executado   | Lacunas em malha/Δp/L      | Reportar como pendência          |
+  | Projeções subjetivas   | Superestimar melhorias     | Coletar dados reais antes de     |
+  |                        |                            | afirmar ganhos de satisfação     |
+  +------------------------+----------------------------+----------------------------------+
+
+  Fonte: produção autoral.
+
+
+7.2 Primeira Avaliação
+----------------------------------------------------------------------
+
+7.2.1 Instrumentos e Resultados
 ----------------------------------------------------------------------
 
 A primeira avaliação utilizou: questionário estruturado, entrevista
@@ -1644,7 +1836,7 @@ Resultados quantitativos verificados:
     Sugestões: "Foco em concluir o que estava em desenvolvimento."
 
 
-7.3 Conjunto G4 — Resultados da Primeira Avaliação
+7.2.2 Conjunto G4 — Resultados
 ----------------------------------------------------------------------
 
 O conjunto G4 foi executado em 18/11/2025 (16:33–16:40), seis execuções. O
@@ -1671,24 +1863,10 @@ Casos:
   G4-4 RANS (f91f8e): parcial (y+, refinamento e curva não verificados).
 
 
-7.4 Ameaças à Validade
+7.3 Segunda Demonstração
 ----------------------------------------------------------------------
 
-  +------------------------+----------------------------+----------------------------------+
-  | Ameaça                 | Risco                      | Mitigação                        |
-  +------------------------+----------------------------+----------------------------------+
-  | Amostra pequena        | Baixa generalização        | Dados ricos de observação        |
-  | Efeito do avaliador    | Influência nas respostas   | Roteiro neutro e padronizado     |
-  | Variação de hardware   | Diferenças de desempenho   | Ambiente padronizado             |
-  | Solver não executado   | Lacunas em malha/Δp/L      | Reportar como pendência          |
-  | Projeções subjetivas   | Superestimar melhorias     | Coletar dados reais antes de     |
-  |                        |                            | afirmar ganhos de satisfação     |
-  +------------------------+----------------------------+----------------------------------+
-
-  Fonte: produção autoral.
-
-
-7.5 Segunda Demonstração — Reaplicação dos Instrumentos
+7.3.1 Reaplicação dos Instrumentos
 ----------------------------------------------------------------------
 
 A segunda demonstração reaplicará os mesmos blocos de avaliação, acrescentando
@@ -1722,7 +1900,7 @@ etapa subsequente e deverá produzir os valores definitivos para esta coluna.
   projeções da segunda demonstração não substituem medição real.
 
 
-7.6 Verificação das Dimensões Técnicas (Segunda Demonstração)
+7.3.2 Verificação das Dimensões Técnicas
 ----------------------------------------------------------------------
 
   +-----------------------------------+----------------------------+---------------------------+
@@ -1744,7 +1922,10 @@ etapa subsequente e deverá produzir os valores definitivos para esta coluna.
   Fonte: produção autoral.
 
 
-7.7 Testes Automatizados — Evidências de Objetivos
+7.4 Evidências de Atendimento e Comparação
+----------------------------------------------------------------------
+
+7.4.1 Testes Automatizados e Critérios de Aceitação
 ----------------------------------------------------------------------
 
 Grupos de teste que provam cada objetivo específico:
@@ -1772,14 +1953,12 @@ Grupos de teste que provam cada objetivo específico:
     test_packing_same_seed_same_centers — mesmo seed → mesmos centros.
 
 
-7.8 Critérios de Aceitação — Evidências
-----------------------------------------------------------------------
-
-(Ver Tabela 3, Capítulo 4. Resumo: 15 de 16 critérios atendem na etapa atual.
-CA16 (malha/curvas Δp/L OpenFOAM) permanece pendente.)
+Quanto aos critérios de aceitação, vale o resumo consolidado na Tabela 3 do
+Capítulo 4: 15 dos 16 critérios são atendidos na etapa atual, restando pendente
+apenas o CA16 (malha e curvas Δp/L do solver OpenFOAM).
 
 
-7.9 Evidências no GitHub
+7.4.2 Evidências no GitHub
 ----------------------------------------------------------------------
 
   +----------------------------+-----------------------------------------------------------+
@@ -1801,7 +1980,7 @@ CA16 (malha/curvas Δp/L OpenFOAM) permanece pendente.)
   marco, releases por tag (v0.5.1) e paths de arquivo por módulo.
   Fonte: produção autoral.
 
-7.10 Evolução da Demonstração — Comparação Crítica entre Etapas
+7.4.3 Comparação Crítica entre Etapas
 ----------------------------------------------------------------------
 
 A avaliação foi conduzida em duas etapas distintas, separadas por um semestre de
@@ -1880,7 +2059,10 @@ perspectivas de desenvolvimento futuro.
 8 CONCLUSÃO
 ================================================================================
 
-8.1 Síntese do Problema e da Solução
+8.1 Síntese e Objetivos
+----------------------------------------------------------------------
+
+8.1.1 Síntese do Problema e da Solução
 ----------------------------------------------------------------------
 
 Este trabalho partiu de um problema recorrente na pesquisa computacional com
@@ -1904,7 +2086,7 @@ containment e porosidade 2D; e (4) rastreabilidade ampliada por seed fixo,
 hash SHA-256 e sidecar JSON por artefato.
 
 
-8.2 Análise dos Objetivos Específicos
+8.1.2 Análise dos Objetivos Específicos
 ----------------------------------------------------------------------
 
   Tabela — Objetivos específicos e evidências de atendimento.
@@ -1926,7 +2108,10 @@ hash SHA-256 e sidecar JSON por artefato.
   Fonte: produção autoral.
 
 
-8.3 Contribuições
+8.2 Contribuições e Limitações
+----------------------------------------------------------------------
+
+8.2.1 Contribuições
 ----------------------------------------------------------------------
 
 O trabalho produz quatro contribuições distintas que, em conjunto, avançam o
@@ -1954,7 +2139,7 @@ para simulação CFD com ferramentas de código aberto.
   CFD mantendo representatividade estatística de porosidade.
 
 
-8.4 Limitações
+8.2.2 Limitações
 ----------------------------------------------------------------------
 
   L1. Motor rigid_body requer Blender: em servidores sem GUI, usar o Python puro.
@@ -1989,7 +2174,10 @@ para simulação CFD com ferramentas de código aberto.
   Fonte: produção autoral.
 
 
-8.5 Trabalhos Futuros
+8.3 Perspectivas e Considerações Finais
+----------------------------------------------------------------------
+
+8.3.1 Trabalhos Futuros
 ----------------------------------------------------------------------
 
 As direções de desenvolvimento a seguir decorrem diretamente das limitações
@@ -2014,7 +2202,7 @@ preserva a rastreabilidade e a reprodutibilidade como princípios centrais do pr
        em vez de apenas troca de arquivo STL.
 
 
-8.6 Consideração Final
+8.3.2 Consideração Final
 ----------------------------------------------------------------------
 
 Em relação ao protótipo exploratório do SIC 2025 — limitado à modelagem 3D com
