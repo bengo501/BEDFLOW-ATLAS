@@ -1410,7 +1410,8 @@ def main_com_parametros():
 
             print("criando geometria leito e tampas")
             leito, nucleo, bed_partial = create_bed_by_internal_mode(
-                internal_mode, raio_ext, raio_int, altura, vis
+                internal_mode, raio_ext, raio_int, altura, vis,
+                bottom_cap=esp_tampa_inf, top_cap=esp_tampa_sup,
             )
             tampa_inferior, tampa_superior = create_caps(
                 altura,

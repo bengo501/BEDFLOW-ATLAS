@@ -592,6 +592,16 @@ class BedWizard:
                 'min': 0.0, 'max': 0.01, 'unit': 'm',
                 'exemplo': 'superficie lisa = 0.0m'
             },
+            'bed.internal_cylinder_mode': {
+                'desc': (
+                    'o que ocupa o interior do leito (o empacotamento continua no anel '
+                    'r_int=diametro/2-espessura): [1] normal = leito oco com as particulas '
+                    'soltas no interior; [2] interior solido = cilindro macico r_int com as '
+                    'particulas embutidas/grudadas; [3] interior solido com furos = o cilindro '
+                    'macico e perfurado pelas particulas (efeito queijo) e as particulas somem'
+                ),
+                'exemplo': 'normal (oco) | solido+particulas | solido furado (queijo)'
+            },
             # secao lids
             'lids.top_type': {
                 'desc': 'formato da tampa superior',
@@ -2318,19 +2328,45 @@ class BedWizard:
             False,
             "bed.roughness",
         )
-        icm_choices = [
+        # modo do interior do leito: rotulos claros -> valor canonico armazenado
+        icm_canon = [
             "hollow_boolean_applied",
             "internal_cylinder_visible_no_boolean",
             "solid_internal_cylinder_with_particle_holes",
         ]
-        bd["internal_cylinder_mode"] = self.get_choice(
-            "modo cilindro interno (empacotamento continua no anel)",
-            icm_choices,
-            self._default_choice_index(
-                icm_choices, "bed.internal_cylinder_mode", 0
-            ),
+        icm_labels = [
+            "normal - leito oco, particulas soltas no interior",
+            "interior solido + particulas grudadas no cilindro solido",
+            "interior solido com furos das particulas (efeito queijo)",
+        ]
+        self.ui.hint(
+            "interior do leito: [1] normal (oco) | "
+            "[2] solido com particulas embutidas | "
+            "[3] solido furado pelas particulas (queijo)"
+        )
+        try:
+            from bed_internal_modes import (
+                normalize_internal_cylinder_mode as _norm_icm,
+            )
+        except Exception:
+            _norm_icm = None
+        _loaded_icm = self._flatten_params_for_defaults().get(
+            "bed.internal_cylinder_mode"
+        )
+        if _norm_icm and _loaded_icm:
+            _icm_norm = _norm_icm(_loaded_icm)
+        elif _loaded_icm:
+            _icm_norm = str(_loaded_icm).strip().lower()
+        else:
+            _icm_norm = icm_canon[0]
+        _icm_idx = icm_canon.index(_icm_norm) if _icm_norm in icm_canon else 0
+        _icm_label = self.get_choice(
+            "modo do interior do leito (o empacotamento continua no anel)",
+            icm_labels,
+            _icm_idx,
             "bed.internal_cylinder_mode",
         )
+        bd["internal_cylinder_mode"] = icm_canon[icm_labels.index(_icm_label)]
         if str(bd.get("internal_cylinder_mode")) != "hollow_boolean_applied":
             print(
                 "  nota: empacotamento continua com r_int = diametro/2 - espessura da parede"

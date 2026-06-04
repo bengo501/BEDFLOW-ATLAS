@@ -126,3 +126,44 @@ def test_blender_smoke_bed_modes_script():
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert "smoke_bed_modes: ok" in proc.stdout
+
+
+def _find_blender() -> str | None:
+    """blender no PATH, em BEDFLOW_BLENDER_EXE, ou em caminhos comuns do windows."""
+    found = shutil.which("blender")
+    if found:
+        return found
+    env = os.environ.get("BEDFLOW_BLENDER_EXE")
+    if env and Path(env).is_file():
+        return env
+    from glob import glob
+
+    for pat in (
+        r"C:\Program Files\Blender Foundation\Blender*\blender.exe",
+        r"C:\Program Files (x86)\Blender Foundation\Blender*\blender.exe",
+    ):
+        hits = sorted(glob(pat))
+        if hits:
+            return hits[-1]
+    return None
+
+
+@pytest.mark.skipif(
+    os.environ.get("BEDFLOW_BLENDER_SMOKE") != "1",
+    reason="defina BEDFLOW_BLENDER_SMOKE=1 para executar validacao blender dos modos internos",
+)
+def test_blender_internal_modes_no_overlap():
+    """m2/m3 reais no blender: parede anelar + nucleo entre tampas, furos do queijo."""
+    blender = _find_blender()
+    if not blender:
+        pytest.skip("blender nao encontrado (PATH/BEDFLOW_BLENDER_EXE/Program Files)")
+    script = _ROOT / "scripts" / "blender_scripts" / "validate_internal_modes_blender.py"
+    proc = subprocess.run(
+        [blender, "--background", "--python", str(script)],
+        cwd=str(_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "BEDFLOW_INTERNAL_MODES_OK" in proc.stdout, proc.stdout[-2000:]

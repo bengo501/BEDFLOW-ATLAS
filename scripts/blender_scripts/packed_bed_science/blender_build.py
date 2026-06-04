@@ -57,7 +57,9 @@ def create_visible_inner_cylinders(
     outer_name: str = "leito_externo",
     inner_name: str = "cilindro_interno_vis",
 ) -> Tuple[Any, Any]:
-    """m2: dois cilindros cheios sem boolean entre si."""
+    """[OBSOLETO] dois cilindros cheios concentricos (o externo solido engloba o
+    interno => sobreposicao parede/nucleo). nao usar: o m2 agora usa parede anelar
+    + nucleo solido (create_bed_by_internal_mode). mantido apenas por compatibilidade."""
     if inner_radius >= outer_radius:
         raise ValueError("inner_radius must be less than outer_radius")
     bpy.ops.mesh.primitive_cylinder_add(
@@ -81,12 +83,23 @@ def create_solid_inner_core(
     inner_radius: float,
     height: float,
     name: str = "nucleo_interno",
+    *,
+    z_bottom: Optional[float] = None,
+    z_top: Optional[float] = None,
 ) -> Any:
-    """m3: cilindro solido r_int para perfuracao posterior."""
+    """cilindro solido r_int (m2/m3) que preenche o vao interno ENTRE as tampas.
+
+    z_bottom/z_top delimitam o vao (faces internas das tampas); quando None ocupa
+    toda a altura. evita que o nucleo invada o volume das tampas.
+    """
+    z0 = 0.0 if z_bottom is None else float(z_bottom)
+    z1 = float(height) if z_top is None else float(z_top)
+    depth = max(z1 - z0, 1e-6)
+    cz = (z0 + z1) / 2.0
     bpy.ops.mesh.primitive_cylinder_add(
         radius=inner_radius,
-        depth=height,
-        location=(0, 0, height / 2),
+        depth=depth,
+        location=(0, 0, cz),
     )
     core = bpy.context.active_object
     core.name = name
@@ -151,20 +164,45 @@ def punch_core_with_particle_tools(
     return "applied", warnings, applied
 
 
+def _interior_core_span(
+    height: float, bottom_cap: float, top_cap: float
+) -> Tuple[float, float]:
+    """vao interno entre as faces internas das tampas.
+
+    as tampas (create_caps) ficam centradas em z=0 e z=height, logo as faces
+    internas estao em z=bottom_cap/2 e z=height-top_cap/2. o nucleo solido deve
+    ficar nesse intervalo para nao sobrepor as tampas.
+    """
+    z0 = max(0.0, float(bottom_cap)) / 2.0
+    z1 = float(height) - max(0.0, float(top_cap)) / 2.0
+    if z1 <= z0:
+        mid = float(height) / 2.0
+        return mid - 1e-4, mid + 1e-4
+    return z0, z1
+
+
 def create_bed_by_internal_mode(
     mode: str,
     outer_radius: float,
     inner_radius: float,
     height: float,
     visibility: Optional[dict] = None,
+    *,
+    bottom_cap: float = 0.0,
+    top_cap: float = 0.0,
 ) -> Tuple[Any, Optional[Any], dict]:
     """
     devolve (leito_principal, nucleo_opcional, boolean_operation_status parcial).
+
+    m2/m3 usam parede anelar (create_hollow_cylinder) + nucleo solido r_int que
+    preenche apenas o vao entre as tampas, evitando sobreposicao parede/nucleo e
+    tampas/nucleo.
     """
     vis = visibility or {}
     show_outer = vis.get("show_outer_cylinder", True)
     show_inner = vis.get("show_internal_cylinder", False)
     m = (mode or "hollow_boolean_applied").strip().lower()
+    z0, z1 = _interior_core_span(height, bottom_cap, top_cap)
 
     if m == "internal_cylinder_visible_no_boolean":
         if not show_outer:
@@ -172,20 +210,24 @@ def create_bed_by_internal_mode(
                 "outer_shell": "skipped",
                 "inner_core": "visible_separate",
             }
-        outer, inner = create_visible_inner_cylinders(
-            outer_radius, inner_radius, height
-        )
-        if not show_inner:
-            bpy.data.objects.remove(inner, do_unlink=True)
-            inner = None
-        return outer, inner, {
-            "outer_shell": "fallback_separate_meshes",
+        # parede anelar (sem sobrepor o nucleo) + nucleo solido visivel entre tampas
+        leito = create_hollow_cylinder(outer_radius, inner_radius, height)
+        inner = None
+        if show_inner and inner_radius > 0:
+            inner = create_solid_inner_core(
+                inner_radius, height, name="cilindro_interno_vis",
+                z_bottom=z0, z_top=z1,
+            )
+        return leito, inner, {
+            "outer_shell": "explicit_annulus",
             "inner_core": "visible_separate" if inner else "n/a",
         }
 
     if m == "solid_internal_cylinder_with_particle_holes":
         leito = create_hollow_cylinder(outer_radius, inner_radius, height)
-        core = create_solid_inner_core(inner_radius, height)
+        core = create_solid_inner_core(
+            inner_radius, height, z_bottom=z0, z_top=z1
+        )
         if not show_inner:
             try:
                 core.hide_set(True)

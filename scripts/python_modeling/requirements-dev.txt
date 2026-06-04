@@ -1,5 +1,14 @@
 # dependencias apenas para testes locais do python modeling
 pytest>=7.4,<9
 
+# operacoes booleanas do motor python (modos de cilindro interno m2/m3):
+#  - m2 (internal_cylinder_visible_no_boolean): funde nucleo solido + particulas (union)
+#  - m3 (solid_internal_cylinder_with_particle_holes): subtrai particulas do nucleo (queijo)
+# trimesh faz a malha; manifold3d e o backend booleano (sem ele os furos/uniao nao
+# sao aplicados e o nucleo sai solido, com aviso no boolean_operation_status).
+# no blender estes modos usam o boolean do proprio blender e nao precisam destes pacotes.
+trimesh>=4.0
+manifold3d>=2.5
+
 # opcional: visualizador desktop mesh_viewer_desktop.py (open3d e restantes)
 # na raiz do repo: pip install -r requirements-visualizacao.txt

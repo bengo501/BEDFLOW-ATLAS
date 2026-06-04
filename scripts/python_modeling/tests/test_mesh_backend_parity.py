@@ -104,4 +104,4 @@ def test_solid_holes_python_metadata_contract(tmp_path):
     assert len(v) > 0
     assert meta.get("internal_cylinder_mode") == MODE_SOLID_HOLES
     st = meta.get("boolean_operation_status") or {}
-    assert st.get("particle_tools") in ("applied", "failed", "n/a")
+    assert st.get("particle_tools") in ("applied", "partial", "failed", "n/a")

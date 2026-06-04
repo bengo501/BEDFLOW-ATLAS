@@ -370,8 +370,23 @@ def _build_and_export_mesh(
         sidecar["boolean_operation_status"] = st
     extra.update(sidecar)
     if isinstance(packed.meta, dict):
-        for k in ("internal_cylinder_mode", "visibility", "boolean_operation_status"):
-            if k in packed.meta and k not in extra:
+        # o status REAL do build (build_bed_with_internal_mode) tem prioridade sobre o
+        # default do sidecar: reflete particle_tools/inner_core/n_holes/warnings reais
+        real_status = packed.meta.get("boolean_operation_status")
+        if isinstance(real_status, dict):
+            merged = dict(st)
+            merged.update(real_status)
+            w_all = list(
+                dict.fromkeys(
+                    list(st.get("warnings") or [])
+                    + list(real_status.get("warnings") or [])
+                )
+            )
+            if w_all:
+                merged["warnings"] = w_all
+            extra["boolean_operation_status"] = merged
+        for k in ("internal_cylinder_mode", "visibility"):
+            if k in packed.meta:
                 extra[k] = packed.meta[k]
 
     warnings = list(extra.get("warnings") or [])
