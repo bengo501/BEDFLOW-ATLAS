@@ -125,7 +125,9 @@ def test_m1_shell_no_inner_core():
     assert "annulus_shell" in meta.get("shell_components", [])
 
 
-def test_m2_pudding_fused_not_separate_particles():
+def test_m2_embedded_particles_not_loose_in_annulus():
+    # m2: por padrão as partículas ficam EMBUTIDAS (geometria distinta) no núcleo
+    # sólido — não soltas no anel, e não absorvidas por união. o fuse é opt-in.
     from bed_shell_build import build_bed_with_internal_mode
 
     data = {
@@ -140,21 +142,22 @@ def test_m2_pudding_fused_not_separate_particles():
     }
     centers = [(0.01, 0.0, 0.05), (0.0, 0.01, 0.04)]
     v, f, meta = build_bed_with_internal_mode(
-        data,
-        0.025,
-        0.023,
-        0.1,
-        0.003,
-        0.003,
-        centers,
-        0.004,
-        "sphere",
-        segmentos=12,
+        data, 0.025, 0.023, 0.1, 0.003, 0.003, centers, 0.004, "sphere", segmentos=12,
     )
     assert len(v) > 0
-    assert "inner_pudding_fused" in meta.get("shell_components", [])
+    assert "inner_core_with_embedded_particles" in meta.get("shell_components", [])
     assert "particles_in_annulus" not in meta.get("shell_components", [])
-    assert meta["boolean_operation_status"]["inner_core"] == "fused_with_particles"
+    st = meta["boolean_operation_status"]
+    assert st["inner_core"] == "solid_with_embedded_particles"
+    assert st["particle_tools"] == "embedded"
+    assert st.get("n_particles_embedded") == len(centers)
+
+    # opt-in bed.solid_particles_fuse=true -> união booleana num sólido único
+    data["bed"]["solid_particles_fuse"] = True
+    _v2, _f2, meta2 = build_bed_with_internal_mode(
+        data, 0.025, 0.023, 0.1, 0.003, 0.003, centers, 0.004, "sphere", segmentos=12,
+    )
+    assert meta2["boolean_operation_status"]["inner_core"] == "fused_with_particles"
 
 
 def test_statistical_ignores_mode_warning():

@@ -402,25 +402,42 @@ def build_bed_with_internal_mode(
             shell_components.append("particles_in_annulus")
 
     elif mode == MODE_VISIBLE_INNER:
-        status["outer_shell"] = status.get("outer_shell") or "fallback_separate_meshes"
+        status["outer_shell"] = status.get("outer_shell") or "explicit_annulus"
         show_inner = vis.get("show_internal_cylinder", True)
         show_parts = vis.get("show_particles", True)
+        bed_sec = data.get("bed") if isinstance(data.get("bed"), dict) else {}
+        fuse_solid = str(bed_sec.get("solid_particles_fuse", False)).strip().lower() in (
+            "1", "true", "yes", "sim", "on",
+        )
         if show_inner and r_int > 0:
             cv, cf = _solid_cylinder_mesh(
                 r_int, height, segmentos, z_bottom=core_z0, z_top=core_z1
             )
-            pv, pf, pstat, pw = fuse_core_with_particles(
-                cv,
-                cf,
-                particle_centers,
-                particle_kind,
-                particle_diameter,
-            )
-            warnings.extend(pw)
-            status["particle_tools"] = pstat
-            status["inner_core"] = "fused_with_particles"
-            v, f = merge_mesh(v, f, pv, pf)
-            shell_components.append("inner_pudding_fused")
+            if fuse_solid:
+                # opcional: união booleana núcleo + partículas num sólido estanque.
+                # partículas totalmente internas são absorvidas (domínio maciço p/ CFD).
+                pv, pf, pstat, pw = fuse_core_with_particles(
+                    cv, cf, particle_centers, particle_kind, particle_diameter
+                )
+                warnings.extend(pw)
+                status["particle_tools"] = pstat
+                status["inner_core"] = "fused_with_particles"
+                v, f = merge_mesh(v, f, pv, pf)
+                shell_components.append("inner_core_fused_particles")
+            else:
+                # padrão: núcleo sólido + partículas como GEOMETRIA DISTINTA embutida.
+                # mantém as partículas fixas dentro do sólido (visíveis ao cortar/colorir),
+                # ao contrário da união que as engole. paridade com o backend blender.
+                pk = (particle_kind or "sphere").strip().lower()
+                v, f = merge_mesh(v, f, cv, cf)
+                for c in particle_centers:
+                    v, f = _append_particle_mesh(
+                        v, f, c[0], c[1], c[2], particle_diameter, pk, lat_sphere, lon_sphere
+                    )
+                status["particle_tools"] = "embedded"
+                status["inner_core"] = "solid_with_embedded_particles"
+                status["n_particles_embedded"] = len(particle_centers)
+                shell_components.append("inner_core_with_embedded_particles")
         elif show_parts:
             pk = (particle_kind or "sphere").strip().lower()
             for c in particle_centers:

@@ -434,6 +434,35 @@ def _build_and_export_mesh(
         except (OSError, json.JSONDecodeError):
             pass
 
+    # formatos extra (obj/gltf/glb) conforme export.formats do .bed/JSON
+    export_section = p.get("export") if isinstance(p.get("export"), dict) else {}
+    requested_formats = export_section.get("formats")
+    if requested_formats:
+        from mesh_export_formats import export_mesh_formats
+
+        fmt_warns: List[str] = []
+        fmt_files = export_mesh_formats(
+            out_stl,
+            packed.mesh.vertices,
+            packed.mesh.faces,
+            requested_formats,
+            skip_stl=True,
+            warnings=fmt_warns,
+        )
+        for fn in fmt_files:
+            print(f"[bedflow] formato extra: {out_stl.parent / fn}", file=sys.stderr)
+        for wmsg in fmt_warns:
+            print(f"[bedflow aviso] {wmsg}", file=sys.stderr)
+        if fmt_files and out_json.is_file():
+            try:
+                sc = json.loads(out_json.read_text(encoding="utf-8"))
+                sc["export_formats_files"] = fmt_files
+                out_json.write_text(
+                    json.dumps(sc, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+            except (OSError, json.JSONDecodeError):
+                pass
+
     if progress is not None:
         progress.update("export", pct=95.0, detail="metadados gravados")
 
