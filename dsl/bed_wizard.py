@@ -2201,6 +2201,31 @@ class BedWizard:
         preserve = self.get_boolean(
             "preservar coordenadas originais (nao recentrar na fatia)?", True
         )
+        # validacao do corte: gerar tambem o modelo 3d (antes do corte) p/ comparar
+        self.ui.hint(
+            "validacao: gera o modelo 3D (antes do corte) para comparar com a fatia 2D"
+        )
+        compare_labels = [
+            "3D em arquivo separado (baixar os dois modelos)",
+            "2D e 3D juntos, lado a lado (um arquivo)",
+            "2D dentro do 3D, na posicao do corte (um arquivo)",
+            "todos (separado + lado a lado + sobreposto)",
+            "so 2D (nao gerar o 3D)",
+        ]
+        compare_canon = ["separate", "combined", "overlay", "all", "off"]
+        _loaded_cmp = str(
+            (self.params.get("slice") or {}).get("compare_mode") or "separate"
+        ).strip().lower()
+        _cmp_idx = (
+            compare_canon.index(_loaded_cmp) if _loaded_cmp in compare_canon else 0
+        )
+        cmp_label = self.get_choice(
+            "saida de validacao do corte (2D vs 3D)",
+            compare_labels,
+            _cmp_idx,
+            "",
+        )
+        compare_mode = compare_canon[compare_labels.index(cmp_label)]
         self.params["slice"] = {
             "slice_enabled": True,
             "slice_thickness": float(thickness),
@@ -2208,6 +2233,7 @@ class BedWizard:
             "slice_position": float(pos),
             "keep_only_intersecting_particles": bool(keep_only),
             "preserve_original_packing": bool(preserve),
+            "compare_mode": compare_mode,
         }
 
     def _questionnaire_geometry_mode_section(self) -> None:

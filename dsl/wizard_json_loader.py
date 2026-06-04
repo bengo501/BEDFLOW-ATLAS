@@ -380,14 +380,21 @@ def patch_compiled_json_metadata(
 
 
 def patch_compiled_json_slice(json_path: Path, wizard_params: Dict[str, Any]) -> None:
-    # guarda configuracao de thin slice no json compilado
-    # a gramatica bed nao conhece esta secao, entao ela so existe se o wizard a adicionou
+    # guarda configuracao de thin slice no json compilado.
+    # a gramatica .bed so conhece um subconjunto das chaves de slice; chaves que o
+    # wizard tem mas a gramatica nao (compare_mode, slice_wall_mode, preserve_full_3d)
+    # sao MESCLADAS aqui para nao se perderem na compilacao .bed -> .json.
     ws = wizard_params.get("slice")
     if not isinstance(ws, dict) or not ws:
         return
     data = _load_compiled_json(json_path)
-    if not data.get("slice"):
-        data["slice"] = ws
+    existing = data.get("slice")
+    if not isinstance(existing, dict) or not existing:
+        data["slice"] = dict(ws)
+    else:
+        for k, v in ws.items():
+            existing.setdefault(k, v)
+        data["slice"] = existing
     _save_compiled_json(json_path, data)
 
 

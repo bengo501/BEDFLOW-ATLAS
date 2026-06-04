@@ -39,6 +39,7 @@ from full3d_companion import (  # noqa: E402
     full3d_sidecar_path_for,
     preserve_full_3d_enabled,
 )
+from slice_compare import export_slice_comparison  # noqa: E402
 from mesh_export_validate import (  # noqa: E402
     check_geometry_mode_slice_consistency,
     validate_stl_file,
@@ -491,6 +492,41 @@ def _build_and_export_mesh(
                 f"[bedflow aviso] falha ao gravar modelo 3d completo: {exc}",
                 file=sys.stderr,
             )
+
+        # arquivos de comparação 2d vs 3d para validação do corte:
+        #  combined = lado a lado (um arquivo) | overlay = 2d dentro do 3d | all
+        compare_mode = str(slice_cfg.get("compare_mode", "separate"))
+        try:
+            gen_files = export_slice_comparison(
+                out_stl,
+                (packed.mesh.vertices, packed.mesh.faces),
+                (packed_full3d.mesh.vertices, packed_full3d.mesh.faces),
+                compare_mode=compare_mode,
+            )
+        except OSError as exc:
+            gen_files = []
+            print(
+                f"[bedflow aviso] falha ao gerar comparacao 2d/3d: {exc}",
+                file=sys.stderr,
+            )
+        if gen_files:
+            for fn in gen_files:
+                print(
+                    f"[bedflow] comparacao 2d/3d: {out_stl.parent / fn}",
+                    file=sys.stderr,
+                )
+            if out_json.is_file():
+                try:
+                    sc = json.loads(out_json.read_text(encoding="utf-8"))
+                    sc["comparison_files"] = gen_files
+                    sc["compare_mode"] = compare_mode
+                    sc["full_3d_companion"] = full3d_companion_name
+                    out_json.write_text(
+                        json.dumps(sc, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                except (OSError, json.JSONDecodeError):
+                    pass
 
 
 def generate_packed_bed(

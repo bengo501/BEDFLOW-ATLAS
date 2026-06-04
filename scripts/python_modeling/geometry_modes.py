@@ -213,6 +213,7 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
         "keep_only_intersecting_particles",
         "preserve_original_packing",
         "preserve_full_3d",
+        "compare_mode",
         "slice_wall_mode",
         "slice_particle_policy",
         "debug_export_gizmos",
@@ -234,6 +235,18 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
     if min_r < 0:
         min_r = 0.0
 
+    # saída de comparação/validação do corte (gera o 3d e/ou arquivos combinados).
+    # honra o flag legado preserve_full_3d: ausente compare_mode -> separate/off.
+    from slice_compare import COMPARE_OFF, COMPARE_SEPARATE, normalize_compare_mode
+
+    preserve_legacy = _to_bool(cfg.get("preserve_full_3d"), True)
+    raw_compare = cfg.get("compare_mode")
+    if raw_compare is None:
+        compare_mode = COMPARE_SEPARATE if preserve_legacy else COMPARE_OFF
+    else:
+        compare_mode = normalize_compare_mode(raw_compare)
+    preserve_full_3d = compare_mode != COMPARE_OFF
+
     return {
         "slice_enabled": True,
         "slice_axis": axis,
@@ -246,7 +259,9 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
         ),
         "preserve_original_packing": _to_bool(cfg.get("preserve_original_packing"), True),
         # mantem o modelo 3d completo (arquivo irmao _full3d) para validar o corte
-        "preserve_full_3d": _to_bool(cfg.get("preserve_full_3d"), True),
+        "preserve_full_3d": preserve_full_3d,
+        # saída de validação: off | separate | combined (lado a lado) | overlay (2d dentro do 3d) | all
+        "compare_mode": compare_mode,
         # parede da fatia: moldura retangular fina (default) ou corte da casca do leito
         "slice_wall_mode": normalize_slice_wall_mode(cfg.get("slice_wall_mode")),
         "slice_particle_policy": policy,
