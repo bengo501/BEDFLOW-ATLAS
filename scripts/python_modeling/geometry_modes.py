@@ -160,6 +160,32 @@ DEFAULT_SLICE_THICKNESS = 0.002
 DEFAULT_MIN_SLICE_PARTICLE_RADIUS = 1e-5
 
 
+SLICE_WALL_RECTANGULAR = "rectangular"
+SLICE_WALL_BED_WALLS = "bed_walls"
+VALID_SLICE_WALL_MODES = (SLICE_WALL_RECTANGULAR, SLICE_WALL_BED_WALLS)
+
+
+def normalize_slice_wall_mode(raw: Any, default: str = SLICE_WALL_RECTANGULAR) -> str:
+    """parede da fatia 2d: 'rectangular' (moldura fina no plano) ou 'bed_walls' (corte da casca)."""
+    s = str(raw or default).strip().lower().replace("-", "_").replace(" ", "_")
+    if s in VALID_SLICE_WALL_MODES:
+        return s
+    aliases = {
+        "rect": SLICE_WALL_RECTANGULAR,
+        "frame": SLICE_WALL_RECTANGULAR,
+        "rectangle": SLICE_WALL_RECTANGULAR,
+        "moldura": SLICE_WALL_RECTANGULAR,
+        "retangulo": SLICE_WALL_RECTANGULAR,
+        "retangular": SLICE_WALL_RECTANGULAR,
+        "bed": SLICE_WALL_BED_WALLS,
+        "walls": SLICE_WALL_BED_WALLS,
+        "shell": SLICE_WALL_BED_WALLS,
+        "cylinder": SLICE_WALL_BED_WALLS,
+        "legacy": SLICE_WALL_BED_WALLS,
+    }
+    return aliases.get(s, default)
+
+
 def normalize_slice_particle_policy(raw: Any, default: str = SLICE_POLICY_CONTAINED) -> str:
     s = str(raw or default).strip().lower().replace("-", "_")
     if s in VALID_SLICE_PARTICLE_POLICIES:
@@ -186,6 +212,8 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
         "slice_position",
         "keep_only_intersecting_particles",
         "preserve_original_packing",
+        "preserve_full_3d",
+        "slice_wall_mode",
         "slice_particle_policy",
         "debug_export_gizmos",
         "min_slice_particle_radius",
@@ -217,6 +245,10 @@ def resolve_slice_config(data: Dict[str, Any]) -> Dict[str, Any]:
             cfg.get("keep_only_intersecting_particles"), True
         ),
         "preserve_original_packing": _to_bool(cfg.get("preserve_original_packing"), True),
+        # mantem o modelo 3d completo (arquivo irmao _full3d) para validar o corte
+        "preserve_full_3d": _to_bool(cfg.get("preserve_full_3d"), True),
+        # parede da fatia: moldura retangular fina (default) ou corte da casca do leito
+        "slice_wall_mode": normalize_slice_wall_mode(cfg.get("slice_wall_mode")),
         "slice_particle_policy": policy,
         "debug_export_gizmos": _to_bool(cfg.get("debug_export_gizmos"), False),
     }

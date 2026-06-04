@@ -537,6 +537,70 @@ def _create_slice_disc_bpy(
     return obj
 
 
+def _boolean_difference_apply(target_obj, cutter_obj, label: str = "rect_hole") -> bool:
+    """aplica boolean DIFFERENCE (target - cutter) e consolida o modificador."""
+    try:
+        mod = target_obj.modifiers.new(name=label, type="BOOLEAN")
+        mod.operation = "DIFFERENCE"
+        mod.object = cutter_obj
+        if hasattr(mod, "solver"):
+            try:
+                mod.solver = "EXACT"
+            except Exception:
+                pass
+        bpy.context.view_layer.objects.active = target_obj
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        return True
+    except Exception as e:
+        print(f"aviso: boolean difference {label} falhou em {target_obj.name}: {e}")
+        return False
+
+
+def _create_rect_frame_bpy(frame, *, bottom_cap: float = 0.0, top_cap: float = 0.0):
+    """parede da fatia como moldura retangular fina (retângulo com corte retangular no meio).
+
+    caixa externa (2*r_ext de largura, altura cheia, espessura = plano de corte) menos
+    caixa interna (2*r_int de largura, altura útil), no plano de corte. eixo do leito = z;
+    só faz sentido para corte vertical (slice_axis x ou y).
+    """
+    axis = frame.slice_axis if frame.slice_axis in ("x", "y") else "y"
+    t = max(float(frame.slice_thickness), 1e-9)
+    r_ext = float(frame.r_ext)
+    r_int = float(frame.r_util)
+    h = float(frame.height)
+    pos = float(frame.slice_center)
+    inner_h = max(h - max(0.0, float(bottom_cap)) - max(0.0, float(top_cap)), 1e-6)
+    z_center = max(0.0, float(bottom_cap)) + inner_h / 2.0
+
+    if axis == "x":
+        outer_dims = (t, 2.0 * r_ext, h)
+        inner_dims = (t * 2.0, 2.0 * r_int, inner_h)
+        outer_loc = (pos, 0.0, h / 2.0)
+        inner_loc = (pos, 0.0, z_center)
+    else:  # y
+        outer_dims = (2.0 * r_ext, t, h)
+        inner_dims = (2.0 * r_int, t * 2.0, inner_h)
+        outer_loc = (0.0, pos, h / 2.0)
+        inner_loc = (0.0, pos, z_center)
+
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=outer_loc)
+    outer = bpy.context.active_object
+    outer.name = "thin_slice_frame"
+    outer.dimensions = outer_dims
+
+    if r_int > 1e-9:
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=inner_loc)
+        inner = bpy.context.active_object
+        inner.name = "thin_slice_frame_hole"
+        inner.dimensions = inner_dims
+        _boolean_difference_apply(outer, inner, label="thin_slice_frame_hole")
+        try:
+            bpy.data.objects.remove(inner, do_unlink=True)
+        except Exception:
+            pass
+    return outer
+
+
 def aplicar_thin_slice(
     slice_cfg: dict,
     *,
@@ -546,6 +610,8 @@ def aplicar_thin_slice(
     particle_centers: Optional[List[Tuple[float, float, float]]] = None,
     particle_diameter: float = 0.005,
     particle_kind: str = "sphere",
+    bottom_cap: float = 0.0,
+    top_cap: float = 0.0,
     output_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     # leito e tampas: boolean intersect com cubo fino (referencial unificado)
@@ -562,7 +628,9 @@ def aplicar_thin_slice(
         sys.path.insert(0, str(_pm))
     from bed_reference_frame import blender_cutter_spec, frame_from_slice_cfg  # noqa: E402
     from geometry_modes import (  # noqa: E402
+        SLICE_WALL_RECTANGULAR,
         axis_index,
+        normalize_slice_wall_mode,
         particle_passes_policy,
         particle_slice_metrics,
         snap_center_radial_to_util_wall,
@@ -600,14 +668,27 @@ def aplicar_thin_slice(
     cutter.name = "thin_slice_cutter"
     cutter.scale = tuple(scale)
 
+    wall_mode = normalize_slice_wall_mode(slice_cfg.get("slice_wall_mode"))
+    use_rect_wall = wall_mode == SLICE_WALL_RECTANGULAR and axis in ("x", "y")
+
     part_prefix = "particula"
     bed_targets = [
         o
         for o in bpy.data.objects
         if o.type == "MESH" and o.name != cutter.name and not o.name.lower().startswith(part_prefix)
     ]
-    for obj in bed_targets:
-        _boolean_intersect_apply(obj, cutter, label="thin_slice_bed")
+    if use_rect_wall:
+        # parede = moldura retangular fina no plano de corte: remove as paredes reais
+        # do leito/tampas e cria o retângulo com corte retangular no meio
+        for obj in bed_targets:
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+        _create_rect_frame_bpy(frame, bottom_cap=bottom_cap, top_cap=top_cap)
+    else:
+        for obj in bed_targets:
+            _boolean_intersect_apply(obj, cutter, label="thin_slice_bed")
 
     parts = [
         o
@@ -1003,6 +1084,7 @@ def write_export_sidecar_json(
     params: dict,
     *,
     slice_summary: Optional[Dict[str, Any]] = None,
+    full_3d_companion: Optional[str] = None,
 ) -> None:
     """grava {stem}_pure_bed.json junto ao blend/stl para o viewer web."""
     try:
@@ -1027,6 +1109,8 @@ def write_export_sidecar_json(
     sl = resolve_slice_config(params)
     if sl:
         payload["slice"] = sl
+    if full_3d_companion:
+        payload["full_3d_companion"] = full_3d_companion
     if slice_summary:
         payload["slice_particle_summary"] = slice_summary
         for k in (
@@ -1061,6 +1145,46 @@ def write_export_sidecar_json(
     with out_json.open("w", encoding="utf-8") as fp:
         json.dump(payload, fp, indent=2, ensure_ascii=False)
     print(f"sidecar metadata: {out_json}")
+
+
+def export_full3d_companion(args, output_path: Path, params: dict) -> Optional[str]:
+    """exporta o leito 3d completo da cena atual (antes do corte) como arquivo irmao.
+
+    o boolean intersect de aplicar_thin_slice destroi o modelo 3d in-place; chamada
+    aqui, antes do corte, grava <stem>_full3d.blend + .stl e o json lateral para
+    permitir validar visualmente a fatia 2d. devolve o nome do .stl companheiro.
+    """
+    try:
+        _pm = Path(__file__).resolve().parents[1] / "python_modeling"
+        if str(_pm) not in sys.path:
+            sys.path.insert(0, str(_pm))
+        from full3d_companion import (  # noqa: E402
+            full3d_companion_metadata,
+            full3d_path_for,
+            full3d_sidecar_path_for,
+        )
+    except ImportError as exc:
+        print(f"aviso: full3d_companion indisponivel, 3d nao preservado: {exc}")
+        return None
+
+    full3d_blend = full3d_path_for(output_path, ".blend")
+    full3d_stl = full3d_path_for(output_path, ".stl")
+    print(f"\npreservando modelo 3d completo (validacao do corte): {full3d_blend}")
+    # exporta a cena inteira (leito + tampas + particulas) sem podar visibilidade
+    export_outputs(args, full3d_blend, formats_override="blend,stl")
+    try:
+        meta = full3d_companion_metadata(
+            companion_of=output_path,
+            generation_backend=str(params.get("generation_backend") or "blender"),
+        )
+        sidecar = full3d_sidecar_path_for(full3d_blend)
+        sidecar.write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(f"sidecar 3d completo: {sidecar}")
+    except OSError as exc:
+        print(f"aviso: falha ao gravar sidecar 3d completo: {exc}")
+    return full3d_stl.name
 
 
 def main_com_parametros():
@@ -1481,7 +1605,21 @@ def main_com_parametros():
         except Exception:
             pass
         slice_summary_export: Dict[str, Any] = {}
+        full3d_companion_name: Optional[str] = None
         if isinstance(slice_cfg, dict) and slice_cfg.get("slice_enabled"):
+            # preserva o 3d completo ANTES do corte (o boolean intersect o destroi)
+            try:
+                _pm_f3d = Path(__file__).resolve().parents[1] / "python_modeling"
+                if str(_pm_f3d) not in sys.path:
+                    sys.path.insert(0, str(_pm_f3d))
+                from full3d_companion import preserve_full_3d_enabled  # noqa: E402
+
+                if args.output and preserve_full_3d_enabled(slice_cfg):
+                    full3d_companion_name = export_full3d_companion(
+                        args, Path(args.output), params
+                    )
+            except Exception as e:
+                print(f"aviso: falha ao preservar modelo 3d completo: {e}")
             slice_summary_export = aplicar_thin_slice(
                 slice_cfg,
                 altura=altura,
@@ -1490,6 +1628,8 @@ def main_com_parametros():
                 particle_centers=centers_for_slice,
                 particle_diameter=diametro_particula,
                 particle_kind=particle_kind,
+                bottom_cap=esp_tampa_inf,
+                top_cap=esp_tampa_sup,
                 output_path=Path(args.output) if args.output else None,
             ) or {}
 
@@ -1515,7 +1655,10 @@ def main_com_parametros():
             out_p = Path(args.output)
             export_outputs(args, out_p, formats_override=fmt_cli)
             write_export_sidecar_json(
-                out_p, params, slice_summary=slice_summary_export or None
+                out_p,
+                params,
+                slice_summary=slice_summary_export or None,
+                full_3d_companion=full3d_companion_name,
             )
         else:
             print("\naviso caminho saida nao especificado arquivo nao salvo")

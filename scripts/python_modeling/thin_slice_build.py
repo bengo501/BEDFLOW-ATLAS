@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from bed_reference_frame import frame_from_slice_cfg
+from geometry_modes import SLICE_WALL_RECTANGULAR, normalize_slice_wall_mode
 from slice_debug_export import (
     empty_slice_summary,
     export_debug_gizmo_stl,
@@ -14,6 +15,7 @@ from stl_mesh_utils import (
     annulus_cap_pair,
     filter_faces_by_slab,
     merge_mesh,
+    rect_frame_mesh,
     tri,
     vec3,
 )
@@ -47,10 +49,13 @@ def apply_thin_slice_mesh(
     r_int: float,
     slice_cfg: Dict[str, Any],
     segmentos: int = 48,
+    bed_height: Optional[float] = None,
+    bottom_cap_thickness: float = 0.0,
+    top_cap_thickness: float = 0.0,
     debug_stl_path: Optional[Path] = None,
     debug_json_path: Optional[Path] = None,
 ) -> Tuple[List[vec3], List[tri], SliceSummary]:
-    bed_h = _infer_height_from_shell(shell_vertices)
+    bed_h = float(bed_height) if bed_height and float(bed_height) > 0 else _infer_height_from_shell(shell_vertices)
     frame = frame_from_slice_cfg(
         slice_cfg, r_int=r_int, r_ext=r_ext, height=bed_h
     )
@@ -59,28 +64,44 @@ def apply_thin_slice_mesh(
     pos = frame.slice_center
     policy = frame.slice_particle_policy
     preserve = bool(slice_cfg.get("preserve_original_packing", True))
+    wall_mode = normalize_slice_wall_mode(slice_cfg.get("slice_wall_mode"))
 
-    min_v = pos - thickness / 2.0
-    max_v = pos + thickness / 2.0
-    v_shell, f_shell = filter_faces_by_slab(
-        shell_vertices,
-        shell_faces,
-        axis=axis,
-        min_v=min_v,
-        max_v=max_v,
-    )
-    cap_v, cap_f = annulus_cap_pair(
-        r_ext=r_ext,
-        r_int=r_int,
-        axis=axis,
-        position=pos,
-        thickness=thickness,
-        segments=max(12, segmentos),
-    )
-    v_all: List[vec3] = list(v_shell)
-    f_all: List[tri] = list(f_shell)
-    if cap_v and cap_f:
-        v_all, f_all = merge_mesh(v_all, f_all, cap_v, cap_f)
+    # parede da fatia: moldura retangular fina (default) ou corte da casca do leito (legacy)
+    if wall_mode == SLICE_WALL_RECTANGULAR and axis in ("x", "y"):
+        # retângulo com corte retangular no meio, na mesma espessura do plano de corte
+        v_all, f_all = rect_frame_mesh(
+            slice_axis=axis,
+            position=pos,
+            thickness=thickness,
+            half_width_outer=r_ext,
+            half_width_inner=r_int,
+            w_outer_min=0.0,
+            w_outer_max=bed_h,
+            w_inner_min=max(0.0, float(bottom_cap_thickness)),
+            w_inner_max=bed_h - max(0.0, float(top_cap_thickness)),
+        )
+    else:
+        min_v = pos - thickness / 2.0
+        max_v = pos + thickness / 2.0
+        v_shell, f_shell = filter_faces_by_slab(
+            shell_vertices,
+            shell_faces,
+            axis=axis,
+            min_v=min_v,
+            max_v=max_v,
+        )
+        cap_v, cap_f = annulus_cap_pair(
+            r_ext=r_ext,
+            r_int=r_int,
+            axis=axis,
+            position=pos,
+            thickness=thickness,
+            segments=max(12, segmentos),
+        )
+        v_all = list(v_shell)
+        f_all = list(f_shell)
+        if cap_v and cap_f:
+            v_all, f_all = merge_mesh(v_all, f_all, cap_v, cap_f)
 
     pk = (particle_kind or "sphere").strip().lower()
     pcfg = SliceParticleConfig.from_slice_cfg(slice_cfg, r_int=r_int)

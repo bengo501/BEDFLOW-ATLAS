@@ -33,6 +33,12 @@ from geometry_modes import (  # noqa: E402
 from pseudo_2d_statistical import generate_statistical_thin_3d_stl  # noqa: E402
 from pure_bed_mesh import build_packed_bed_model, export_model_data  # noqa: E402
 from thin_slice_build import apply_thin_slice_mesh, slice_cfg_active  # noqa: E402
+from full3d_companion import (  # noqa: E402
+    full3d_companion_metadata,
+    full3d_path_for,
+    full3d_sidecar_path_for,
+    preserve_full_3d_enabled,
+)
 from mesh_export_validate import (  # noqa: E402
     check_geometry_mode_slice_consistency,
     validate_stl_file,
@@ -232,6 +238,11 @@ def _build_and_export_mesh(
     slice_cfg = resolve_slice_config(p)
     bed_mode_notes = validate_bed_geometry_mode(p, gm)
     slice_summary_pipe: Dict[str, Any] = {}
+    # ao fatiar (pseudo_2d), preservamos o modelo 3d completo num arquivo irmao
+    # (_full3d) para validar o corte; capturado abaixo e exportado no fim
+    keep_full3d = slice_cfg_active(slice_cfg) and preserve_full_3d_enabled(slice_cfg)
+    packed_full3d: Optional[Any] = None
+    full3d_companion_name: Optional[str] = None
 
     if slice_cfg_active(slice_cfg):
         if progress is not None:
@@ -283,12 +294,33 @@ def _build_and_export_mesh(
             r_int=r_int,
             slice_cfg=slice_cfg,
             segmentos=seg,
+            bed_height=domain.height,
+            bottom_cap_thickness=tb,
+            top_cap_thickness=tt,
             debug_json_path=dbg_json,
         )
         packed = type(shell)(
             mesh=type(shell.mesh)(vertices=v_all, faces=f_all), meta=shell.meta
         )
         slice_summary_pipe = slice_sum
+        # constroi o leito 3d completo (casca + todas as particulas) sem fatiar,
+        # para gravar como arquivo irmao _full3d (validacao do corte)
+        if keep_full3d:
+            packed_full3d = build_packed_bed_model(
+                r_ext=r_ext,
+                r_int=r_int,
+                height=domain.height,
+                bottom_cap_thickness=tb,
+                top_cap_thickness=tt,
+                particle_centers=centers,
+                particle_diameter=d_char,
+                particle_kind=pk,
+                segmentos_cil=seg,
+                lat_sphere=_to_int(p.get("sphere_lat"), 4),
+                lon_sphere=_to_int(p.get("sphere_lon"), 6),
+                bed_config=p,
+            )
+            full3d_companion_name = full3d_path_for(out_stl).name
 
     preview_n = 12
     extra: Dict[str, Any] = {
@@ -325,6 +357,8 @@ def _build_and_export_mesh(
         extra["porosity_slice_meta"] = slice_poro_meta
         if result.porosity is not None:
             extra["porosity_packing_3d"] = result.porosity
+        if full3d_companion_name:
+            extra["full_3d_companion"] = full3d_companion_name
 
     sidecar = bed_internal_sidecar(
         p, backend="python_engine", r_int=r_int, r_ext=r_ext
@@ -394,6 +428,7 @@ def _build_and_export_mesh(
             slice_axis=str(slice_cfg.get("slice_axis", "y")),
             slice_thickness=float(slice_cfg.get("slice_thickness", 0.002)),
             bed_height=domain.height,
+            wall_mode=str(slice_cfg.get("slice_wall_mode", "rectangular")),
         )
         vreport["particle_region_only"] = False
         if not vreport.get("ok"):
@@ -411,6 +446,36 @@ def _build_and_export_mesh(
                 )
             except Exception:
                 pass
+
+    # modelo 3d completo preservado (validacao do corte): grava o arquivo irmao
+    # _full3d.stl + json lateral sem fatiar nenhuma particula
+    if packed_full3d is not None:
+        full3d_stl = full3d_path_for(out_stl)
+        full3d_json = full3d_sidecar_path_for(full3d_stl)
+        if progress is not None:
+            progress.update(
+                "export", pct=97.0, detail=f"3d completo: {full3d_stl.name}"
+            )
+        full3d_extra = full3d_companion_metadata(
+            companion_of=out_stl,
+            generation_backend="python_engine",
+            n_particles=len(centers),
+        )
+        if result.porosity is not None:
+            full3d_extra["porosity_packing_3d"] = result.porosity
+        try:
+            export_model_data(
+                packed_full3d, full3d_stl, out_json=full3d_json, extra=full3d_extra
+            )
+            print(
+                f"[bedflow] modelo 3d completo preservado: {full3d_stl}",
+                file=sys.stderr,
+            )
+        except OSError as exc:
+            print(
+                f"[bedflow aviso] falha ao gravar modelo 3d completo: {exc}",
+                file=sys.stderr,
+            )
 
 
 def generate_packed_bed(

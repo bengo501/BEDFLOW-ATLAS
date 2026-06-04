@@ -325,6 +325,9 @@ def _legacy_generate_stl(p: Dict[str, Any], out_stl: Path, max_passos: int) -> N
             r_int=r_int,
             slice_cfg=slice_cfg,
             segmentos=int(p.get("mesh_segmentos", 48)),
+            bed_height=float(p["height"]),
+            bottom_cap_thickness=float(p.get("bottom_thickness") or 0.0),
+            top_cap_thickness=float(p.get("top_thickness") or 0.0),
             debug_json_path=dbg_json,
         )
     else:
@@ -563,6 +566,9 @@ def _science_generate_stl(p: Dict[str, Any], out_stl: Path) -> None:
             r_int=r_int,
             slice_cfg=slice_cfg,
             segmentos=seg,
+            bed_height=float(altura),
+            bottom_cap_thickness=float(tb),
+            top_cap_thickness=float(tt),
             debug_json_path=dbg_json,
         )
         packed = type(shell)(mesh=type(shell.mesh)(vertices=v_all, faces=f_all), meta=shell.meta)  # type: ignore

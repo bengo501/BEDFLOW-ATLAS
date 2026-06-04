@@ -320,6 +320,70 @@ def annulus_cap_pair(
     return verts, faces
 
 
+def rect_frame_mesh(
+    *,
+    slice_axis: str,
+    position: float,
+    thickness: float,
+    half_width_outer: float,
+    half_width_inner: float,
+    w_outer_min: float,
+    w_outer_max: float,
+    w_inner_min: float,
+    w_inner_max: float,
+) -> Tuple[List[vec3], List[tri]]:
+    """moldura retangular fina (retângulo com corte retangular no meio) no plano de corte.
+
+    representa a parede do leito como um "porta-retrato" plano e fino, com a mesma
+    espessura do plano de corte (eixo da fatia). decompõe-se em 4 barras sem
+    sobreposição: parede esquerda/direita (altura cheia) + tampas inferior/superior
+    (largura interna). o furo central (u∈[-iw,iw], w∈[wi0,wi1]) fica vazio.
+
+    eixos no plano: u = eixo horizontal (radial, usa half_width_*),
+    w = eixo da altura do leito (z, usa w_*). só faz sentido para corte vertical
+    (slice_axis x ou y); para z cai para y por segurança.
+    """
+    a = slice_axis.strip().lower()
+    if a not in ("x", "y"):
+        a = "y"
+    t = max(float(thickness), 1e-9)
+    ow = max(float(half_width_outer), 0.0)
+    iw = max(min(float(half_width_inner), ow), 0.0)
+    wo0, wo1 = sorted((float(w_outer_min), float(w_outer_max)))
+    wi0, wi1 = sorted((float(w_inner_min), float(w_inner_max)))
+    # furo confinado ao retângulo externo
+    wi0 = min(max(wi0, wo0), wo1)
+    wi1 = min(max(wi1, wo0), wo1)
+
+    bars: List[Tuple[float, float, float, float]] = []
+    # paredes laterais (altura cheia)
+    if ow - iw > 1e-12:
+        bars.append((-ow, -iw, wo0, wo1))
+        bars.append((iw, ow, wo0, wo1))
+    # tampas inferior/superior (largura interna)
+    if iw > 1e-12:
+        if wi0 - wo0 > 1e-12:
+            bars.append((-iw, iw, wo0, wi0))
+        if wo1 - wi1 > 1e-12:
+            bars.append((-iw, iw, wi1, wo1))
+
+    v_all: List[vec3] = []
+    f_all: List[tri] = []
+    for (ua, ub, wa, wb) in bars:
+        su = ub - ua
+        sw = wb - wa
+        if su <= 0 or sw <= 0:
+            continue
+        cu = (ua + ub) / 2.0
+        cw = (wa + wb) / 2.0
+        if a == "y":
+            sv, sf = box_mesh_anisotropic(cu, position, cw, su, t, sw)
+        else:  # x
+            sv, sf = box_mesh_anisotropic(position, cu, cw, t, su, sw)
+        v_all, f_all = merge_mesh(v_all, f_all, sv, sf)
+    return v_all, f_all
+
+
 def write_stl_binary(path: Path, vertices: List[vec3], faces: List[tri]) -> None:
     # funcao write_stl_binary
     # grava ficheiro stl binario padrao com uma normal por triangulo

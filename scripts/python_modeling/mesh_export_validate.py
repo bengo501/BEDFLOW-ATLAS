@@ -82,15 +82,22 @@ def validate_thin_slice_mesh(
     slice_thickness: float = 0.002,
     bed_height: Optional[float] = None,
     particle_region_only: bool = False,
+    wall_mode: str = "bed_walls",
 ) -> Dict[str, Any]:
     """
     detecta regressão «colunas z».
     com particle_region_only=True exige extensão no eixo da fatia ~ slice_thickness.
     com casco incluído (False) só detecta colunas altas em z com lâmina fina no eixo da fatia.
+
+    wall_mode='rectangular': a malha completa (parede + partículas) é, por desenho,
+    fina no eixo da fatia; a heurística «colunas z» é desligada para o conjunto
+    (a regressão real continua coberta pela checagem particle_region_only=True da
+    sub-malha de partículas, feita em apply_thin_slice_mesh).
     """
     axis = normalize_slice_axis(slice_axis)
     thick = max(float(slice_thickness), 1e-9)
     bed_h = float(bed_height) if bed_height is not None and float(bed_height) > 0 else None
+    rectangular = str(wall_mode).strip().lower() == "rectangular"
 
     if not vertices:
         return {"ok": False, "errors": ["malha sem vértices"]}
@@ -107,8 +114,20 @@ def validate_thin_slice_mesh(
             f"extensão no eixo {axis} ({ext_slice:.6f} m) > espessura da fatia "
             f"({thick:.6f} m) — discos mal orientados"
         )
+    elif rectangular and not particle_region_only and ext_slice > thick * 2.5:
+        # na moldura retangular a parede também deve ser fina no eixo da fatia
+        errors.append(
+            f"extensão no eixo {axis} ({ext_slice:.6f} m) > espessura da fatia "
+            f"({thick:.6f} m) — moldura retangular mal orientada"
+        )
 
-    if not particle_region_only and bed_h and ext_z > bed_h * 0.85 and ext_slice <= thick * 2.5:
+    if (
+        not rectangular
+        and not particle_region_only
+        and bed_h
+        and ext_z > bed_h * 0.85
+        and ext_slice <= thick * 2.5
+    ):
         errors.append(
             f"extensão em z ({ext_z:.6f} m) ~ altura do leito ({bed_h:.6f} m) com fatia fina "
             "no eixo da fatia — possíveis colunas verticais (regressão)"
@@ -136,6 +155,7 @@ def validate_stl_file(
     slice_axis: str = "y",
     slice_thickness: float = 0.002,
     bed_height: Optional[float] = None,
+    wall_mode: str = "bed_walls",
 ) -> Dict[str, Any]:
     verts = _read_stl_vertices(stl_path)
     if geometry_mode == "pseudo_2d_thin_slice":
@@ -144,6 +164,7 @@ def validate_stl_file(
             slice_axis=slice_axis,
             slice_thickness=slice_thickness,
             bed_height=bed_height,
+            wall_mode=wall_mode,
         )
     if not verts:
         return {"ok": False, "errors": ["stl sem vértices ou ilegível"]}
