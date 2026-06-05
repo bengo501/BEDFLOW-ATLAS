@@ -1,15 +1,20 @@
+# =============================================================================
+# imagem do FRONTEND (Vite dev server). contexto de build = RAIZ do repositorio.
+#   docker build -f docker/Dockerfile.frontend -t bedflow-frontend .
+# o proxy /api -> backend e configurado por VITE_PROXY_TARGET (ver vite.config.js).
+# =============================================================================
 FROM node:18-alpine
 
 WORKDIR /app
 
-# copiar package files
+# instala dependencias primeiro (camada cacheada por package*.json)
 COPY frontend/package*.json ./
-
-# instalar dependências
 RUN npm ci
 
-# copiar código
-COPY frontend/ .
+# codigo do frontend
+COPY frontend/ ./
 
-# comando padrão
-CMD ["npm", "run", "dev"]
+EXPOSE 5173
+
+# bind em 0.0.0.0 para ser acessivel fora do container (mapeado no compose)
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

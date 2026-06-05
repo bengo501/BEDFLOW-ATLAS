@@ -14,5 +14,25 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build backend image (raiz do repo)
-      run: docker build . --file docker/Dockerfile --build-arg WITH_BLENDER=1 --tag cfd-pipeline-backend:${{ github.sha }}
+
+    # imagem LEVE (default: sem blender/openfoam) — build rapido e confiavel no CI.
+    - name: Build backend image (light)
+      run: docker build . --file docker/Dockerfile --tag bedflow-backend:${{ github.sha }}
+
+    # smoke: sobe o container e confere o /health (SQLite, sem infra externa)
+    - name: Smoke test (/health)
+      run: |
+        docker run -d --name bedflow_ci -p 8000:8000 bedflow-backend:${{ github.sha }}
+        for i in $(seq 1 30); do
+          if curl -fsS http://localhost:8000/health; then echo "OK"; exit 0; fi
+          sleep 3
+        done
+        echo "backend nao respondeu em /health"; docker logs bedflow_ci; exit 1
+
+    - name: Cleanup
+      if: always()
+      run: docker rm -f bedflow_ci || true
+
+    # opcional: validar a imagem com blender (mais lenta) — descomente se quiser no CI
+    # - name: Build backend image (blender)
+    #   run: docker build . --file docker/Dockerfile --build-arg WITH_BLENDER=1 --tag bedflow-backend:blender-${{ github.sha }}

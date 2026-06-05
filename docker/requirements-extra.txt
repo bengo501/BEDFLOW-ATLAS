@@ -1,0 +1,19 @@
+# dependencias adicionais instaladas APENAS na imagem docker (alem de backend/requirements.txt).
+# mantidas fora do backend/requirements.txt para nao forcar instalacoes pesadas no
+# fluxo local (que usa sqlite e, muitas vezes, nao precisa do motor python completo).
+
+# --- banco de dados postgresql (driver) ---
+# o docker-compose usa postgres; o backend defaulta para sqlite no local.
+psycopg2-binary==2.9.9
+
+# --- motor de modelagem em python (scripts/python_modeling) ---
+# numpy: solver DEM e utilitarios; trimesh + manifold3d: booleanos (modos m2/m3) e
+# export glTF/GLB; scipy: trimesh usa scipy.csgraph (body_count/fix_normals) — sem
+# ele os booleanos do m2/m3 falham silenciosamente.
+numpy>=1.26,<2.0
+scipy>=1.11
+trimesh>=4.0
+manifold3d>=2.5
+
+# --- compilador da DSL .bed (ANTLR runtime) ---
+antlr4-python3-runtime>=4.13.1

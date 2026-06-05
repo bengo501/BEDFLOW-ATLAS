@@ -1,0 +1,73 @@
+# contexto de build do docker = raiz do repositorio (docker/docker-compose.yml usa context: ..)
+# este arquivo evita enviar pastas enormes/irrelevantes ao daemon docker, tornando o
+# build muito mais rapido e a imagem menor.
+
+# --- controlo de versao / ci ---
+.git
+.github
+.gitignore
+.dockerignore
+
+# --- dependencias e build do frontend (a imagem do backend NAO precisa) ---
+**/node_modules
+frontend/dist
+frontend/build
+
+# --- caches e artefatos python ---
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+coverage
+.coverage
+
+# --- ambientes virtuais ---
+venv
+.venv
+env
+ENV
+
+# --- dados de runtime / saidas geradas (recriadas dentro do container) ---
+generated
+local_data
+output
+logs
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# --- artefatos 3d/cfd pesados (gerados, nao sao codigo-fonte) ---
+**/*.blend1
+generated/**/*.stl
+generated/**/*.obj
+generated/**/*.glb
+generated/**/*.gltf
+generated/**/*.blend
+
+# --- configuracoes locais e segredos ---
+**/.env
+**/.env.local
+**/.env.*.local
+docker/.env
+
+# --- documentacao acessoria e materiais do tcc (nao entram na imagem) ---
+relatorio_tcc
+sprints
+bibliografia
+refs
+docs/_build
+site
+
+# --- ides / sistema ---
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.log
+*.tmp

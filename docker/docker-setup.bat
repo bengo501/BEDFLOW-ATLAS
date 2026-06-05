@@ -1,60 +1,51 @@
 @echo off
+chcp 65001 >nul
+REM setup da stack docker do BEDFLOW-ATLAS (rode a partir da pasta docker\)
 echo ========================================
-echo   CFD PIPELINE - DOCKER SETUP
+echo   BEDFLOW-ATLAS - DOCKER SETUP
 echo ========================================
 echo.
 
-echo [1/5] verificando docker...
+echo [1/4] verificando docker...
 docker --version >nul 2>&1
 if errorlevel 1 (
-    echo erro: docker nao encontrado!
-    echo instale docker desktop: https://www.docker.com/products/docker-desktop
+    echo erro: docker nao encontrado! instale o Docker Desktop.
     pause
     exit /b 1
 )
-echo docker encontrado ✓
-
-echo.
-echo [2/5] verificando docker-compose...
-docker-compose --version >nul 2>&1
+docker compose version >nul 2>&1
 if errorlevel 1 (
-    echo erro: docker-compose nao encontrado!
+    echo erro: "docker compose" (v2) nao disponivel. atualize o Docker Desktop.
     pause
     exit /b 1
 )
-echo docker-compose encontrado ✓
+echo docker + compose v2 ok
 
 echo.
-echo [3/5] criando arquivo .env...
+echo [2/4] preparando docker\.env...
 if not exist .env (
-    copy env.example .env
-    echo arquivo .env criado ✓
+    copy .env.example .env >nul
+    echo .env criado a partir de .env.example
 ) else (
-    echo arquivo .env ja existe ✓
+    echo .env ja existe
 )
 
 echo.
-echo [4/5] parando containers existentes...
-docker-compose down
+echo [3/4] subindo a stack (build + up -d)...
+docker compose up -d --build
 
 echo.
-echo [5/5] iniciando containers...
-docker-compose up -d
-
-echo.
+echo [4/4] stack iniciada.
 echo ========================================
-echo   CONTAINERS INICIADOS!
+echo   STACK NO AR!
 echo ========================================
-echo.
-echo servicos disponiveis:
 echo - frontend:    http://localhost:5173
-echo - backend:     http://localhost:8000
+echo - backend:     http://localhost:8000   (/docs para a API)
 echo - postgres:    localhost:5432
 echo - redis:       localhost:6379
-echo - minio:       http://localhost:9000
-echo - minio admin: http://localhost:9001
+echo - minio:       http://localhost:9000   (console :9001)
 echo.
-echo para ver logs: docker-compose logs -f
-echo para parar:    docker-compose down
+echo logs:  docker compose logs -f
+echo parar: docker compose down
 echo.
 pause

@@ -1,32 +1,36 @@
-version: '3.8'
-
-# imagem com blender: WITH_BLENDER=1 (default no build)
-# imagem sem blender (perfil python modeling): WITH_BLENDER=0 e MODELING_PROFILE=python
-# a partir desta pasta: docker compose up --build
+# =============================================================================
+# stack local do BEDFLOW-ATLAS (a partir desta pasta: docker compose up --build)
+#
+# perfil de modelagem:
+#   - default LEVE: WITH_BLENDER=0  MODELING_PROFILE=python  (build rapido, motor python)
+#   - com blender:  WITH_BLENDER=1  MODELING_PROFILE=blender  (no .env ou no ambiente)
+#
+# variaveis ajustaveis em docker/.env (copie de docker/.env.example).
+# =============================================================================
 
 services:
   postgres:
     image: postgres:15
-    container_name: cfd_postgres
+    container_name: bedflow_postgres
     environment:
-      POSTGRES_DB: cfd_pipeline
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: ${POSTGRES_DB:-cfd_pipeline}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres123}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: cfd_redis
+    container_name: bedflow_redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -38,13 +42,13 @@ services:
 
   minio:
     image: minio/minio
-    container_name: cfd_minio
+    container_name: bedflow_minio
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -59,21 +63,24 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       args:
-        WITH_BLENDER: ${WITH_BLENDER:-1}
-    container_name: cfd_backend
+        WITH_BLENDER: ${WITH_BLENDER:-0}
+        WITH_OPENFOAM: ${WITH_OPENFOAM:-0}
+    image: bedflow-backend:${IMAGE_TAG:-local}
+    container_name: bedflow_backend
     working_dir: /workspace
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
       PYTHONPATH: /workspace
-      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/cfd_pipeline
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres123@postgres:5432/cfd_pipeline}
       REDIS_URL: redis://redis:6379
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MODELING_PROFILE: ${MODELING_PROFILE:-blender}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MODELING_PROFILE: ${MODELING_PROFILE:-python}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-1}
     volumes:
+      # bind mount para dev (hot-reload do uvicorn); comente para usar so a imagem
       - ..:/workspace
     depends_on:
       postgres:
@@ -88,17 +95,20 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend
-    container_name: cfd_frontend
+    image: bedflow-frontend:${IMAGE_TAG:-local}
+    container_name: bedflow_frontend
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      VITE_API_URL: http://localhost:8000
+      # proxy de dev do vite -> backend pelo nome do servico (ver vite.config.js)
+      VITE_PROXY_TARGET: http://backend:8000
+      VITE_HOST: 0.0.0.0
     volumes:
       - ../frontend:/app
       - /app/node_modules
     depends_on:
       - backend
-    command: npm run dev -- --host 0.0.0.0
+    command: npm run dev -- --host 0.0.0.0 --port 5173
 
 volumes:
   postgres_data:
