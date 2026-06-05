@@ -58,10 +58,11 @@ O frontend faz proxy de `/api`, `/files`, `/generated` para o backend
 ### Decisões de design (e os porquês)
 
 1. **Imagem leve por padrão (`WITH_BLENDER=0`, `WITH_OPENFOAM=0`)**
-   O Blender (~300 MB) e o OpenFOAM tornam o build lento e a imagem enorme. Como
-   o **motor de modelagem em python** (`scripts/python_modeling`) faz a geração
-   de malha sem Blender, o default é uma imagem **leve (~450 MB), rápida de
-   construir e testar**. Blender/OpenFOAM são **opcionais** via build-arg.
+   O Blender e o OpenFOAM tornam o build lento e a imagem enorme. Como o **motor
+   de modelagem em python** (`scripts/python_modeling`) faz a geração de malha sem
+   Blender, o default é uma imagem **leve (~650 MB), rápida de construir e
+   testar**. Com Blender a imagem vai a **~2.7 GB** (a camada do Blender 4.0 sozinha
+   ≈ 1.55 GB). Blender/OpenFOAM são **opcionais** via build-arg.
 
 2. **`.dockerignore`** — o contexto de build é a raiz do repo. Sem ele, o Docker
    enviaria `frontend/node_modules`, `.git`, `generated/`, `local_data/`… ao
@@ -140,6 +141,16 @@ Blender). Ou, num build direto:
 ```bash
 docker build -f docker/Dockerfile --build-arg WITH_BLENDER=1 -t bedflow-backend:blender .
 ```
+
+> Validado: a imagem com Blender (~2.7 GB) tem o **Blender 4.0.0** rodando headless
+> (`blender --version`), e o pipeline real gera o leito dentro do container:
+> ```bash
+> docker run --rm bedflow-backend:blender \
+>   blender --background --python /workspace/scripts/blender_scripts/leito_extracao.py -- \
+>   --params /workspace/dsl/wizard_templates/_test_bed_m1_hollow_boolean.json \
+>   --output /tmp/m1.blend --formats blend,stl
+> # -> "modelo 3d gerado com sucesso!" (gera m1.blend + m1.stl)
+> ```
 
 ### 4.4 SQLite vs Postgres no compose
 
