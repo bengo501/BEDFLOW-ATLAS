@@ -233,6 +233,8 @@ def load_bed_json(path: Path) -> Dict[str, Any]:
         "bed": bed,
         "particles": particles if isinstance(particles, dict) else {},
         "particle_kind": str(particles.get("kind") or "sphere").strip().lower(),
+        # seção export preservada p/ o motor honrar export.formats (obj/gltf/glb)
+        "export": data.get("export") if isinstance(data, dict) and isinstance(data.get("export"), dict) else {},
     }
 
 
