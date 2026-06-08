@@ -1,0 +1,22 @@
+// exemplo com ERRO intencional de sintaxe (falta ';' na linha 6)
+// usado para demonstrar a mensagem de erro do compilador ANTLR
+
+bed {
+    diameter = 0.05 m;
+    height = 0.1 m              // <-- ERRO: falta o ';' no fim desta linha
+    wall_thickness = 0.002 m;
+    clearance = 0.01 m;
+    material = "steel";
+}
+
+particles {
+    kind = "sphere";
+    diameter = 0.005 m;
+    count = 100;
+    density = 2500.0 kg/m3;
+    seed = 42;
+}
+
+packing {
+    method = "spherical_packing";
+}

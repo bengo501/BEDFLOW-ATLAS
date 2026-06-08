@@ -1,0 +1,36 @@
+{
+  "shell_components": [
+    "annulus_shell",
+    "bottom_cap",
+    "top_cap",
+    "particles_in_annulus"
+  ],
+  "boolean_operation_status": {
+    "outer_shell": "explicit_annulus",
+    "inner_core": "n/a",
+    "particle_tools": "n/a",
+    "backend": "python_engine",
+    "warnings": [],
+    "r_int": 0.023,
+    "r_ext": 0.025
+  },
+  "internal_cylinder_mode": "hollow_boolean_applied",
+  "visibility": {
+    "show_outer_cylinder": true,
+    "show_internal_cylinder": false,
+    "show_particles": true,
+    "show_boolean_tools": false,
+    "export_boolean_tools": false
+  },
+  "n_particles": 100,
+  "particle_kind": "sphere",
+  "r_ext": 0.025,
+  "r_int": 0.023,
+  "height": 0.1,
+  "geometry_mode": "full_3d",
+  "generation_backend": "python_engine",
+  "role": "full_3d_companion",
+  "companion_of": "_t8.bed_pure.stl",
+  "note": "modelo 3d completo preservado para validacao do corte 2d",
+  "porosity_packing_3d": 0.9593995024003015
+}

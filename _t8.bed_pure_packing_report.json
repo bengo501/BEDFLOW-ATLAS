@@ -1,0 +1,37 @@
+{
+  "packing_method": "spherical_packing",
+  "particle_type": "sphere",
+  "particle_kind": "sphere",
+  "n_particles_requested": 100,
+  "n_particles_placed": 100,
+  "n_spheres_requested": 100,
+  "n_spheres_placed": 100,
+  "porosity_estimate": 0.9593995024003015,
+  "validation_ok": true,
+  "collisions_checked": 185,
+  "wall_violations": 0,
+  "elapsed_sec": 0.0033587999641895294,
+  "warnings": [],
+  "metadata": {
+    "generation": {
+      "n_placed": 100,
+      "n_target": 100,
+      "attempts": 185,
+      "elapsed_sec": 0.0021271000150591135,
+      "acceptance_rate": 0.5405405405405406,
+      "stopped_reason": "ok",
+      "packing_random_seed": 42,
+      "packing_seed_auto": false
+    },
+    "validation": {
+      "ok": true,
+      "n_spheres": 100,
+      "pair_violations": 0,
+      "domain_violations": 0,
+      "messages": []
+    },
+    "collision_radius_equiv": 0.0025,
+    "collision_model": "circumscribed_sphere"
+  },
+  "generated_at": "2026-06-07T16:53:46Z"
+}

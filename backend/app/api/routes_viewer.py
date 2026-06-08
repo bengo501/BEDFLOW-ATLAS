@@ -246,7 +246,7 @@ async def launch_desktop_viewer(body: LaunchViewerRequest):
     log_path = default_subprocess_log(root).with_name("bedflow_desktop_viewer.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(log_path, "ab", encoding="utf-8", errors="replace") as lf:
+        with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
             lf.write(f"\n--- launch {mesh_path.name} ---\n")
             proc = subprocess.Popen(
                 [py, str(script), str(mesh_path)],
